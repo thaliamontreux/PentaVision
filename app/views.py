@@ -210,6 +210,13 @@ def _camera_preview_response(device_id: int, fps: float) -> Response:
 
     interval = 1.0 / fps_value if fps_value > 0 else 0.5
 
+    # Capture the preview cache directory while we still have an application
+    # context; the streaming generator will run after the request context has
+    # been torn down under Gunicorn.
+    preview_base = str(
+        current_app.config.get("PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews")
+    )
+
     def _load_frame() -> bytes | None:
         # Preferred path: use in-process CameraStreamManager (dev/local).
         if manager is not None:
@@ -218,11 +225,8 @@ def _camera_preview_response(device_id: int, fps: float) -> Response:
         # Fallback for production where streams run in a separate worker:
         # read the most recent preview frame from the shared cache directory
         # written by the video worker.
-        base = current_app.config.get(
-            "PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews"
-        )
         try:
-            path = Path(str(base)) / f"{device_id}.jpg"
+            path = Path(preview_base) / f"{device_id}.jpg"
             return path.read_bytes()
         except FileNotFoundError:
             return None
