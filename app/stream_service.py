@@ -64,6 +64,8 @@ class CameraStream(threading.Thread):
             app.config.get("PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews")
         )
         self._preview_dir_ready = False
+        raw_diag = str(app.config.get("STREAM_FFMPEG_DIAGNOSTICS", "0") or "0")
+        self._enable_ffmpeg_diag = raw_diag.strip().lower() not in {"0", "false", "no", ""}
 
     def stop(self) -> None:
         self._running = False
@@ -212,7 +214,7 @@ class CameraStream(threading.Thread):
     def run(self) -> None:  # pragma: no cover - realtime streaming
         import cv2
 
-        if self._ffmpeg_thread is None:
+        if self._ffmpeg_thread is None and self._enable_ffmpeg_diag:
             thread = threading.Thread(target=self._ffmpeg_logger, daemon=True)
             self._ffmpeg_thread = thread
             thread.start()

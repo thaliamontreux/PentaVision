@@ -44,6 +44,7 @@ def load_config() -> Dict[str, Any]:
         "PREVIEW_MAX_WIDTH": _get_int_env("PREVIEW_MAX_WIDTH", 0),
         "PREVIEW_MAX_HEIGHT": _get_int_env("PREVIEW_MAX_HEIGHT", 0),
         "PREVIEW_CAPTURE_FPS": _get_float_env("PREVIEW_CAPTURE_FPS", 10.0),
+        "STREAM_FFMPEG_DIAGNOSTICS": os.getenv("STREAM_FFMPEG_DIAGNOSTICS", "0"),
         "WEBAUTHN_RP_ID": os.getenv("WEBAUTHN_RP_ID", ""),
         "WEBAUTHN_RP_NAME": os.getenv("WEBAUTHN_RP_NAME", "PentaVision"),
         "S3_ENDPOINT": os.getenv("S3_ENDPOINT", ""),
