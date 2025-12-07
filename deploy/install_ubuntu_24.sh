@@ -92,7 +92,7 @@ EOF
   chown "${APP_USER}:${APP_USER}" "${APP_DIR}/app/.env"
 fi
 
-mkdir -p /var/lib/pentavision/recordings /var/lib/pentavision/storage
+mkdir -p /var/lib/pentavision/recordings /var/lib/pentavision/storage /var/lib/pentavision/previews
 chown -R "${APP_USER}:${APP_USER}" /var/lib/pentavision
 
 WRAPPER_SCRIPT="${APP_DIR}/video_worker_wrapper.sh"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import threading
@@ -59,6 +60,10 @@ class CameraStream(threading.Thread):
         self._ffmpeg_process: Optional[subprocess.Popen] = None
         self._ffmpeg_thread: Optional[threading.Thread] = None
         self._permanent_failure = False
+        self._preview_dir: str = str(
+            app.config.get("PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews")
+        )
+        self._preview_dir_ready = False
 
     def stop(self) -> None:
         self._running = False
@@ -287,6 +292,26 @@ class CameraStream(threading.Thread):
                         with self._lock:
                             self._last_frame = jpg_bytes
                             self._last_frame_time = time.time()
+                        # Also persist the latest preview frame to disk so that
+                        # web workers running in separate processes (without a
+                        # local CameraStreamManager) can serve previews.
+                        if self._preview_dir:
+                            try:
+                                if not self._preview_dir_ready:
+                                    os.makedirs(self._preview_dir, exist_ok=True)
+                                    self._preview_dir_ready = True
+                                tmp_path = os.path.join(
+                                    self._preview_dir, f"{self.device_id}.jpg.tmp"
+                                )
+                                final_path = os.path.join(
+                                    self._preview_dir, f"{self.device_id}.jpg"
+                                )
+                                with open(tmp_path, "wb") as f:
+                                    f.write(jpg_bytes)
+                                os.replace(tmp_path, final_path)
+                            except Exception:
+                                # Disk preview caching must never break streaming.
+                                pass
                 finally:
                     cap.release()
                 time.sleep(1.0)
