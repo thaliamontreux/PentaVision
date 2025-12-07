@@ -239,7 +239,17 @@ class CameraStream(threading.Thread):
                         "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
                         "appsink sync=false drop=true max-buffers=1"
                     )
-                    return cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+                    cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+                    if cap.isOpened():
+                        return cap
+                    try:
+                        self._set_error(
+                            "open",
+                            "GStreamer pipeline failed to open; falling back to default backend",
+                        )
+                    except Exception:
+                        pass
+                    cap.release()
                 return cv2.VideoCapture(self.url)
 
             backoff = 1.0
