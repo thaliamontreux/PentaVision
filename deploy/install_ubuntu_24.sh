@@ -24,7 +24,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ffmpeg libopencv-dev \
   mysql-server default-libmysqlclient-dev \
   apache2 libxml2-dev \
-  git
+  git cmake python-is-python3
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
   echo "==> Creating application user ${APP_USER}"
