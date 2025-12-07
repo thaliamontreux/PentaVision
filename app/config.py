@@ -39,6 +39,8 @@ def load_config() -> Dict[str, Any]:
         "RECORDING_BASE_DIR": os.getenv("RECORDING_BASE_DIR", ""),
         "STORAGE_TARGETS": os.getenv("STORAGE_TARGETS", ""),
         "LOCAL_STORAGE_PATH": os.getenv("LOCAL_STORAGE_PATH", ""),
+        "RECORD_SEGMENT_SECONDS": _get_int_env("RECORD_SEGMENT_SECONDS", 60),
+        "RECORD_FFMPEG_THREADS": _get_int_env("RECORD_FFMPEG_THREADS", 2),
         "PREVIEW_LOW_FPS": _get_float_env("PREVIEW_LOW_FPS", 2.0),
         "PREVIEW_HIGH_FPS": _get_float_env("PREVIEW_HIGH_FPS", 10.0),
         "PREVIEW_MAX_WIDTH": _get_int_env("PREVIEW_MAX_WIDTH", 0),

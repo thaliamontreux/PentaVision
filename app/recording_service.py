@@ -94,6 +94,15 @@ class CameraWorker(threading.Thread):
         base_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
         temp_path = base_dir / f"{self.config.device_id}_{timestamp}.mp4"
+        # Limit ffmpeg thread usage for lower CPU impact and allow segment
+        # length to be tuned via configuration.
+        try:
+            threads = int(
+                self.app.config.get("RECORD_FFMPEG_THREADS", 2) or 2
+            )
+        except (TypeError, ValueError):
+            threads = 2
+        threads = max(1, threads)
         command = [
             "ffmpeg",
             "-hide_banner",
@@ -105,6 +114,8 @@ class CameraWorker(threading.Thread):
             self.config.url,
             "-t",
             str(self.segment_seconds),
+            "-threads",
+            str(threads),
             "-c",
             "copy",
             str(temp_path),
