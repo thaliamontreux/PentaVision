@@ -47,9 +47,9 @@ if [[ ! -d "${APP_DIR}/venv" ]]; then
 fi
 
 echo "==> Installing Python dependencies"
-sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install --upgrade pip
-sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install -r requirements.txt
-sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install "git+https://github.com/ageitgey/face_recognition_models"
+sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install --upgrade pip --break-system-packages
+sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install -r requirements.txt --break-system-packages
+sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install "git+https://github.com/ageitgey/face_recognition_models" --break-system-packages
 
 if [[ ! -f "${APP_DIR}/app/.env" ]]; then
   echo "==> Creating default .env template at ${APP_DIR}/app/.env"
