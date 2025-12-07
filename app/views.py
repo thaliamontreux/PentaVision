@@ -157,6 +157,8 @@ def index():
         for device in devices:
             camera_status.setdefault(device.id, "unknown")
 
+    preview_low_fps = current_app.config.get("PREVIEW_LOW_FPS", 2.0)
+
     return render_template(
         "index.html",
         db_status=db_status,
@@ -165,6 +167,7 @@ def index():
         patterns=patterns_index,
         camera_status=camera_status,
         camera_last_seen=camera_last_seen,
+        preview_low_fps=preview_low_fps,
     )
 
 
@@ -261,6 +264,18 @@ def camera_preview_low(device_id: int):
     except (TypeError, ValueError):
         fps_value = 2.0
     return _camera_preview_response(device_id, fps=fps_value)
+
+
+@bp.get("/cameras/<int:device_id>/preview_low.jpg")
+def camera_preview_low_jpeg(device_id: int):
+    base = current_app.config.get("PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews")
+    try:
+        path = Path(str(base)) / f"{device_id}.jpg"
+        if not path.exists():
+            abort(404)
+        return send_file(path, mimetype="image/jpeg")
+    except Exception:
+        abort(404)
 
 
 @bp.get("/cameras/<int:device_id>/preview.mjpg")

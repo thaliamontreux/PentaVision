@@ -83,7 +83,8 @@
                   style="position: relative;"
                 >
                   <img
-                    src="{{ url_for('main.camera_preview_low', device_id=d.id) }}"
+                    src="{{ url_for('main.camera_preview_low_jpeg', device_id=d.id) }}"
+                    data-preview-url="{{ url_for('main.camera_preview_low_jpeg', device_id=d.id) }}"
                     alt="Live preview for {{ d.name }}"
                     class="pv-camera-live"
                   />
@@ -159,6 +160,12 @@
     (function () {
       var POLL_INTERVAL_MS = 10000;
       var statusEls = document.querySelectorAll('[data-stream-health]');
+      var previewImgs = document.querySelectorAll('.pv-camera-preview .pv-camera-live');
+      var previewFps = {{ preview_low_fps|default(2.0)|tojson }};
+      var previewIntervalMs = 0;
+      if (typeof previewFps === 'number' && previewFps > 0) {
+        previewIntervalMs = Math.max(200, Math.round(1000 / previewFps));
+      }
 
       function updateStreamStatus() {
         if (!statusEls.length) {
@@ -210,6 +217,33 @@
       if (statusEls.length) {
         updateStreamStatus();
         window.setInterval(updateStreamStatus, POLL_INTERVAL_MS);
+      }
+
+      function refreshPreviews() {
+        if (!previewImgs.length || !previewIntervalMs) {
+          return;
+        }
+        previewImgs.forEach(function (img) {
+          var container = img.closest('.pv-camera-preview');
+          if (!container) {
+            return;
+          }
+          var deviceId = container.getAttribute('data-device-id');
+          if (!deviceId) {
+            return;
+          }
+          var baseUrl = img.getAttribute('data-preview-url') || img.getAttribute('src');
+          if (!baseUrl) {
+            return;
+          }
+          var sep = baseUrl.indexOf('?') === -1 ? '?' : '&';
+          img.src = baseUrl + sep + 'ts=' + Date.now();
+        });
+      }
+
+      if (previewImgs.length && previewIntervalMs) {
+        refreshPreviews();
+        window.setInterval(refreshPreviews, previewIntervalMs);
       }
 
       var faceButtons = document.querySelectorAll('[data-face-recognize]');
