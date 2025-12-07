@@ -8,7 +8,7 @@ set -euo pipefail
 
 APP_USER="pentavision"
 APP_DIR="/opt/pentavision"
-REPO_URL="CHANGE_ME_GIT_URL"  # TODO: set to your Git repository URL
+REPO_URL="https://github.com/thaliamontreux/PentaVision.git"  # Git repository URL for application code
 PYTHON_BIN="python3"
 
 if [[ $EUID -ne 0 ]]; then
@@ -23,7 +23,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   build-essential libffi-dev libssl-dev \
   ffmpeg libopencv-dev \
   mysql-server default-libmysqlclient-dev \
-  apache2 libapache2-mod-proxy-html libxml2-dev
+  apache2 libxml2-dev \
+  git
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
   echo "==> Creating application user ${APP_USER}"
