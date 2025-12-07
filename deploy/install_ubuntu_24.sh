@@ -22,9 +22,19 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ${PYTHON_BIN} ${PYTHON_BIN}-venv ${PYTHON_BIN}-dev \
   build-essential libffi-dev libssl-dev \
   ffmpeg libopencv-dev \
-  mysql-server default-libmysqlclient-dev \
+  default-libmysqlclient-dev \
   apache2 libxml2-dev \
   git cmake python-is-python3
+
+# Only install a local DB server if none is present. This avoids removing an
+# existing MariaDB server when running the installer on a machine that already
+# has its own MySQL/MariaDB setup.
+if ! dpkg -s mariadb-server >/dev/null 2>&1 && ! dpkg -s mysql-server >/dev/null 2>&1; then
+  echo "==> No existing MySQL/MariaDB server detected; installing MariaDB server"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server
+else
+  echo "==> Existing MySQL/MariaDB server detected; skipping DB server install"
+fi
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
   echo "==> Creating application user ${APP_USER}"
