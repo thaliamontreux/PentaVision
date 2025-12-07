@@ -235,7 +235,7 @@ class CameraStream(threading.Thread):
             def _open_capture():
                 if use_gst:
                     pipeline = (
-                        f"rtspsrc location={self.url} latency={gst_latency_ms} ! "
+                        f"rtspsrc location={self.url} latency={gst_latency_ms} protocols=tcp ! "
                         "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
                         "appsink sync=false drop=true max-buffers=1"
                     )
