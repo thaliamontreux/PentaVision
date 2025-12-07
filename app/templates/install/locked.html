@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block title %}Installer Locked · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Installer Locked</h1>
+    <p>
+      The installation wizard has already completed and is now locked. To adjust
+      configuration, edit your <code>.env</code> file or use administrative tools
+      within the application.
+    </p>
+    <p style="font-size: 0.9rem; color: #6b7280; margin-top: 0.5rem;">
+      The lock state is controlled by the <code>INSTALL_LOCKED</code> setting in
+      your environment or <code>.env</code> file. Unlocking and re-running the
+      installer on a production system should be done with care.
+    </p>
+  </section>
+{% endblock %}

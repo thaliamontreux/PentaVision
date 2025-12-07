@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Storage · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Storage providers</h1>
+    <p style="margin-bottom: 1rem; color: #9ca3af; font-size: 0.9rem;">
+      These providers are used for storing camera recordings. Configuration is read
+      from environment variables and the application config; update those to change
+      providers. Multiple providers can be active at once.
+    </p>
+
+    <div class="pv-card">
+      <h2>Active providers</h2>
+      {% if providers %}
+        <table class="pv-table">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Type</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in providers %}
+              <tr>
+                <td><code>{{ p.name }}</code></td>
+                <td>{{ p.type }}</td>
+                <td style="font-size: 0.85rem; color: #9ca3af;">
+                  {{ p.details }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p style="font-size: 0.9rem; color: #9ca3af;">
+          No storage providers are currently active. Set the
+          <code>STORAGE_TARGETS</code> environment variable to one or more of
+          <code>local_fs</code>, <code>db</code>, <code>s3</code>,
+          <code>gcs</code>, <code>azure_blob</code>, <code>dropbox</code>, or
+          <code>webdav</code>.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
+      <h2>S3-compatible configuration</h2>
+      <p style="font-size: 0.85rem; color: #9ca3af;">
+        When <code>s3</code> is included in <code>STORAGE_TARGETS</code>, recordings
+        are uploaded to an S3-compatible bucket. The following config keys are used:
+      </p>
+      <ul style="font-size: 0.85rem; color: #9ca3af;">
+        <li><code>S3_BUCKET</code> – bucket name (required).</li>
+        <li><code>S3_ENDPOINT</code> – endpoint URL (optional for AWS S3, required for most third-party providers).</li>
+        <li><code>S3_REGION</code> – region (optional if your endpoint implies it).</li>
+        <li><code>S3_ACCESS_KEY</code> – access key ID.</li>
+        <li><code>S3_SECRET_KEY</code> – secret access key.</li>
+      </ul>
+      <p style="font-size: 0.85rem; color: #9ca3af; margin-top: 0.5rem;">
+        Current S3-related configuration (secrets are masked):
+      </p>
+      <pre style="font-size: 0.8rem; white-space: pre-wrap;">
+Bucket: {{ s3.bucket or 'not set' }}
+Endpoint: {{ s3.endpoint or 'not set' }}
+Region: {{ s3.region or 'not set' }}
+Access key: {{ s3.access_key_masked or 'not set' }}
+Secret key: {{ s3.secret_key_masked or 'not set' }}
+      </pre>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
+      <h2>Google Cloud Storage</h2>
+      <p style="font-size: 0.85rem; color: #9ca3af;">
+        When <code>gcs</code> is included in <code>STORAGE_TARGETS</code>,
+        recordings are uploaded to a Google Cloud Storage bucket. The
+        following config keys are used:
+      </p>
+      <ul style="font-size: 0.85rem; color: #9ca3af;">
+        <li><code>GCS_BUCKET</code> – bucket name (required).</li>
+        <li>
+          Application default credentials for the Google Cloud SDK are used
+          for authentication (for example
+          <code>GOOGLE_APPLICATION_CREDENTIALS</code> on the host).
+        </li>
+      </ul>
+      <pre style="font-size: 0.8rem; white-space: pre-wrap;">
+Bucket: {{ gcs.bucket or 'not set' }}
+      </pre>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
+      <h2>Azure Blob Storage</h2>
+      <p style="font-size: 0.85rem; color: #9ca3af;">
+        When <code>azure_blob</code> is included in
+        <code>STORAGE_TARGETS</code>, recordings are uploaded to an Azure
+        Blob container. The following config keys are used:
+      </p>
+      <ul style="font-size: 0.85rem; color: #9ca3af;">
+        <li><code>AZURE_BLOB_CONTAINER</code> – container name (required).</li>
+        <li>
+          <code>AZURE_BLOB_CONNECTION_STRING</code> – connection string with
+          appropriate access (secrets are masked in this UI).
+        </li>
+      </ul>
+      <pre style="font-size: 0.8rem; white-space: pre-wrap;">
+Container: {{ azure.container or 'not set' }}
+Connection string: {{ azure.connection_string_masked or 'not set' }}
+      </pre>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
+      <h2>Dropbox</h2>
+      <p style="font-size: 0.85rem; color: #9ca3af;">
+        When <code>dropbox</code> is included in
+        <code>STORAGE_TARGETS</code>, recordings are uploaded to the
+        configured Dropbox account under <code>/recordings</code>. The
+        following config key is used:
+      </p>
+      <ul style="font-size: 0.85rem; color: #9ca3af;">
+        <li>
+          <code>DROPBOX_ACCESS_TOKEN</code> – access token with write access
+          (masked below).
+        </li>
+      </ul>
+      <pre style="font-size: 0.8rem; white-space: pre-wrap;">
+Access token: {{ dropbox.access_token_masked or 'not set' }}
+      </pre>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
+      <h2>WebDAV / Nextcloud</h2>
+      <p style="font-size: 0.85rem; color: #9ca3af;">
+        When <code>webdav</code> is included in <code>STORAGE_TARGETS</code>,
+        recordings are uploaded via WebDAV to a privacy-focused or
+        self-hosted service such as Nextcloud. The following config keys are
+        used:
+      </p>
+      <ul style="font-size: 0.85rem; color: #9ca3af;">
+        <li>
+          <code>WEBDAV_BASE_URL</code> – base URL to the WebDAV endpoint (for
+          example the <code>remote.php/dav/files/&lt;user&gt;</code> path in
+          Nextcloud).
+        </li>
+        <li><code>WEBDAV_USERNAME</code> – username for authentication.</li>
+        <li><code>WEBDAV_PASSWORD</code> – password or app token (masked).</li>
+      </ul>
+      <pre style="font-size: 0.8rem; white-space: pre-wrap;">
+Base URL: {{ webdav.base_url or 'not set' }}
+Username: {{ webdav.username or 'not set' }}
+Password: {{ webdav.password_masked or 'not set' }}
+      </pre>
+    </div>
+  </section>
+{% endblock %}

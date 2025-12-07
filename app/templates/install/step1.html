@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+
+{% block title %}Installer · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Initial Setup</h1>
+    <p>
+      Configure database connections for users, faces, and recordings. These
+      settings are written to <code>.env</code> and used to initialize the
+      required schemas before you create the first administrator account.
+    </p>
+
+    {% if saved %}
+      <div class="pv-alert pv-alert-success">
+        <strong>Configuration saved.</strong> Environment variables have been written to <code>.env</code>.
+      </div>
+    {% endif %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div
+      id="install-step1-client-errors"
+      class="pv-alert pv-alert-error"
+      style="display: none;"
+      aria-live="polite"
+    >
+      <ul id="install-step1-client-errors-list"></ul>
+    </div>
+
+    <form method="post" class="pv-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+      <h2>User database</h2>
+      <div class="pv-field-group">
+        <label for="user_db_backend">Database server</label>
+        <select id="user_db_backend" name="user_db_backend">
+          {% set backend = form.user_db_backend or 'mysql' %}
+          <option value="mysql" {% if backend == 'mysql' %}selected{% endif %}>
+            MySQL / MariaDB
+          </option>
+          <option value="url" {% if backend == 'url' %}selected{% endif %}>
+            Other (advanced URL)
+          </option>
+        </select>
+      </div>
+      <div class="pv-field-group">
+        <label for="user_db_host">Server IP / hostname</label>
+        <input
+          id="user_db_host"
+          name="user_db_host"
+          type="text"
+          value="{{ form.user_db_host }}"
+          placeholder="127.0.0.1"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="user_db_port">Port</label>
+        <input
+          id="user_db_port"
+          name="user_db_port"
+          type="text"
+          value="{{ form.user_db_port }}"
+          placeholder="3306"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="user_db_username">Username</label>
+        <input
+          id="user_db_username"
+          name="user_db_username"
+          type="text"
+          value="{{ form.user_db_username }}"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="user_db_password">Password</label>
+        <input
+          id="user_db_password"
+          name="user_db_password"
+          type="password"
+          value="{{ form.user_db_password }}"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="user_db_name">Database name</label>
+        <input
+          id="user_db_name"
+          name="user_db_name"
+          type="text"
+          value="{{ form.user_db_name }}"
+          placeholder="users"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="user_db_url">User DB URL (advanced)</label>
+        <input
+          id="user_db_url"
+          name="user_db_url"
+          type="text"
+          value="{{ form.user_db_url }}"
+          placeholder="mysql+pymysql://user:pass@host:3306/users"
+        />
+        <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">
+          If you choose "Other (advanced URL)", this field will be used instead of the
+          structured settings above.
+        </p>
+      </div>
+
+      <h2>Face database</h2>
+      <div class="pv-field-group">
+        <label for="face_db_backend">Database server</label>
+        <select id="face_db_backend" name="face_db_backend">
+          {% set backend = form.face_db_backend or 'mysql' %}
+          <option value="mysql" {% if backend == 'mysql' %}selected{% endif %}>
+            MySQL / MariaDB
+          </option>
+          <option value="url" {% if backend == 'url' %}selected{% endif %}>
+            Other (advanced URL)
+          </option>
+        </select>
+      </div>
+      <div class="pv-field-group">
+        <label for="face_db_host">Server IP / hostname</label>
+        <input
+          id="face_db_host"
+          name="face_db_host"
+          type="text"
+          value="{{ form.face_db_host }}"
+          placeholder="127.0.0.1"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="face_db_port">Port</label>
+        <input
+          id="face_db_port"
+          name="face_db_port"
+          type="text"
+          value="{{ form.face_db_port }}"
+          placeholder="3306"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="face_db_username">Username</label>
+        <input
+          id="face_db_username"
+          name="face_db_username"
+          type="text"
+          value="{{ form.face_db_username }}"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="face_db_password">Password</label>
+        <input
+          id="face_db_password"
+          name="face_db_password"
+          type="password"
+          value="{{ form.face_db_password }}"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="face_db_name">Database name</label>
+        <input
+          id="face_db_name"
+          name="face_db_name"
+          type="text"
+          value="{{ form.face_db_name }}"
+          placeholder="faces"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="face_db_url">Face DB URL (advanced)</label>
+        <input
+          id="face_db_url"
+          name="face_db_url"
+          type="text"
+          value="{{ form.face_db_url }}"
+          placeholder="mysql+pymysql://user:pass@host:3306/faces"
+        />
+        <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">
+          If you choose "Other (advanced URL)", this field will be used instead of the
+          structured settings above.
+        </p>
+      </div>
+
+      <h2>Recordings database</h2>
+      <div class="pv-field-group">
+        <label for="record_db_backend">Database server</label>
+        <select id="record_db_backend" name="record_db_backend">
+          {% set backend = form.record_db_backend or 'mysql' %}
+          <option value="mysql" {% if backend == 'mysql' %}selected{% endif %}>
+            MySQL / MariaDB
+          </option>
+          <option value="url" {% if backend == 'url' %}selected{% endif %}>
+            Other (advanced URL)
+          </option>
+        </select>
+      </div>
+      <div class="pv-field-group">
+        <label for="record_db_host">Server IP / hostname</label>
+        <input
+          id="record_db_host"
+          name="record_db_host"
+          type="text"
+          value="{{ form.record_db_host }}"
+          placeholder="127.0.0.1"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="record_db_port">Port</label>
+        <input
+          id="record_db_port"
+          name="record_db_port"
+          type="text"
+          value="{{ form.record_db_port }}"
+          placeholder="3306"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="record_db_username">Username</label>
+        <input
+          id="record_db_username"
+          name="record_db_username"
+          type="text"
+          value="{{ form.record_db_username }}"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="record_db_password">Password</label>
+        <input
+          id="record_db_password"
+          name="record_db_password"
+          type="password"
+          value="{{ form.record_db_password }}"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="record_db_name">Database name</label>
+        <input
+          id="record_db_name"
+          name="record_db_name"
+          type="text"
+          value="{{ form.record_db_name }}"
+          placeholder="records"
+        />
+      </div>
+      <div class="pv-field-group">
+        <label for="record_db_url">Record DB URL (advanced)</label>
+        <input
+          id="record_db_url"
+          name="record_db_url"
+          type="text"
+          value="{{ form.record_db_url }}"
+          placeholder="mysql+pymysql://user:pass@host:3306/records"
+        />
+        <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">
+          If you choose "Other (advanced URL)", this field will be used instead of the
+          structured settings above.
+        </p>
+      </div>
+
+      <button type="submit" class="pv-button-primary">Save configuration</button>
+      {% if saved and not errors %}
+        <p style="margin-top: 0.75rem; font-size: 0.9rem;">
+          Configuration looks good. The installer will use these settings to
+          create or update the databases, then you can
+          <a href="{{ next_step_url }}">create the initial admin account</a>.
+        </p>
+      {% endif %}
+    </form>
+  </section>
+  <script>
+    (function () {
+      var form = document.querySelector('.pv-form');
+      if (!form) {
+        return;
+      }
+
+      var clientBox = document.getElementById('install-step1-client-errors');
+      var clientList = document.getElementById('install-step1-client-errors-list');
+
+      function showClientErrors(errors) {
+        if (!clientBox || !clientList) {
+          return;
+        }
+        clientList.innerHTML = '';
+        errors.forEach(function (msg) {
+          var li = document.createElement('li');
+          li.textContent = msg;
+          clientList.appendChild(li);
+        });
+        clientBox.style.display = errors.length ? 'block' : 'none';
+      }
+
+      form.addEventListener('submit', function (ev) {
+        var errors = [];
+
+        function val(id) {
+          var el = document.getElementById(id);
+          return el ? String(el.value || '').trim() : '';
+        }
+
+        function checkSection(prefix, label) {
+          var backend = val(prefix + '_db_backend');
+          if (backend === 'url') {
+            if (!val(prefix + '_db_url')) {
+              errors.push(label + ': URL is required when using advanced URL mode.');
+            }
+          } else {
+            if (!val(prefix + '_db_host')) {
+              errors.push(label + ': host is required.');
+            }
+            if (!val(prefix + '_db_name')) {
+              errors.push(label + ': database name is required.');
+            }
+          }
+        }
+
+        checkSection('user', 'User DB');
+        checkSection('face', 'Face DB');
+        checkSection('record', 'Record DB');
+
+        if (errors.length) {
+          ev.preventDefault();
+          showClientErrors(errors);
+        } else {
+          showClientErrors([]);
+        }
+      });
+    })();
+  </script>
+{% endblock %}

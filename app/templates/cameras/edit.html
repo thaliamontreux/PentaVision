@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if is_edit %}Edit Camera URL Pattern{% else %}New Camera URL Pattern{% endif %} · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>
+      {% if is_edit %}
+        Edit Camera URL Pattern
+      {% else %}
+        New Camera URL Pattern
+      {% endif %}
+    </h1>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if form is not none %}
+      <form method="post" class="pv-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        <div class="pv-field-group">
+          <label for="manufacturer">Manufacturer</label>
+          <input
+            id="manufacturer"
+            name="manufacturer"
+            type="text"
+            required
+            value="{{ form.manufacturer }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="model_or_note">Model / Note</label>
+          <input
+            id="model_or_note"
+            name="model_or_note"
+            type="text"
+            value="{{ form.model_or_note }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="protocol">Protocol</label>
+          <select id="protocol" name="protocol">
+            {% set proto = (form.protocol or 'RTSP') %}
+            <option value="RTSP" {% if proto == 'RTSP' %}selected{% endif %}>RTSP/RTP</option>
+            <option value="RTMP" {% if proto == 'RTMP' %}selected{% endif %}>RTMP</option>
+            <option value="SRT" {% if proto == 'SRT' %}selected{% endif %}>SRT</option>
+            <option value="RIST" {% if proto == 'RIST' %}selected{% endif %}>RIST</option>
+            <option value="HLS" {% if proto == 'HLS' %}selected{% endif %}>HLS</option>
+            <option value="DASH" {% if proto == 'DASH' %}selected{% endif %}>MPEG-DASH</option>
+            <option value="WEBRTC" {% if proto == 'WEBRTC' %}selected{% endif %}>WebRTC</option>
+            <option value="HTTP_MJPEG" {% if proto == 'HTTP_MJPEG' %}selected{% endif %}>MJPEG over HTTP</option>
+            <option value="UDP" {% if proto == 'UDP' %}selected{% endif %}>RTP/UDP</option>
+          </select>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="rtsp_url_pattern">URL pattern</label>
+          <input
+            id="rtsp_url_pattern"
+            name="rtsp_url_pattern"
+            type="text"
+            required
+            value="{{ form.rtsp_url_pattern }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label>
+            <input
+              type="checkbox"
+              name="is_active"
+              value="1"
+              {% if form.is_active %}checked{% endif %}
+            />
+            Active template
+          </label>
+        </div>
+
+        <button type="submit" class="pv-button-primary">
+          {% if is_edit %}
+            Save changes
+          {% else %}
+            Create pattern
+          {% endif %}
+        </button>
+      </form>
+    {% else %}
+      <p>Nothing to edit.</p>
+    {% endif %}
+  </section>
+{% endblock %}

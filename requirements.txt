@@ -1,0 +1,17 @@
+flask
+python-dotenv
+SQLAlchemy
+pymysql
+argon2-cffi
+face-recognition
+face_recognition_models
+opencv-python
+numpy
+PyJWT
+fido2
+pyotp
+boto3
+google-cloud-storage
+azure-storage-blob
+dropbox
+requests

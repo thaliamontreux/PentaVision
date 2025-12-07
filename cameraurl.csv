@@ -1,0 +1,143 @@
+manufacturer,model_or_note,rtsp_url_pattern,source
+3xLOGIC,generic,rtsp://<IP>/channel1,CCTV.supplies
+ACTi,TCM-3511 Stream1,rtsp://<IP>/track1,AvertX;OpenEye
+ACTi,TCM-7511 Stream1,rtsp://<IP>/track2,AvertX;OpenEye
+ACTI,generic,rtsp://<IP>/,CCTV.supplies
+Acumen,generic,rtsp://<IP>/mpg4/rtsp.amp,CCTVForum
+Airlink101,generic,rtsp://<IP>/mpeg4,CCTVForum
+AirLive,generic,rtsp://<IP>/video.mp4,CCTVForum
+ALinking,generic mjpeg,rtsp://<IP>/cam1/mjpeg,CCTVForum
+ALinking,generic mpeg4,rtsp://<IP>/cam1/mpeg4,CCTVForum
+ALinking,generic h264,rtsp://<IP>/cam1/h264,CCTVForum
+ALLIEDE,generic,rtsp://<IP>:555/0/1:1/main,CCTVForum
+Amcrest,IP cameras,rtsp://<USERNAME>:<PASSWORD>@<IP>:<PORT>/cam/realmonitor?channel=1&subtype=0,AvertX;OpenEye;CCTV.supplies
+Amcrest,DVR/NVR h264Preview,rtsp://<USERNAME>:<PASSWORD>@<IP>:<PORT>/h264Preview_<CHANNEL>_<STREAM>,CCTV.supplies
+A-MTK,generic,rtsp://<IP>/media/media.amp,CCTVForum
+Amcrest,alternate channel,rtsp://<USERNAME>:<PASSWORD>@<IP>/cam/realmonitor?channel=<CHANNEL>&subtype=<STREAM#>,AvertX
+Arecont,dual h264 sdp,rtsp://<IP>/h264.sdp?res=full...,AvertX;OpenEye
+Arecont,sdp1..sdp4,rtsp://<IP>/h264.sdp1?...,AvertX;OpenEye
+Avigilon,generic defaultPrimary,rtsp://<IP>/defaultPrimary-0?streamType=u,AvertX;OpenEye
+Avigilon,generic defaultSecondary,rtsp://<IP>/defaultSecondary-0?streamType=u,AvertX;OpenEye
+Avigilon,24C-H4A defaultPrimary,rtsp://<IP>defaultPrimary-1?mtu=1440&streamType=u,AvertX;OpenEye
+Axis,generic media amp,rtsp://<IP>/axis-media/media.amp,AvertX;CCTV.supplies;OpenEye
+Axis,with params,rtsp://<IP>/axis-media/media.amp?camera=<CAMERA>&fps=<X>&resolution=<WxH>,AvertX;CCTV.supplies
+Axis,legacy Axis-Orig-Sw,rtsp://<IP>/axis-media/media.amp?Axis-Orig-Sw=true,AvertX
+Axis,mpeg4 variant,rtsp://<IP>/mpeg4/media.amp,CCTV.supplies
+AVTech,generic,rtsp://<IP>/live/mpeg4,CCTVForum
+BOSCH,generic rtsp_tunnel,rtsp://<IP>/rtsp_tunnel,CCTV.supplies;NSoft
+BOSCH,video,rtsp://<IP>/video,CCTV.supplies;NSoft
+BOSCH,inst param,rtsp://<IP>/?inst=2,CCTV.supplies
+Basler,generic mpeg4,rtsp://<IP>/mpeg4,CCTVForum
+Basler,generic h264 multicast,rtsp://<IP>/h264?multicast,CCTVForum
+BiKal,generic,rtsp://<IP>/,CCTVForum
+BlueJay,generic,rtsp://<IP>/mpeg4,CCTVForum
+Bosch,generic h264-stream,rtsp://<USERNAME>:<PASSWORD>@<IP>/h264-stream,derived from vendor docs/CCTV.supplies
+Brickcom,generic,rtsp://<IP>/channel1,CCTVForum
+Canon,generic,rtsp://<IP>/,CCTVForum
+Canon,profile stream,rtsp://<IP>/stream/profile1=u,CCTVForum
+Canon,realmonitor example,rtsp://<USERNAME>:<PASSWORD>@<IP>:554/cam/realmonitor?channel=1&subtype=1,CCTVForum
+CBC-Ganz,generic,rtsp://<IP>/gnz_media/main,CCTVForum
+Cisco,generic,rtsp://<IP>/img/media.sav,CCTVForum
+Clairvoyant,generic,rtsp://<IP>/av0_0,CCTVForum
+CNB,generic,rtsp://<IP>/,CCTVForum
+Cohu,generic,rtsp://<IP>/stream1,CCTVForum
+Cohu,cam,rtsp://<IP>/cam,CCTVForum
+Compro,generic,rtsp://<IP>/medias1,CCTVForum
+Dahua,older IPC main,rtsp://<IP>/cam/realmonitor?channel=1&subtype=0,AvertX;OpenEye;CCTV.supplies
+Dahua,older IPC sub,rtsp://<IP>/cam/realmonitor?channel=1&subtype=1,AvertX;OpenEye;CCTV.supplies
+Dahua,generic cam/realmonitor,rtsp://<USERNAME>:<PASSWORD>@<IP>:<PORT>/cam/realmonitor?channel=<CHANNEL>&subtype=<typeNo>,NSoft;CCTV.supplies
+D-Link,play1.sdp,rtsp://<IP>/play1.sdp,CCTVForum
+D-Link,play2.sdp,rtsp://<IP>/play2.sdp,CCTVForum
+Dallmeier,generic,rtsp://<IP>/encoder1,CCTVForum
+DoOurBest,generic,rtsp://<IP>/:ch0_0.h264,CCTVForum
+DVTel-IOimage,generic,rtsp://<IP>/ioImage/1,CCTVForum
+DigitalWatchdog,ENHD primary,rtsp://<IP>/1/stream1,AvertX;OpenEye
+DigitalWatchdog,ENHD secondary,rtsp://<IP>/1/stream2,AvertX;OpenEye
+EagleVision,generic,rtsp://<IP>/11,CCTVForum
+EDIMAX,generic ipcam.sdp,rtsp://<IP>/ipcam.sdp,CCTVForum
+EDIMAX,h264 sdp,rtsp://<IP>/ipcam_h264.sdp,CCTVForum
+ENEO,generic,rtsp://<IP>/1/stream1,CCTVForum
+Etrovision,generic,rtsp://<IP>/rtpvideo1.sdp,CCTVForum
+EverFocus,generic,rtsp://<IP>/streaming/channels/0,CCTV.supplies
+EverFocus,tunneling note,rtsp://<IP>/streaming/channels/0 (tunnel required),CCTV.supplies
+Ezviz,limited,try Hikvision patterns,CCTV.supplies
+FLIR,automation avc,rtsp://<IP>/avc,CCTV.supplies;OpenEye
+FLIR,avc with options,rtsp://<IP>/avc/ch1&?cbr=0&quant=80&frate=30&gop=1,AvertX;OpenEye
+Foscam,videoMain,rtsp://<USERNAME>:<PASSWORD>@<IP>:<PORT>/videoMain,CCTV.supplies
+Foscam,videoSub,rtsp://<USERNAME>:<PASSWORD>@<IP>:<PORT>/videoSub,CCTV.supplies
+Foscam,audio,rtsp://<USERNAME>:<PASSWORD>@<IP>:<PORT>/audio,CCTV.supplies
+GeoVision,GV-FE420 CH001,rtsp://<IP>:8554/CH001.sdp,AvertX;OpenEye;CCTVForum
+GeoVision,GV-FE420 CH002,rtsp://<IP>:8554/CH002.sdp,AvertX;OpenEye
+GeoVision,GV-FE420 CH003,rtsp://<IP>:8554/CH003.sdp,AvertX;OpenEye
+GVI,generic,rtsp://<IP>/mpeg4,CCTVForum
+Grandstream,generic,rtsp://<IP>/,CCTVForum
+GRUNDIG,jpeg,rtsp://<IP>/jpeg,CCTVForum
+GRUNDIG,h264,rtsp://<IP>/h264,CCTVForum
+GVI,mpg4,rtsp://<IP>/mpeg4,CCTVForum
+Hikvision,generic NVR,rtsp://<IP>:<PORT>/Streaming/Channels/<id>,NSoft;CCTV.supplies;OpenEye
+Hikvision,DS-6716HWI main,rtsp://<IP>/h.264/ch1/main/av_stream,AvertX;OpenEye
+Hikvision,DS-2CD2332-I ch1,rtsp://<IP>/h.264/Streaming/Channels/1,AvertX;OpenEye
+Hikvision,DS-2CD6D54FWD-IZHS 101,rtsp://<IP>/Streaming/Channels/101/,AvertX;OpenEye
+Honeywell,try Hikvision/Dahua patterns,CCTV.supplies
+Intellinet,generic,rtsp://<IP>/video.mp4,CCTVForum;NSoft
+IQinVision,IQM32,rtsp://<IP>/rtsp/now.mp4,AvertX;OpenEye
+JVC,PSIA streaming,rtsp://<IP>/PSIA/Streaming/channels/0,CCTVForum
+KTC,generic,rtsp://<IP>/h264/,CCTVForum
+Laview,generic,rtsp://<IP>/,CCTVForum
+LevelOne,access_code or channel,rtsp://<IP>/access_code ; rtsp://<IP>/channel1,CCTVForum
+Linksys,generic,rtsp://<IP>/img/video.sav,CCTVForum
+Logitech,HighRes,rtsp://<IP>/HighResolutionVideo,CCTVForum
+Lorex,generic,rtsp://<IP>/video.mp4,CCTVForum
+MOBOTIX,generic stream1,rtsp://<USERNAME>:<PASSWORD>@<IP>:<PORT>/stream1,CCTV.supplies;NSoft
+MOBOTIX,ONVIF profile,rtsp://<IP>:554/stream/profile0,CCTV.supplies
+MOBOTIX,mxg/mjpeg/h264 patterns,rtsp://<IP>/stream0/mobotix.mxg ; rtsp://<IP>/stream0/mobotix.mjpeg ; rtsp://<IP>/mobotix.h264,CCTV.supplies
+MeritLi-Lin,generic,rtsp://<IP>/rtsph264,CCTVForum
+MESSOA,generic,rtsp://<IP>:8557/h264 ; rtsp://<IP>/mpeg4 ; rtsp://<IP>/livestream/,CCTVForum
+MicroDigital,generic,rtsp://<IP>/cam0_0,CCTVForum
+Moxa,generic,rtsp://<IP>/multicaststream,CCTVForum
+OpenEye,OE-C2012B4 media1,rtsp://<IP>/media/video1,AvertX;OpenEye
+OpenEye,OE-C2012B4 media2,rtsp://<IP>/media/video2,AvertX;OpenEye
+Panasonic,WV-8571N MediaInput,rtsp://<IP>/MediaInput/h264/stream_<STREAM#>/ch_<CHANNEL>,AvertX;OpenEye;NSoft
+Panasonic,nphMpeg4 variants,rtsp://<IP>:<PORT>//nphMpeg4/g726-640x48 ; rtsp://<IP>/nphMpeg4/g726-640×480,CCTV.supplies;NSoft
+Pelco,Sarix,rtsp://<IP>/stream1,CCTV.supplies
+PiXORD,generic,rtsp://<IP>/,CCTVForum
+Planet,ipcam.sdp,rtsp://<IP>/ipcam.sdp ; rtsp://<IP>/ipcam_h264.sdp,CCTVForum
+PRIME,generic,rtsp://<IP>/cam1/h264/multicast,CCTVForum
+QihanTechnology,generic,rtsp://<IP>/,CCTVForum
+Reolink,RLC-520 main,rtsp://<IP>/h264Preview_01_main,AvertX;OpenEye
+Reolink,RLC-520 sub,rtsp://<IP>/h264Preview_01_sub,AvertX;OpenEye
+Repotec,generic with creds,rtsp://<IP>/cam1/mpeg4?user='username'&pwd='password',CCTVForum
+Samsung,LiveChannel/media.smp,rtsp://<IP>:<PORT>/LiveChannel/<CHAN>/media.smp,CCTV.supplies
+Samsung,mpeg4unicast,rtsp://<IP>/mpeg4unicast,CCTV.supplies
+Samsung,h264/media.smp,rtsp://<IP>/h264/media.smp,CCTVForum
+Sanyo,VideoInput h264,rtsp://<IP>/VideoInput/1/h264/1,CCTVForum
+ScallopImaging,generic,rtsp://<IP>:8554/main,CCTVForum
+Siemens,img/video.asf,rtsp://<IP>/img/video.asf,CCTVForum;NSoft
+Siemens,livestream,rtsp://<IP>/livestream,CCTVForum;NSoft
+Siqura,generic,rtsp://<IP>/mpeg4 ; rtsp://<IP>/h264,CCTVForum
+Sony,media/video1,rtsp://<IP>/media/video1,CCTVForum
+Speco,generic root,rtsp://<IP>/,CCTVForum
+StarDot,nph-h264.cgi,rtsp://<IP>/nph-h264.cgi,CCTVForum
+SuperCircuits,ch0_unicast_firststream,rtsp://<IP>/ch0_unicast_firststream,CCTVForum
+Swann,generic mpeg4,rtsp://<IP>/mpeg4,CCTV.supplies
+TP-Link,generic,rtsp://<IP>/video.mp4,CCTVForum
+TRENDnet,generic mpeg4,rtsp://<IP>/mpeg4,CCTVForum
+Ubiquiti,UniFi live ch00,rtsp://<IP>/live/ch00_0,CCTVForum
+Uniview,media/video,rtsp://<IP>:<PORT>/media/video (video1=main,video2=sub),CCTV.supplies;NSoft
+Vivotek,live sdp,rtsp://<IP>/live.sdp,CCTV.supplies;AvertX
+Vivotek,live2 sdp,rtsp://<IP>/live2.sdp,CCTV.supplies;AvertX
+Vivotek,live1s1/live1s2,rtsp://<IP>/live1s1 ; rtsp://<IP>/live1s2,AvertX;OpenEye
+Verint,live.sdp,rtsp://<IP>/live.sdp,AvertX;OpenEye
+Verint,live# variants,rtsp://<IP>/live<STREAM#>.sdp,AvertX
+VICON,generic,rtsp://<IP>:7070/ ; rtsp://<USERNAME>:<PASSWORD>@<IP>:7070/,CCTVForum
+XM,example with params,rtsp://<IP>:554/user=admin&password=&channel=1&stream=0.sdp?,CCTVForum
+Y-cam,live_mpeg4.sdp,rtsp://<IP>/live_mpeg4.sdp,CCTVForum
+Yoosee,onvif1,rtsp://<IP>:554/onvif1,CCTVForum
+Zavio,video.3gp/mp4,rtsp://<IP>/video.3gp ; rtsp://<IP>/video.mp4,CCTVForum
+Generic-dictionary,nmap/generic-paths,rtsp://<IP>/<access_name_for_stream_1_to_5>,nmap rtsp-urls dictionary & CCTVForum
+Generic-ONVIF,ONVIF media,rtsp://<USERNAME>:<PASSWORD>@<IP>/onvif/media.smp,derived/NSoft
+Generic-cam/realmonitor,Generic Dahua/Amcrest style,rtsp://<IP>/cam/realmonitor?channel=<CHANNEL>&subtype=<STREAM#>,CCTV.supplies;AvertX
+Generic-profile-media,Hanwha/Samsung style,rtsp://<IP>/profile<no>/media.smp,CCTV.supplies;NSoft
+Generic-media-amp,Axis style,rtsp://<IP>/axis-media/media.amp?
+camera=<CAMERA>,AvertX;CCTV.supplies
+Axis,Old Version,rtsp://<IP>/axis-media/media.amp?Axis-Orig-Sw=true

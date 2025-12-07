@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Camera · {{ device.name }} · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>{{ device.name }}</h1>
+    <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
+      Detailed view with live stream and recent recordings.
+    </p>
+
+    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr);">
+      <div class="pv-card">
+        <h2>Live view</h2>
+        <div class="pv-camera-preview pv-camera-preview-large">
+          <img
+            src="{{ url_for('main.camera_preview', device_id=device.id) }}"
+            alt="Live view for {{ device.name }}"
+            class="pv-camera-live pv-camera-live-large"
+          />
+        </div>
+        <p class="pv-card-subtitle">
+          Stream URL is derived from the selected camera template and device settings.
+        </p>
+      </div>
+
+      <div class="pv-card">
+        <h2>Camera details</h2>
+        <ul class="pv-status-list">
+          <li>
+            <span>IP address</span>
+            <span>{{ device.ip_address }}{% if device.port %}:{{ device.port }}{% endif %}</span>
+          </li>
+          <li>
+            <span>Template</span>
+            {% if pattern %}
+              <span>{{ pattern.manufacturer }} {{ pattern.model_or_note or '' }}</span>
+            {% else %}
+              <span>None selected</span>
+            {% endif %}
+          </li>
+          <li>
+            <span>Protocol</span>
+            {% if pattern %}
+              <span>{{ pattern.protocol or 'RTSP' }}</span>
+            {% else %}
+              <span>RTSP (default)</span>
+            {% endif %}
+          </li>
+          <li>
+            <span>Status</span>
+            {% set status = status or 'unknown' %}
+            <span class="pv-status-chip pv-status-{{ status }}">
+              {% if status == 'online' %}
+                Online · recording
+              {% elif status == 'offline' %}
+                Offline
+              {% else %}
+                Status unknown
+              {% endif %}
+            </span>
+          </li>
+          {% if last_seen %}
+          <li>
+            <span>Last segment</span>
+            <span>{{ last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+          </li>
+          {% endif %}
+        </ul>
+        <p style="margin-top: 1rem; font-size: 0.85rem;">
+          <a href="{{ url_for('camera_admin.edit_device', device_id=device.id) }}" class="pv-link-muted">
+            Configure camera
+          </a>
+        </p>
+      </div>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.25rem;">
+      <div class="pv-card-header">
+        <div>
+          <h2>Recent recordings</h2>
+          <p class="pv-card-subtitle">
+            Latest segments captured for this camera.
+          </p>
+        </div>
+        <a
+          href="{{ url_for('main.recordings') }}?device_id={{ device.id }}"
+          class="pv-link-muted"
+        >
+          Open recordings browser
+        </a>
+      </div>
+      {% if recordings %}
+        <table class="pv-table" style="margin-top: 0.5rem;">
+          <thead>
+            <tr>
+              <th>Time (UTC)</th>
+              <th>Provider</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in recordings %}
+              <tr>
+                <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ r.storage_provider }}</td>
+                <td>
+                  <a
+                    href="{{ url_for('main.download_camera_recording', recording_id=r.id) }}"
+                    class="pv-link-muted"
+                  >
+                    Download
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p style="font-size: 0.9rem; color: #9ca3af; margin-top: 0.5rem;">
+          No recordings for this camera yet.
+        </p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+
+{% block title %}Session · {{ device.name }} · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Session – {{ device.name }}</h1>
+    <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
+      Live view with quick actions and face recognition overlays.
+    </p>
+
+    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr);">
+      <div class="pv-card">
+        <h2>Live session</h2>
+        <div
+          class="pv-camera-preview pv-camera-preview-large"
+          data-session-device-id="{{ device.id }}"
+          style="position: relative;"
+        >
+          <img
+            src="{{ url_for('main.camera_preview', device_id=device.id) }}"
+            alt="Live session for {{ device.name }}"
+            class="pv-camera-live pv-camera-live-large"
+          />
+          <canvas
+            class="pv-camera-face-overlay"
+            id="session-face-overlay"
+            style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; display: none;"
+          ></canvas>
+        </div>
+        <div class="pv-camera-actions" style="margin-top: 0.75rem;">
+          <button
+            type="button"
+            class="pv-button"
+            id="session-face-recognize-btn"
+          >
+            Recognize faces on current frame
+          </button>
+          <a
+            href="{{ url_for('main.recordings') }}?device_id={{ device.id }}"
+            class="pv-link-muted"
+            style="margin-left: 0.75rem;"
+          >
+            View recordings
+          </a>
+        </div>
+        <p class="pv-card-subtitle" style="margin-top: 0.75rem;">
+          Recognition uses the latest cached preview frame for this camera; it does not
+          open extra connections to the device.
+        </p>
+      </div>
+
+      <div class="pv-card">
+        <h2>Camera summary</h2>
+        <ul class="pv-status-list">
+          <li>
+            <span>Name</span>
+            <span>{{ device.name }}</span>
+          </li>
+          <li>
+            <span>Address</span>
+            <span>{{ device.ip_address }}{% if device.port %}:{{ device.port }}{% endif %}</span>
+          </li>
+          <li>
+            <span>Template</span>
+            {% if pattern %}
+              <span>{{ pattern.manufacturer }} {{ pattern.model_or_note or '' }}</span>
+            {% else %}
+              <span>None selected</span>
+            {% endif %}
+          </li>
+          <li>
+            <span>Status</span>
+            {% set status = status or 'unknown' %}
+            <span class="pv-status-chip pv-status-{{ status }}">
+              {% if status == 'online' %}
+                Online · recording
+              {% elif status == 'offline' %}
+                Offline
+              {% else %}
+                Status unknown
+              {% endif %}
+            </span>
+          </li>
+          {% if last_seen %}
+          <li>
+            <span>Last segment</span>
+            <span>{{ last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+          </li>
+          {% endif %}
+        </ul>
+        <p style="margin-top: 1rem; font-size: 0.85rem;">
+          <a href="{{ url_for('camera_admin.edit_device', device_id=device.id) }}" class="pv-link-muted">
+            Configure camera
+          </a>
+        </p>
+      </div>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.25rem;">
+      <h2>Face recognition results</h2>
+      <pre
+        id="session-face-output"
+        style="min-height: 4rem; font-size: 0.8rem; white-space: pre-wrap;"
+        aria-live="polite"
+      ></pre>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      var deviceId = '{{ device.id }}';
+      var recognizeBtn = document.getElementById('session-face-recognize-btn');
+      var outputEl = document.getElementById('session-face-output');
+
+      function setOutput(value) {
+        try {
+          if (typeof value === 'object') {
+            outputEl.textContent = JSON.stringify(value, null, 2);
+            return;
+          }
+        } catch (e) {}
+        outputEl.textContent = String(value || '');
+      }
+
+      function clearFaceOverlay() {
+        var canvas = document.getElementById('session-face-overlay');
+        if (!canvas) {
+          return;
+        }
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.display = 'none';
+      }
+
+      function drawFaceOverlay(faces, imageWidth, imageHeight) {
+        var container = document.querySelector('[data-session-device-id]');
+        if (!container) {
+          return;
+        }
+        var img = container.querySelector('.pv-camera-live');
+        var canvas = document.getElementById('session-face-overlay');
+        if (!img || !canvas) {
+          return;
+        }
+
+        var w = img.clientWidth || img.naturalWidth || 0;
+        var h = img.clientHeight || img.naturalHeight || 0;
+        if (!w || !h || !imageWidth || !imageHeight) {
+          return;
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return;
+        }
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.font = '11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillStyle = 'rgba(34,197,94,0.7)';
+
+        var scaleX = w / imageWidth;
+        var scaleY = h / imageHeight;
+
+        faces.forEach(function (face) {
+          var top = face.top;
+          var right = face.right;
+          var bottom = face.bottom;
+          var left = face.left;
+          var label = face.email || (face.user_id != null ? ('ID ' + face.user_id) : 'Unknown');
+          var distance = typeof face.distance === 'number' ? face.distance.toFixed(2) : null;
+
+          var x = left * scaleX;
+          var y = top * scaleY;
+          var fw = (right - left) * scaleX;
+          var fh = (bottom - top) * scaleY;
+
+          ctx.strokeRect(x, y, fw, fh);
+          var text = label + (distance ? (' [' + distance + ']') : '');
+          var tw = ctx.measureText(text).width + 6;
+          var th = 14;
+          ctx.fillRect(x, y - th, tw, th);
+          ctx.fillStyle = '#0b1120';
+          ctx.fillText(text, x + 3, y - 3);
+          ctx.fillStyle = 'rgba(34,197,94,0.7)';
+        });
+
+        canvas.style.display = 'block';
+        window.setTimeout(function () {
+          clearFaceOverlay();
+        }, 2500);
+      }
+
+      if (recognizeBtn) {
+        recognizeBtn.addEventListener('click', function () {
+          var originalText = recognizeBtn.textContent;
+          recognizeBtn.disabled = true;
+          recognizeBtn.textContent = 'Recognizing…';
+          clearFaceOverlay();
+
+          fetch('/api/cameras/' + deviceId + '/face-recognize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: '{}',
+          })
+            .then(function (resp) { return resp.json(); })
+            .then(function (data) {
+              setOutput(data);
+              if (data && Array.isArray(data.faces) && data.faces.length) {
+                drawFaceOverlay(
+                  data.faces,
+                  data.image_width || 0,
+                  data.image_height || 0
+                );
+              } else {
+                clearFaceOverlay();
+              }
+              recognizeBtn.disabled = false;
+              recognizeBtn.textContent = originalText;
+            })
+            .catch(function (err) {
+              setOutput(String(err));
+              clearFaceOverlay();
+              recognizeBtn.disabled = false;
+              recognizeBtn.textContent = originalText;
+            });
+        });
+      }
+    })();
+  </script>
+{% endblock %}

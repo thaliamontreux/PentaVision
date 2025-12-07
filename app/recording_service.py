@@ -1,0 +1,420 @@
+from __future__ import annotations
+
+import subprocess
+import threading
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Dict, List, Optional
+from urllib.parse import urlparse, urlunparse
+
+from flask import Flask
+from sqlalchemy.orm import Session
+
+from .db import get_record_engine
+from .models import (
+    CameraDevice,
+    CameraRecording,
+    CameraStoragePolicy,
+    CameraUrlPattern,
+    UploadQueueItem,
+)
+from .storage_providers import StorageProvider, build_storage_providers
+from .camera_utils import build_camera_url
+
+
+def _normalize_bool(value: str) -> bool:
+    if not value:
+        return False
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "on"}
+
+
+class CameraConfig:
+    def __init__(self, device_id: int, name: str, url: str) -> None:
+        self.device_id = device_id
+        self.name = name
+        self.url = url
+
+
+def _mask_url_password(url: str) -> str:
+    if not url:
+        return url
+    parsed = urlparse(url)
+    if parsed.username is None and parsed.password is None:
+        return url
+
+    username = parsed.username or ""
+    password = parsed.password or ""
+    masked_userinfo = username
+    if password:
+        stars = "*" * len(password)
+        if username:
+            masked_userinfo = f"{username}:{stars}"
+        else:
+            masked_userinfo = stars
+
+    host = parsed.hostname or ""
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+
+    if masked_userinfo:
+        netloc = f"{masked_userinfo}@{host}"
+    else:
+        netloc = host
+
+    return urlunparse(parsed._replace(netloc=netloc))
+
+
+class CameraWorker(threading.Thread):
+    def __init__(
+        self,
+        app: Flask,
+        config: CameraConfig,
+        providers: List[StorageProvider],
+        segment_seconds: int = 60,
+    ) -> None:
+        super().__init__(daemon=True)
+        self.app = app
+        self.config = config
+        self.providers = providers
+        self.segment_seconds = segment_seconds
+        self.retry_delay = 10
+
+    def run(self) -> None:
+        with self.app.app_context():
+            while True:
+                try:
+                    self._record_segment()
+                except Exception:
+                    time.sleep(self.retry_delay)
+
+    def _record_segment(self) -> None:
+        base_dir = self._segment_temp_dir()
+        base_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        temp_path = base_dir / f"{self.config.device_id}_{timestamp}.mp4"
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-rtsp_transport",
+            "tcp",
+            "-i",
+            self.config.url,
+            "-t",
+            str(self.segment_seconds),
+            "-c",
+            "copy",
+            str(temp_path),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError("ffmpeg executable not found") from exc
+        if result.returncode != 0 or not temp_path.exists():
+            if temp_path.exists():
+                temp_path.unlink()
+            stderr_text = result.stderr or ""
+            masked_url = _mask_url_password(self.config.url)
+            try:
+                self.app.logger.warning(
+                    "Recording ffmpeg error for device=%s url=%s returncode=%s stderr=%s",
+                    self.config.device_id,
+                    masked_url,
+                    result.returncode,
+                    stderr_text.strip(),
+                )
+            except Exception:
+                # Logging must not crash the worker.
+                pass
+            raise RuntimeError("recording command failed")
+        data = temp_path.read_bytes()
+        key_hint = f"camera{self.config.device_id}_{timestamp}"
+        for provider in self.providers:
+            try:
+                storage_key = provider.upload(data, key_hint)
+            except Exception as exc:  # noqa: BLE001
+                self._enqueue_upload_failure(
+                    provider.name,
+                    key_hint,
+                    data,
+                    str(exc),
+                )
+                continue
+            self._create_camera_recording(provider.name, storage_key)
+        temp_path.unlink(missing_ok=True)
+
+    def _segment_temp_dir(self) -> Path:
+        base = self.app.config.get("RECORDING_BASE_DIR") or ""
+        if base:
+            return Path(str(base)) / "tmp"
+        return Path(self.app.instance_path) / "recording_tmp"
+
+    def _create_camera_recording(
+        self,
+        provider_name: str,
+        storage_key: str,
+    ) -> None:
+        engine = get_record_engine()
+        if engine is None:
+            return
+        CameraRecording.__table__.create(bind=engine, checkfirst=True)
+        with Session(engine) as session:
+            row = CameraRecording(
+                device_id=self.config.device_id,
+                storage_provider=provider_name,
+                storage_key=storage_key,
+            )
+            session.add(row)
+            session.commit()
+
+    def _enqueue_upload_failure(
+        self,
+        provider_name: str,
+        key_hint: str,
+        data: bytes,
+        error: str,
+    ) -> None:
+        engine = get_record_engine()
+        if engine is None:
+            return
+        UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
+        with Session(engine) as session:
+            item = UploadQueueItem(
+                device_id=self.config.device_id,
+                provider_name=provider_name,
+                key_hint=key_hint,
+                payload=data,
+                status="pending",
+                attempts=0,
+                last_error=error[:512],
+            )
+            session.add(item)
+            session.commit()
+
+
+class RecordingManager:
+    def __init__(self, app: Flask) -> None:
+        self.app = app
+        self.providers = build_storage_providers(app)
+        self.workers: Dict[int, CameraWorker] = {}
+        self.lock = threading.Lock()
+
+    def start(self) -> None:
+        if not self.providers:
+            return
+        thread = threading.Thread(target=self.run, daemon=True)
+        thread.start()
+
+    def run(self) -> None:
+        with self.app.app_context():
+            while True:
+                try:
+                    self._sync_workers()
+                except Exception:
+                    time.sleep(5)
+                time.sleep(10)
+
+    def _sync_workers(self) -> None:
+        engine = get_record_engine()
+        if engine is None:
+            return
+        with Session(engine) as session:
+            devices = session.query(CameraDevice).all()
+            patterns = session.query(CameraUrlPattern).all()
+            CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
+            policies = session.query(CameraStoragePolicy).all()
+        patterns_index = {item.id: item for item in patterns}
+        policies_index = {p.device_id: p for p in policies}
+        providers_index = {p.name: p for p in self.providers}
+        for device in devices:
+            if not getattr(device, "is_active", 1):
+                continue
+            policy = policies_index.get(device.id)
+            device_providers: List[StorageProvider] = list(self.providers)
+            if policy and policy.storage_targets:
+                targets = {
+                    name.strip()
+                    for name in policy.storage_targets.split(",")
+                    if name.strip()
+                }
+                selected = [
+                    providers_index[name]
+                    for name in targets
+                    if name in providers_index
+                ]
+                if selected:
+                    device_providers = selected
+                else:
+                    continue
+            if not device_providers:
+                continue
+            if (
+                device.id in self.workers
+                and self.workers[device.id].is_alive()
+            ):
+                continue
+            pattern = None
+            if getattr(device, "pattern_id", None):
+                pattern = patterns_index.get(device.pattern_id)
+            url = build_camera_url(device, pattern)
+            if not url:
+                continue
+            worker = CameraWorker(
+                self.app,
+                CameraConfig(device.id, device.name, url),
+                device_providers,
+            )
+            worker.start()
+            self.workers[device.id] = worker
+
+
+class UploadQueueWorker(threading.Thread):
+    def __init__(
+        self,
+        app: Flask,
+        interval: int = 30,
+        batch_size: int = 20,
+        max_attempts: int = 5,
+    ) -> None:
+        super().__init__(daemon=True)
+        self.app = app
+        self.interval = interval
+        self.batch_size = batch_size
+        self.max_attempts = max_attempts
+
+    def run(self) -> None:
+        with self.app.app_context():
+            while True:
+                try:
+                    self._process_once()
+                except Exception:  # noqa: BLE001
+                    time.sleep(self.interval)
+                time.sleep(self.interval)
+
+    def _process_once(self) -> None:
+        engine = get_record_engine()
+        if engine is None:
+            return
+        UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
+        CameraRecording.__table__.create(bind=engine, checkfirst=True)
+        with Session(engine) as session:
+            items = (
+                session.query(UploadQueueItem)
+                .filter(UploadQueueItem.status == "pending")
+                .order_by(UploadQueueItem.id)
+                .limit(self.batch_size)
+                .all()
+            )
+            if not items:
+                return
+            providers = build_storage_providers(self.app)
+            providers_index = {provider.name: provider for provider in providers}
+            for item in items:
+                provider = providers_index.get(item.provider_name)
+                if provider is None:
+                    item.attempts = (item.attempts or 0) + 1
+                    item.status = "failed"
+                    item.last_error = "Unknown provider"
+                    session.add(item)
+                    session.commit()
+                    continue
+                try:
+                    storage_key = provider.upload(item.payload, item.key_hint)
+                except Exception as exc:  # noqa: BLE001
+                    item.attempts = (item.attempts or 0) + 1
+                    item.last_error = str(exc)[:512]
+                    if item.attempts >= self.max_attempts:
+                        item.status = "failed"
+                    session.add(item)
+                    session.commit()
+                    continue
+                recording = CameraRecording(
+                    device_id=item.device_id,
+                    storage_provider=item.provider_name,
+                    storage_key=storage_key,
+                )
+                session.add(recording)
+                session.delete(item)
+                session.commit()
+
+
+class RetentionWorker(threading.Thread):
+    def __init__(
+        self,
+        app: Flask,
+        interval: int = 3600,
+    ) -> None:
+        super().__init__(daemon=True)
+        self.app = app
+        self.interval = interval
+
+    def run(self) -> None:
+        with self.app.app_context():
+            while True:
+                try:
+                    self._run_once()
+                except Exception:  # noqa: BLE001
+                    time.sleep(self.interval)
+                time.sleep(self.interval)
+
+    def _run_once(self) -> None:
+        engine = get_record_engine()
+        if engine is None:
+            return
+        now = datetime.now(timezone.utc)
+        providers = build_storage_providers(self.app)
+        providers_index = {p.name: p for p in providers}
+        with Session(engine) as session:
+            CameraRecording.__table__.create(bind=engine, checkfirst=True)
+            CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
+            policies = (
+                session.query(CameraStoragePolicy)
+                .filter(CameraStoragePolicy.retention_days.isnot(None))
+                .all()
+            )
+            for policy in policies:
+                if not policy.retention_days or policy.retention_days <= 0:
+                    continue
+                cutoff = now - timedelta(days=policy.retention_days)
+                old_records = (
+                    session.query(CameraRecording)
+                    .filter(
+                        CameraRecording.device_id == policy.device_id,
+                        CameraRecording.created_at < cutoff,
+                    )
+                    .all()
+                )
+                if not old_records:
+                    continue
+                for rec in old_records:
+                    provider = providers_index.get(rec.storage_provider)
+                    if provider is not None:
+                        try:
+                            provider.delete(rec.storage_key or "")
+                        except Exception:  # noqa: BLE001
+                            pass
+                    session.delete(rec)
+                session.commit()
+
+
+def start_recording_service(app: Flask) -> None:
+    enabled = _normalize_bool(
+        str(app.config.get("RECORDING_ENABLED", "0") or "0")
+    )
+    if not enabled:
+        return
+    manager = RecordingManager(app)
+    manager.start()
+    queue_worker = UploadQueueWorker(app)
+    queue_worker.start()
+    retention_worker = RetentionWorker(app)
+    retention_worker.start()

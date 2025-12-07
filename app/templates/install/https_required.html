@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}HTTPS required · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>HTTPS required for installer</h1>
+    <p>The installer can only be accessed over HTTPS.</p>
+    <p>
+      If you are behind a reverse proxy or load balancer, ensure it terminates
+      TLS and forwards HTTPS requests to this application.
+    </p>
+    <p style="font-size: 0.9rem; color: #6b7280; margin-top: 0.5rem;">
+      For example, with an HTTP reverse proxy you should set the
+      <code>X-Forwarded-Proto</code> header to <code>https</code> when the
+      client connection is secure, so the installer can detect that the
+      request is arriving over HTTPS.
+    </p>
+  </section>
+{% endblock %}

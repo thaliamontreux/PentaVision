@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Installer · Admin · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Administrator Account</h1>
+    <p>Create the initial administrator account for this PentaVision instance.</p>
+
+    {% if saved %}
+      <div class="pv-alert pv-alert-success">
+        <strong>Admin account created.</strong> You can now log in using the email and
+        password you specified. The installer has been locked.
+      </div>
+    {% endif %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div
+      id="install-admin-client-errors"
+      class="pv-alert pv-alert-error"
+      style="display: none;"
+      aria-live="polite"
+    >
+      <ul id="install-admin-client-errors-list"></ul>
+    </div>
+
+    <form method="post" class="pv-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+      <div class="pv-field-group">
+        <label for="email">Admin email</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          required
+          value="{{ form.email }}"
+        />
+      </div>
+
+      <div class="pv-field-group">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          required
+        />
+      </div>
+
+      <div class="pv-field-group">
+        <label for="password_confirm">Confirm password</label>
+        <input
+          id="password_confirm"
+          name="password_confirm"
+          type="password"
+          required
+        />
+      </div>
+
+      <button type="submit" class="pv-button-primary">Create admin account</button>
+    </form>
+  </section>
+  <script>
+    (function () {
+      var form = document.querySelector('.pv-form');
+      if (!form) {
+        return;
+      }
+
+      var box = document.getElementById('install-admin-client-errors');
+      var list = document.getElementById('install-admin-client-errors-list');
+
+      function showErrors(errors) {
+        if (!box || !list) {
+          return;
+        }
+        list.innerHTML = '';
+        errors.forEach(function (msg) {
+          var li = document.createElement('li');
+          li.textContent = msg;
+          list.appendChild(li);
+        });
+        box.style.display = errors.length ? 'block' : 'none';
+      }
+
+      form.addEventListener('submit', function (ev) {
+        var errors = [];
+        var emailEl = document.getElementById('email');
+        var pwEl = document.getElementById('password');
+        var pw2El = document.getElementById('password_confirm');
+        var email = emailEl ? String(emailEl.value || '').trim() : '';
+        var pw = pwEl ? String(pwEl.value || '') : '';
+        var pw2 = pw2El ? String(pw2El.value || '') : '';
+
+        if (!email) {
+          errors.push('Enter an admin email.');
+        }
+        if (!pw) {
+          errors.push('Enter a password.');
+        } else if (pw.length < 8) {
+          errors.push('Password should be at least 8 characters long.');
+        }
+        if (pw !== pw2) {
+          errors.push('Passwords do not match.');
+        }
+
+        if (errors.length) {
+          ev.preventDefault();
+          showErrors(errors);
+        } else {
+          showErrors([]);
+        }
+      });
+    })();
+  </script>
+{% endblock %}

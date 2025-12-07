@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Recordings · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Recordings</h1>
+    <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
+      Browse captured segments across cameras and storage providers.
+    </p>
+
+    {% if device %}
+      <p style="font-size: 0.9rem; margin-bottom: 0.75rem;">
+        Filtering by camera: <strong>{{ device.name }}</strong>
+        (<a href="{{ url_for('main.recordings') }}" class="pv-link-muted">clear filter</a>)
+      </p>
+    {% endif %}
+
+    {% if recordings %}
+      <table class="pv-table">
+        <thead>
+          <tr>
+            <th>Time (UTC)</th>
+            <th>Camera</th>
+            <th>Provider</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recordings %}
+            <tr>
+              <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+              <td>
+                {% set dev = devices_index.get(r.device_id) if devices_index else None %}
+                {% if dev %}
+                  <a
+                    href="{{ url_for('main.camera_detail', device_id=dev.id) }}"
+                    class="pv-link-muted"
+                  >
+                    {{ dev.name }}
+                  </a>
+                {% else %}
+                  Unknown
+                {% endif %}
+              </td>
+              <td>{{ r.storage_provider }}</td>
+              <td>
+                <a
+                  href="{{ url_for('main.download_camera_recording', recording_id=r.id) }}"
+                  class="pv-link-muted"
+                >
+                  Download
+                </a>
+                <span aria-hidden="true"> · </span>
+                <a
+                  href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
+                  class="pv-link-muted"
+                >
+                  Play with overlays
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p style="font-size: 0.9rem; color: #9ca3af;">
+        No recordings found.
+      </p>
+    {% endif %}
+  </section>
+{% endblock %}

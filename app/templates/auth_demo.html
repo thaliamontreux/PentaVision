@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+
+{% block title %}Auth Demo · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Authentication demo</h1>
+    <p style="margin-bottom: 1rem; color: #9ca3af; font-size: 0.9rem;">
+      This page lets you try the JSON auth APIs (password + TOTP) and WebAuthn passkeys
+      using your browser's built-in WebAuthn support.
+    </p>
+
+    <div class="pv-dashboard-grid">
+      <div class="pv-card">
+        <h2>Password login</h2>
+        <form id="pw-login-form">
+          <label class="pv-form-label" for="pw-email">Email</label>
+          <input id="pw-email" class="pv-input" type="email" autocomplete="username" required />
+
+          <label class="pv-form-label" for="pw-password">Password</label>
+          <input id="pw-password" class="pv-input" type="password" autocomplete="current-password" required />
+
+          <label class="pv-form-label" for="pw-totp">TOTP (optional)</label>
+          <input id="pw-totp" class="pv-input" type="text" autocomplete="one-time-code" />
+
+          <button type="submit" class="pv-button pv-button-primary" style="margin-top: 0.75rem;">
+            Login via /api/auth/login
+          </button>
+        </form>
+      </div>
+
+      <div class="pv-card">
+        <h2>Passkeys (WebAuthn)</h2>
+        <p style="font-size: 0.85rem; color: #9ca3af;">
+          Register a passkey tied to your browser/device, then sign in with it.
+          Requires HTTPS and a supported browser.
+        </p>
+
+        <div class="pv-form-group">
+          <label class="pv-form-label" for="pk-email">Email</label>
+          <input id="pk-email" class="pv-input" type="email" autocomplete="username" />
+        </div>
+
+        <div class="pv-form-group">
+          <label class="pv-form-label" for="pk-password">Password (for registration)</label>
+          <input id="pk-password" class="pv-input" type="password" autocomplete="current-password" />
+        </div>
+
+        <div class="pv-form-group">
+          <label class="pv-form-label" for="pk-nickname">Passkey nickname (optional)</label>
+          <input id="pk-nickname" class="pv-input" type="text" />
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem;">
+          <button type="button" class="pv-button pv-button-primary" id="pk-register-btn">
+            Register passkey
+          </button>
+          <button type="button" class="pv-button" id="pk-login-btn">
+            Sign in with passkey
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
+      <h2>Auth API response</h2>
+      <pre
+        id="auth-output"
+        style="min-height: 4rem; font-size: 0.8rem; white-space: pre-wrap;"
+        aria-live="polite"
+      ></pre>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      var outputEl = document.getElementById('auth-output');
+
+      function setOutput(value) {
+        if (!outputEl) return;
+        if (typeof value === 'string') {
+          outputEl.textContent = value;
+        } else {
+          try {
+            outputEl.textContent = JSON.stringify(value, null, 2);
+          } catch (e) {
+            outputEl.textContent = String(value);
+          }
+        }
+      }
+
+      function apiPostJson(url, body) {
+        return fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(body || {})
+        }).then(function (resp) {
+          return resp.json().catch(function () { return { error: 'invalid JSON response', status: resp.status }; });
+        });
+      }
+
+      function bufferFromBase64Url(b64url) {
+        var s = String(b64url || '');
+        s = s.replace(/-/g, '+').replace(/_/g, '/');
+        var pad = s.length % 4;
+        if (pad) {
+          s += '='.repeat(4 - pad);
+        }
+        var binary = atob(s);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+      }
+
+      function base64UrlFromBuffer(buf) {
+        var bytes = new Uint8Array(buf);
+        var binary = '';
+        for (var i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        var b64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        return b64;
+      }
+
+      function decodePublicKeyOptions(opts) {
+        if (!opts || !opts.publicKey) return opts;
+        var pk = opts.publicKey;
+        if (pk.challenge) {
+          pk.challenge = bufferFromBase64Url(pk.challenge);
+        }
+        if (pk.user && pk.user.id) {
+          pk.user.id = bufferFromBase64Url(pk.user.id);
+        }
+        if (Array.isArray(pk.excludeCredentials)) {
+          pk.excludeCredentials = pk.excludeCredentials.map(function (cred) {
+            if (cred && cred.id) {
+              cred.id = bufferFromBase64Url(cred.id);
+            }
+            return cred;
+          });
+        }
+        return opts;
+      }
+
+      function decodeAssertionOptions(opts) {
+        if (!opts || !opts.publicKey) return opts;
+        var pk = opts.publicKey;
+        if (pk.challenge) {
+          pk.challenge = bufferFromBase64Url(pk.challenge);
+        }
+        if (Array.isArray(pk.allowCredentials)) {
+          pk.allowCredentials = pk.allowCredentials.map(function (cred) {
+            if (cred && cred.id) {
+              cred.id = bufferFromBase64Url(cred.id);
+            }
+            return cred;
+          });
+        }
+        return opts;
+      }
+
+      var pwForm = document.getElementById('pw-login-form');
+      if (pwForm) {
+        pwForm.addEventListener('submit', function (ev) {
+          ev.preventDefault();
+          var email = document.getElementById('pw-email').value.trim();
+          var password = document.getElementById('pw-password').value;
+          var totp = document.getElementById('pw-totp').value.trim();
+          if (!email || !password) {
+            setOutput('Enter both email and password to log in.');
+            return;
+          }
+          apiPostJson('{{ url_for("auth.login") }}', {
+            email: email,
+            password: password,
+            totp_code: totp
+          }).then(function (data) {
+            setOutput(data);
+          }).catch(function (err) {
+            setOutput(String(err));
+          });
+        });
+      }
+
+      var pkRegisterBtn = document.getElementById('pk-register-btn');
+      if (pkRegisterBtn) {
+        pkRegisterBtn.addEventListener('click', function () {
+          if (!window.PublicKeyCredential) {
+            setOutput('WebAuthn is not supported in this browser.');
+            return;
+          }
+          var email = document.getElementById('pk-email').value.trim();
+          var password = document.getElementById('pk-password').value;
+          var nickname = document.getElementById('pk-nickname').value.trim();
+          if (!email || !password) {
+            setOutput('Enter email and password before registering a passkey.');
+            return;
+          }
+          apiPostJson('{{ url_for("auth.passkey_register_begin") }}', {
+            email: email,
+            password: password,
+            nickname: nickname
+          }).then(function (options) {
+            if (options.error) {
+              setOutput(options);
+              return;
+            }
+            decodePublicKeyOptions(options);
+            return navigator.credentials.create(options).then(function (cred) {
+              var att = {
+                id: cred.id,
+                rawId: base64UrlFromBuffer(cred.rawId),
+                type: cred.type,
+                response: {
+                  clientDataJSON: base64UrlFromBuffer(cred.response.clientDataJSON),
+                  attestationObject: base64UrlFromBuffer(cred.response.attestationObject)
+                }
+              };
+              return apiPostJson('{{ url_for("auth.passkey_register_complete") }}', att);
+            });
+          }).then(function (data) {
+            if (data) setOutput(data);
+          }).catch(function (err) {
+            setOutput(String(err));
+          });
+        });
+      }
+
+      var pkLoginBtn = document.getElementById('pk-login-btn');
+      if (pkLoginBtn) {
+        pkLoginBtn.addEventListener('click', function () {
+          if (!window.PublicKeyCredential) {
+            setOutput('WebAuthn is not supported in this browser.');
+            return;
+          }
+          var email = document.getElementById('pk-email').value.trim();
+          apiPostJson('{{ url_for("auth.passkey_login_begin") }}', {
+            email: email
+          }).then(function (options) {
+            if (options.error) {
+              setOutput(options);
+              return;
+            }
+            decodeAssertionOptions(options);
+            return navigator.credentials.get(options).then(function (assertion) {
+              var res = {
+                id: assertion.id,
+                rawId: base64UrlFromBuffer(assertion.rawId),
+                type: assertion.type,
+                response: {
+                  clientDataJSON: base64UrlFromBuffer(assertion.response.clientDataJSON),
+                  authenticatorData: base64UrlFromBuffer(assertion.response.authenticatorData),
+                  signature: base64UrlFromBuffer(assertion.response.signature)
+                }
+              };
+              return apiPostJson('{{ url_for("auth.passkey_login_complete") }}', res);
+            });
+          }).then(function (data) {
+            if (data) setOutput(data);
+          }).catch(function (err) {
+            setOutput(String(err));
+          });
+        });
+      }
+    })();
+  </script>
+{% endblock %}

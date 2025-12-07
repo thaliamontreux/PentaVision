@@ -1,0 +1,32 @@
+{
+  "python.defaultInterpreterPath": "c:\\projects\\PentaVision\\CascadeProjects\\windsurf-project\\.locust_env\\Scripts\\python",
+  "github.copilot.chat.mcpServers": {
+    "mcp-locust": {
+      "command": "c:\\projects\\PentaVision\\CascadeProjects\\windsurf-project\\.locust_env\\Scripts\\python",
+      "args": [
+        "-u",
+        "c:\\Users\\ThaliaMoonlight\\.windsurf\\extensions\\locust.locust-vscode-extension-0.1.68-universal\\mcp\\server.py"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  },
+  "github.copilot.experimental.mcpServers": {
+    "mcp-locust": {
+      "command": "c:\\projects\\PentaVision\\CascadeProjects\\windsurf-project\\.locust_env\\Scripts\\python",
+      "args": [
+        "-u",
+        "c:\\Users\\ThaliaMoonlight\\.windsurf\\extensions\\locust.locust-vscode-extension-0.1.68-universal\\mcp\\server.py"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  },
+  "python.testing.unittestArgs": [
+    "-v",
+    "-s",
+    ".",
+    "-p",
+    "*test.py"
+  ],
+  "python.testing.pytestEnabled": false,
+  "python.testing.unittestEnabled": true
+}

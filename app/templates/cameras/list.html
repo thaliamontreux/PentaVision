@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}Camera URL Patterns · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Camera URL Patterns</h1>
+    <p>Manage RTSP URL patterns for different camera manufacturers and models.</p>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+      <a class="pv-button-primary" href="{{ url_for('camera_admin.create_pattern') }}">
+        Add camera pattern
+      </a>
+      <form
+        method="post"
+        action="{{ url_for('camera_admin.import_csv') }}"
+        enctype="multipart/form-data"
+        style="display: inline-flex; align-items: center; gap: 0.5rem;"
+      >
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label style="font-size: 0.85rem;">
+          Import CSV
+          <input type="file" name="file" accept=".csv" required />
+        </label>
+        <label style="font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+          <input type="checkbox" name="clear_existing" value="1" />
+          Replace existing
+        </label>
+        <button type="submit" class="pv-button-secondary">Upload</button>
+      </form>
+    </div>
+
+    {% if patterns %}
+      <div style="overflow-x: auto;">
+        <table class="pv-table">
+          <thead>
+            <tr>
+              <th>Manufacturer</th>
+              <th>Model / Type</th>
+              <th>Protocol</th>
+              <th>URL pattern</th>
+              <th>Active</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in patterns %}
+              <tr>
+                <td>{{ p.manufacturer }}</td>
+                <td>{{ p.model_or_note or '' }}</td>
+                <td>{{ p.protocol or 'RTSP' }}</td>
+                <td><code>{{ p.rtsp_url_pattern }}</code></td>
+                <td>{{ 'Yes' if p.is_active else 'No' }}</td>
+                <td style="white-space: nowrap;">
+                  <a href="{{ url_for('camera_admin.edit_pattern', pattern_id=p.id) }}">Edit</a>
+                  <form
+                    method="post"
+                    action="{{ url_for('camera_admin.delete_pattern', pattern_id=p.id) }}"
+                    style="display: inline; margin-left: 0.5rem;"
+                  >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" style="background: none; border: none; color: #fca5a5; cursor: pointer;">
+                      Delete
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p>No camera URL patterns found.</p>
+    {% endif %}
+  </section>
+{% endblock %}

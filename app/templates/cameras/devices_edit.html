@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if is_edit %}Edit Camera{% else %}New Camera{% endif %} · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>
+      {% if is_edit %}
+        Edit Camera
+      {% else %}
+        New Camera
+      {% endif %}
+    </h1>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div
+      id="camera-client-errors"
+      class="pv-alert pv-alert-error"
+      style="display: none;"
+      aria-live="polite"
+    >
+      <ul id="camera-client-errors-list"></ul>
+    </div>
+
+    {% if form is not none %}
+      <form method="post" class="pv-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        <div class="pv-field-group">
+          <label for="name">Name</label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            required
+            value="{{ form.name }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="pattern_id">URL template</label>
+          <select id="pattern_id" name="pattern_id">
+            <option value="">(none)</option>
+            {% for p in patterns %}
+              <option
+                value="{{ p.id }}"
+                {% if form.pattern_id == p.id|string %}selected{% endif %}
+              >
+                {{ p.manufacturer }} {{ p.model_or_note or '' }} ({{ p.protocol or 'RTSP' }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="ip_address">IP address</label>
+          <input
+            id="ip_address"
+            name="ip_address"
+            type="text"
+            required
+            value="{{ form.ip_address }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="port">Port</label>
+          <input
+            id="port"
+            name="port"
+            type="text"
+            value="{{ form.port }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            value="{{ form.username }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value="{{ form.password }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="notes">Notes</label>
+          <textarea
+            id="notes"
+            name="notes"
+            rows="2"
+          >{{ form.notes }}</textarea>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="storage_targets">Storage providers (optional)</label>
+          <input
+            id="storage_targets"
+            name="storage_targets"
+            type="text"
+            value="{{ form.storage_targets }}"
+          />
+          <p class="pv-card-subtitle">
+            Comma-separated provider names (for example:
+            {{ storage_targets_default or "local_fs" }}). Leave blank to use
+            the global default for this camera.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="retention_days">Retention (days, optional)</label>
+          <input
+            id="retention_days"
+            name="retention_days"
+            type="text"
+            value="{{ form.retention_days }}"
+          />
+          <p class="pv-card-subtitle">
+            If set, recordings for this camera older than this many days will
+            be automatically removed from storage.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label>
+            <input
+              type="checkbox"
+              name="is_active"
+              value="1"
+              {% if form.is_active %}checked{% endif %}
+            />
+            Active camera
+          </label>
+        </div>
+
+        <button type="submit" class="pv-button-primary">
+          {% if is_edit %}
+            Save changes
+          {% else %}
+            Create camera
+          {% endif %}
+        </button>
+        <button
+          type="button"
+          id="test-connection-btn"
+          class="pv-button-secondary"
+          style="margin-left: 0.5rem;"
+        >
+          Test connection
+        </button>
+        <span
+          id="test-connection-status"
+          class="pv-card-subtitle"
+          style="margin-left: 0.75rem; font-size: 0.85rem;"
+        ></span>
+      </form>
+    {% else %}
+      <p>Nothing to edit.</p>
+    {% endif %}
+  </section>
+  <script>
+    (function () {
+      var form = document.querySelector('.pv-form');
+      if (!form) {
+        return;
+      }
+
+      var clientBox = document.getElementById('camera-client-errors');
+      var clientList = document.getElementById('camera-client-errors-list');
+
+      function showClientErrors(errors) {
+        if (!clientBox || !clientList) {
+          return;
+        }
+        clientList.innerHTML = '';
+        errors.forEach(function (msg) {
+          var li = document.createElement('li');
+          li.textContent = msg;
+          clientList.appendChild(li);
+        });
+        clientBox.style.display = errors.length ? 'block' : 'none';
+      }
+
+      form.addEventListener('submit', function (ev) {
+        var errors = [];
+        var name = (form.name && form.name.value ? form.name.value.trim() : '');
+        var ip = (form.ip_address && form.ip_address.value ? form.ip_address.value.trim() : '');
+        var port = (form.port && form.port.value ? form.port.value.trim() : '');
+        var retention = (form.retention_days && form.retention_days.value ? form.retention_days.value.trim() : '');
+
+        if (!name) {
+          errors.push('Enter a camera name.');
+        }
+        if (!ip) {
+          errors.push('Enter an IP address or hostname.');
+        }
+        if (port && !/^[0-9]+$/.test(port)) {
+          errors.push('Port must be a numeric value.');
+        }
+        if (retention && !/^[0-9]+$/.test(retention)) {
+          errors.push('Retention days must be a numeric value.');
+        }
+
+        if (errors.length) {
+          ev.preventDefault();
+          showClientErrors(errors);
+        } else {
+          showClientErrors([]);
+        }
+      });
+
+      var btn = document.getElementById('test-connection-btn');
+      var statusEl = document.getElementById('test-connection-status');
+      if (!btn || !statusEl) {
+        return;
+      }
+
+      function setStatus(text, tone) {
+        statusEl.textContent = text || '';
+        var color = '#6b7280';
+        if (tone === 'ok') {
+          color = '#16a34a';
+        } else if (tone === 'error') {
+          color = '#dc2626';
+        }
+        statusEl.style.color = color;
+      }
+
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        btn.disabled = true;
+        setStatus('Testing connection...', 'pending');
+
+        var payload = new URLSearchParams();
+        payload.append('csrf_token', (form.csrf_token && form.csrf_token.value) || '');
+        payload.append('pattern_id', (form.pattern_id && form.pattern_id.value) || '');
+        payload.append('ip_address', (form.ip_address && form.ip_address.value) || '');
+        payload.append('port', (form.port && form.port.value) || '');
+        payload.append('username', (form.username && form.username.value) || '');
+        payload.append('password', (form.password && form.password.value) || '');
+
+        fetch('{{ url_for("camera_admin.test_device_connection") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: payload.toString(),
+        })
+          .then(function (resp) {
+            return resp.json();
+          })
+          .then(function (data) {
+            if (data && data.ok) {
+              setStatus('Connection successful.', 'ok');
+            } else {
+              setStatus((data && data.error) || 'Connection failed.', 'error');
+            }
+          })
+          .catch(function () {
+            setStatus('Connection test failed (network error).', 'error');
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+    })();
+  </script>
+{% endblock %}

@@ -1,0 +1,191 @@
+System Setup and Dependencies
+
+To begin, provision an Ubuntu 24.04 minimal server and update packages. Install Apache and PHP (or your chosen web framework) via sudo apt update and sudo apt install apache2 php libapache2-mod-php to set up the web server
+ubuntu.com
+. Then enable and start Apache (sudo systemctl enable apache2, sudo systemctl start apache2). Next, install MariaDB (the database) with sudo apt install mariadb-server and secure it using sudo mysql_secure_installation to set strong root credentials and remove anonymous/default accounts
+docs.vultr.com
+docs.vultr.com
+. Also install any other dependencies (for example, ffmpeg for video processing or python3-opencv and python3-pip if using Python-based modules). Ensure the server has TLS/SSL certificates (e.g. via LetsEncrypt) and a firewall (e.g. ufw) restricting access. Each installed service should be started and enabled on boot. Avoid running services as root, and apply security patches regularly. These standard steps follow Ubuntu’s own guidelines
+ubuntu.com
+docs.vultr.com
+.
+
+Apache and modules: For example, install Apache with:
+
+sudo apt update
+sudo apt install apache2 libapache2-mod-php php-mysql
+
+
+(The Ubuntu tutorial recommends exactly this command to set up Apache
+ubuntu.com
+.)
+
+Database server: Install MariaDB:
+
+sudo apt install mariadb-server
+
+
+Then run sudo mysql_secure_installation to set a strong root password and disable unsafe defaults
+
+.
+
+Other packages: Install needed libraries for video and AI, such as ffmpeg, python3, python3-pip, python3-opencv, and any language-specific frameworks. For example, you might need python3-venv and then pip3 install face_recognition (which requires dlib) for facial recognition, or Node.js/npm if using JavaScript libraries.
+
+Security tools: Consider installing Fail2ban to block repeated failed logins, and enable Ubuntu’s firewall (ufw) to allow only needed ports (e.g. 80/443 for web, SSH on 22) for added protection.
+
+Graphical Web Installer
+
+Provide a web-based installer (e.g. a PHP or Python script at /install/install.php or similar) that guides the administrator through initial configuration. This installer should present an HTML form to collect configuration details (database hosts, ports, user names, and passwords for each component; admin username; etc.) and then write a secure config file. A common pattern is to create a single-page installer script that, when first accessed, asks for details and then initializes the system
+stackoverflow.com
+. For example, after the admin submits the form with database credentials, the script should attempt connections to each DB server and create necessary tables by executing SQL schema scripts. Once complete, it should “lock” itself (by creating a file or updating a flag) so it cannot be run again unless deliberately reset. Keep the installer outside the web root or disable it after installation to prevent tampering. (As one StackOverflow answer notes: “the easiest is to write a simple install script… that prints a form and asks for details. When submitted, do the necessary install routines.”
+stackoverflow.com
+.)
+
+Form fields: Include inputs for each database (e.g. UserDB, FaceDB, RecordDB), asking host (IP/domain), port, username, and password. Also ask for an initial admin user and password. Validate inputs on submit.
+
+Configuration file: After validation, write these settings to a configuration file (e.g. config.php or .env), stored securely (outside web-accessible directories).
+
+Database setup: Use the provided credentials to run SQL initialization (e.g. CREATE TABLE statements) for each database. If any step fails, display clear errors to the user for re-entry.
+
+Finalization: Once done, display a success message, then delete or disable the installer script to prevent reuse or leaks.
+
+Database Architecture and Separation
+
+For security and scalability, use multiple database servers so that each function has its own isolated database. For example: one MariaDB server (or instance) for user accounts, another for facial data (face embeddings), and another for recording metadata. This reduces blast radius if one database is compromised, as noted by best practices: storing all data on one server “exposes your data to different attack vectors” whereas isolated DB servers “should be isolated from everything else” to reduce risk
+backendless.com
+. Configure each service to only accept connections from the application server’s IP, and create distinct database users with minimal privileges for each schema. For instance, the UserDB account only needs access to user tables, not to facial data tables. Enable TLS/SSL for database connections if on separate hosts.
+
+Separate servers: Host each MariaDB instance on a different machine or container (if resources allow) to isolate services. This follows the advice that “database servers should be isolated from everything else”
+backendless.com
+. Use cloud providers or VMs such that compromise of one container does not directly expose others.
+
+Database permissions: On each server, create separate user accounts and databases (e.g. users, faces, records). Grant only required permissions (e.g. INSERT/UPDATE/SELECT on its own DB). Avoid using root or any privileges in application code.
+
+Network security: Use firewalls or private networks so that only the web server can reach the DB servers. Disable remote root logins and default ports if possible.
+
+Backups: Regularly back up each database separately (and encrypt the backups). Storing them on a different server or storage (even a cloud backup) protects against data loss.
+
+User Interface and Flow
+
+Design a clean, intuitive web UI for all users. Use a modern front-end framework or CSS library (e.g. Bootstrap or Tailwind) to ensure the site is responsive and easy to use on desktops and phones. Each major step (e.g. login, face scan, video recording) should be a clear page or modal. For example, after login the user sees a dashboard, with a button to “Start Session” that activates the camera and begins detection. Visual feedback (green/red indicators for recognized faces, login status, etc.) helps usability. Include progress indicators or instructions during the face scan process so users know when scanning is complete. Make sure all form inputs are clearly labeled, and error messages are user-friendly. Consider accessibility (keyboard navigation, screen-reader labels) so no one is excluded.
+
+Camera access: Use HTML5 getUserMedia() to capture webcam photos or video. Provide a “Scan Face” button that takes a snapshot and sends it to the backend for recognition.
+
+Responsive layout: Apply a mobile-friendly grid or flex layout so buttons and video panels resize gracefully on phones and tablets.
+
+Clear navigation: Use consistent headers/footers or sidebars. For example, show a “Logs” link to review past activity (for admins), and a “Storage” settings page where users pick a storage provider module.
+
+Client-side validation: Validate input (usernames, passwords, etc.) in JavaScript before sending to avoid server errors.
+
+Visual cues: After a face is recognized, overlay the person’s name on the live video feed (using a <canvas> overlay or by updating the video element) so attendees see themselves labeled.
+
+Facial Recognition Integration
+
+Implement real-time face detection and recognition using open-source libraries. On the back end (e.g. Python with Flask or PHP calling a Python script), use a library like face_recognition (built on dlib/OpenCV) to identify faces. This library is simple to use and highly accurate – it claims ~99.38% accuracy on standard benchmarks
+github.com
+. Alternatively, use OpenCV’s Haar cascades or DNN models for face detection
+twine.net
+, then compute face embeddings (e.g. via face_recognition or FaceNet) and compare against your stored database of user face-encodings. When a user scans their face, store their embedding in the FaceDB. During a live session, continually capture frames, detect any face, encode it, and compare to known users to identify matches.
+
+Face scanning: On registration, capture at least one clear front-facing image per user. Use face_recognition’s face_encodings() to compute a numeric descriptor and save it in the FaceDB.
+
+Real-time loop: During a session, periodically grab frames from the webcam video stream, run face_recognition.face_locations() and face_recognition.face_encodings() to find faces, then compare_faces() against known encodings. If match found, overlay the person’s name on the video UI. This approach is feasible for small to medium user counts.
+
+Library options: OpenCV has built-in detectors and the LBPH recognizer (an older but fast method)
+twine.net
+. For higher accuracy, face_recognition (Python) or Dlib (C++/Python) are recommended. They offer pre-trained deep models and Python bindings.
+
+Performance: Consider GPU acceleration if needed (e.g. run on a GPU server, or use TensorFlow models). For a simpler setup, running on CPU with a small number of attendees is usually okay.
+
+Privacy: Since faces are biometric data, store only the encodings (numbers), not raw images if possible. Secure the FaceDB with encryption at rest and strict access controls.
+
+Authentication: Passkeys and 2FA
+
+Use strong, phishing-resistant authentication. Support WebAuthn passkeys (FIDO2) so users can log in without passwords. Passkeys (e.g. Touch ID, Android biometric, or security keys) use public-key cryptography and have become widely supported; over 15 billion accounts can already use them
+fidoalliance.org
+. They inherently resist phishing – “there are no passwords to steal” and no secrets stored on the server
+fidoalliance.org
+. In practice, integrate a FIDO2 library or service so users can register a passkey in their browser/OS, then use it to authenticate. For fallback or added layers, implement traditional 2FA as well. Require a second factor (TOTP codes via Google Authenticator, or SMS/email codes, or a hardware token) on login. As IBM notes, 2FA means “hackers need to steal two credentials” (password + second factor) to break in
+ibm.com
+. This dramatically lowers risk: even if credentials leak, the account remains safe without the second factor.
+
+Passkeys (FIDO2/WebAuthn): Let users register devices as passkeys and login with them. According to the FIDO Alliance, passkeys offer “phishing-resistant security with a simple user experience”
+fidoalliance.org
+. Use established libraries (e.g. FIDO2 server or Node FIDO2) to implement this.
+
+Two-factor (2FA): As a complement or alternative, support a second factor. Common options are TOTP apps (Google Authenticator), SMS/email OTPs, or hardware keys (YubiKey). The FTC warns that “two locks on your door” make it much more secure – even if a hacker has your password, they cannot log in without the second factor
+consumer.ftc.gov
+.
+
+Account lockout and logging: Track failed login attempts and temporarily lock accounts after several failures. Log all login events (success/failure) with user ID and timestamp for auditing. See the Logging section below.
+
+Logging, Auditing, and Monitoring
+
+Implement comprehensive audit logging of user actions and system events. An audit log should record who did what and when, including success or failure.
+digitalguardian.com
+. For example, log each user login/logout (with timestamp and IP), file access (who accessed/downloaded a recording), and administrative actions (database setup changes, user additions). Store logs in a protected location (write-once or append-only files, or a centralized logging service) to prevent tampering. Regularly review logs or use a log analysis tool to detect anomalies (e.g. multiple failed logins, access outside business hours).
+
+What to log: User ID, action type (login, logout, record viewed, etc.), timestamp, target resource, and outcome (success/failure)
+digitalguardian.com
+. For example: 2025-12-05 14:10:23 | user123 | LOGIN_SUCCESS | IP=1.2.3.4.
+
+Secure storage: Keep logs on a separate server or write-protected volume. Encrypt logs at rest. Follow best practices: “Maintain log integrity” and restrict who can access log files
+digitalguardian.com
+digitalguardian.com
+.
+
+Log analysis: Use tools (e.g. fail2ban, ELK stack) to monitor for suspicious patterns (like brute-force attempts). Alert on key events.
+
+Regular reviews: Periodically audit logs. Ensure you keep logs at least 90 days (or per compliance requirements)
+digitalguardian.com
+.
+
+Good logging and auditing complement your security layers by catching what preventative measures might miss.
+
+Storage Modules and Top Providers
+
+Design a modular storage interface so users can choose where to send recorded videos. Each storage provider is implemented as a plugin/module following a common interface (e.g. a StorageProvider class with methods like upload(file) and getUrl(id)). Out of the many available services, here are 15 top storage options to support:
+
+Amazon S3 (AWS): A scalable object storage with 11 nines durability
+ 
+. Supports buckets, fine-grained IAM, and lifecycle policies.
+
+Microsoft Azure Blob Storage: Integrates with Azure ecosystem, multiple access tiers (hot/cold)
+ 
+.
+
+Google Cloud Storage: Versatile, globally distributed, with regional pricing. Easy for media archives and ML workloads
+ 
+.
+
+Backblaze B2: Cost-effective, unlimited storage for backup/archive
+.
+
+Wasabi Hot Cloud Storage: High-performance, pay-as-you-go object store with no egress fees
+.
+
+DigitalOcean Spaces: Simple S3-compatible storage for app backups and static sites
+.
+
+IBM Cloud Object Storage: Scalable storage on IBM Cloud, integrates with their analytics tools
+
+
+Linode (Akamai) Object Storage: Combines Linode’s infrastructure with Akamai’s CDN
+
+Dropbox (Business): Popular file sync/share service with strong collaboration tools
+
+Microsoft OneDrive (for Business): Seamless with Office 365, real-time co-editing, versioning
+
+IDrive: Offers large quotas and backup features at a low cost
+
+Sync.com: Focuses on zero-knowledge encryption and auditing for teams
+
+Nextcloud (Enterprise): An open-source, self-hosted cloud platform for full control over data
+
+Box (Business): Enterprise-grade content management and file sharing
+cloudally.com
+. Easy sharing and scalable.
+
+Google Drive (Workspace): Intuitive and familiar, with 15 GB free per user and deep integration with Google Workspace
+
+Each of the above can be integrated via their APIs or S3-compatible endpoints. For example, AWS S3 and DigitalOcean Spaces share an S3 API, so one module might support both. Dropbox, OneDrive, and Google Drive have distinct REST APIs or SDKs. By treating each provider as a replaceable module, users of your system can register credentials for any supported provider and have recordings automatically uploaded there (offloading storage cost to the user’s cloud). All providers listed are well-regarded in 2025; supporting them makes your software flexible for any user’s needs

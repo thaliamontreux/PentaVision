@@ -1,0 +1,480 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
+from flask import Blueprint, current_app, jsonify, request, session
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from fido2.server import Fido2Server
+from fido2.utils import websafe_decode, websafe_encode
+from fido2.webauthn import (
+    AuthenticatorAttachment,
+    CollectedClientData,
+    PublicKeyCredentialDescriptor,
+    PublicKeyCredentialRpEntity,
+    PublicKeyCredentialUserEntity,
+)
+
+from .db import get_user_engine
+from .logging_utils import log_event
+from .models import User, WebAuthnCredential
+
+
+bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+
+_ph = PasswordHasher()
+
+
+def _webauthn_server() -> Fido2Server:
+    rp_id = current_app.config.get("WEBAUTHN_RP_ID") or ""
+    if not rp_id:
+        host = request.host.split(":", 1)[0]
+        rp_id = host
+    rp_name = current_app.config.get("WEBAUTHN_RP_NAME", "PentaVision")
+    rp = PublicKeyCredentialRpEntity(id=rp_id, name=rp_name)
+    return Fido2Server(rp)
+
+
+def _user_handle_for(user: User) -> bytes:
+    return str(user.id).encode("utf-8")
+
+
+def _credential_descriptors(creds: list[WebAuthnCredential]) -> list[PublicKeyCredentialDescriptor]:
+    return [
+        PublicKeyCredentialDescriptor(
+            type="public-key",
+            id=cred.credential_id,
+            transports=(cred.transports or "").split(",") if cred.transports else None,
+        )
+        for cred in creds
+    ]
+
+
+def _webauthn_json(data):
+    if isinstance(data, (bytes, bytearray)):
+        return websafe_encode(data).decode("ascii")
+    if isinstance(data, dict):
+        return {k: _webauthn_json(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_webauthn_json(v) for v in data]
+    return data
+
+
+def _issue_token(user_id: int) -> str:
+    """Return a simple JWT access token for the given user id."""
+
+    import jwt
+
+    secret = current_app.config.get("SECRET_KEY") or "change-me"
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=1)).timestamp()),
+    }
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
+def _verify_totp(user: User, code: str) -> bool:
+    """Verify a TOTP code for the given user if TOTP is enabled."""
+
+    if not user.totp_secret:
+        return True
+
+    if not code:
+        return False
+
+    try:
+        import pyotp
+
+        totp = pyotp.TOTP(user.totp_secret)
+        return bool(totp.verify(code, valid_window=1))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@bp.post("/register")
+def register():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        log_event("AUTH_REGISTER_INVALID", details="missing email or password")
+        return jsonify({"error": "email and password are required"}), 400
+
+    engine = get_user_engine()
+    if engine is None:
+        log_event("AUTH_REGISTER_ERROR", details="user DB not configured")
+        return jsonify({"error": "user database not configured"}), 500
+
+    with Session(engine) as session:
+        existing = session.scalar(select(User).where(User.email == email))
+        if existing is not None:
+            log_event("AUTH_REGISTER_EMAIL_EXISTS", details=f"email={email}")
+            return jsonify({"error": "email already registered"}), 400
+
+        password_hash = _ph.hash(password)
+        user = User(email=email, password_hash=password_hash)
+        session.add(user)
+        session.commit()
+
+        token = _issue_token(user.id)
+        log_event("AUTH_REGISTER_SUCCESS", user_id=user.id, details=f"email={email}")
+        return (
+            jsonify({"id": user.id, "email": user.email, "access_token": token}),
+            201,
+        )
+
+
+@bp.post("/login")
+def login():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    totp_code = (data.get("totp_code") or "").strip()
+
+    if not email or not password:
+        return jsonify({"error": "email and password are required"}), 400
+
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    with Session(engine) as session:
+        user = session.scalar(select(User).where(User.email == email))
+        if user is None:
+            log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        now = datetime.now(timezone.utc)
+        if user.locked_until and user.locked_until > now:
+            log_event(
+                "AUTH_LOGIN_LOCKED",
+                user_id=user.id,
+                details=f"locked_until={user.locked_until.isoformat()}",
+            )
+            return jsonify({"error": "account locked. try again later."}), 403
+
+        try:
+            _ph.verify(user.password_hash, password)
+        except VerifyMismatchError:
+            # Increment failed login counter and lock account after too many attempts.
+            user.failed_logins = (user.failed_logins or 0) + 1
+            if user.failed_logins >= 5:
+                user.locked_until = now + timedelta(minutes=15)
+                log_event(
+                    "AUTH_LOGIN_LOCKED_SET",
+                    user_id=user.id,
+                    details="failed_logins>=5",
+                )
+            session.add(user)
+            session.commit()
+            log_event("AUTH_LOGIN_FAILURE", user_id=user.id, details="bad password")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        # If TOTP is enabled, require a valid TOTP code as a second factor.
+        if user.totp_secret:
+            if not _verify_totp(user, totp_code):
+                log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user.id)
+                return jsonify({"error": "invalid 2FA code"}), 401
+
+        if _ph.check_needs_rehash(user.password_hash):
+            user.password_hash = _ph.hash(password)
+        user.failed_logins = 0
+        user.locked_until = None
+        session.add(user)
+        session.commit()
+
+        token = _issue_token(user.id)
+        log_event("AUTH_LOGIN_SUCCESS", user_id=user.id)
+        return jsonify({"access_token": token}), 200
+
+
+@bp.post("/totp/setup")
+def totp_setup():
+    """Set up TOTP 2FA for a user using email+password verification.
+
+    This endpoint verifies the user's credentials and, if successful and TOTP is
+    not already configured, generates a new TOTP secret and returns an otpauth
+    URI suitable for QR codes in authenticator apps.
+    """
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"error": "email and password are required"}), 400
+
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    with Session(engine) as session:
+        user = session.scalar(select(User).where(User.email == email))
+        if user is None:
+            log_event("AUTH_TOTP_SETUP_FAILURE", details=f"unknown email={email}")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        try:
+            _ph.verify(user.password_hash, password)
+        except VerifyMismatchError:
+            log_event("AUTH_TOTP_SETUP_FAILURE", user_id=user.id, details="bad password")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        if user.totp_secret:
+            return jsonify({"error": "totp already configured"}), 400
+
+        import pyotp
+
+        secret = pyotp.random_base32()
+        totp = pyotp.TOTP(secret)
+        issuer = current_app.config.get("TOTP_ISSUER", "PentaVision")
+        otpauth_url = totp.provisioning_uri(name=email, issuer_name=issuer)
+
+        user.totp_secret = secret
+        session.add(user)
+        session.commit()
+
+        log_event("AUTH_TOTP_SETUP_SUCCESS", user_id=user.id)
+        return jsonify({"secret": secret, "otpauth_url": otpauth_url}), 201
+
+
+@bp.post("/passkeys/register/begin")
+def passkey_register_begin():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    nickname = (data.get("nickname") or "").strip()
+
+    if not email or not password:
+        return jsonify({"error": "email and password are required"}), 400
+
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    with Session(engine) as session_db:
+        user = session_db.scalar(select(User).where(User.email == email))
+        if user is None:
+            log_event("AUTH_WEBAUTHN_REGISTER_BEGIN_FAILURE", details=f"unknown email={email}")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        try:
+            _ph.verify(user.password_hash, password)
+        except VerifyMismatchError:
+            log_event("AUTH_WEBAUTHN_REGISTER_BEGIN_FAILURE", user_id=user.id, details="bad password")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        creds = (
+            session_db.query(WebAuthnCredential)
+            .filter(WebAuthnCredential.user_id == user.id)
+            .all()
+        )
+
+        user_entity = PublicKeyCredentialUserEntity(
+            id=_user_handle_for(user),
+            name=user.email,
+            display_name=user.email,
+        )
+
+        server = _webauthn_server()
+        options, state = server.register_begin(
+            user_entity,
+            _credential_descriptors(creds),
+            authenticator_selection={
+                "authenticatorAttachment": AuthenticatorAttachment.CROSS_PLATFORM,
+            },
+        )
+
+        session["webauthn_register_state"] = state
+        session["webauthn_register_user_id"] = user.id
+        if nickname:
+            session["webauthn_register_nickname"] = nickname
+
+        log_event("AUTH_WEBAUTHN_REGISTER_BEGIN", user_id=user.id)
+        return jsonify(_webauthn_json(options))
+
+
+@bp.post("/passkeys/register/complete")
+def passkey_register_complete():
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    state = session.get("webauthn_register_state")
+    user_id = session.get("webauthn_register_user_id")
+    nickname = session.pop("webauthn_register_nickname", None)
+    if not state or not user_id:
+        return jsonify({"error": "no pending registration"}), 400
+
+    data = request.get_json(silent=True) or {}
+    raw_id = data.get("id") or data.get("rawId")
+    response = data.get("response") or {}
+    client_data_b64 = response.get("clientDataJSON")
+    att_obj_b64 = response.get("attestationObject")
+    if not raw_id or not client_data_b64 or not att_obj_b64:
+        return jsonify({"error": "invalid attestation payload"}), 400
+
+    client_data = CollectedClientData(websafe_decode(client_data_b64))
+    att_obj = websafe_decode(att_obj_b64)
+
+    server = _webauthn_server()
+    try:
+        auth_data = server.register_complete(state, client_data, att_obj)
+    except Exception:
+        log_event("AUTH_WEBAUTHN_REGISTER_COMPLETE_FAILURE", user_id=int(user_id))
+        return jsonify({"error": "failed to verify attestation"}), 400
+
+    credential_data = auth_data.credential_data
+    credential_id = credential_data.credential_id
+    public_key = credential_data.public_key
+    sign_count = auth_data.sign_count
+
+    with Session(engine) as session_db:
+        user = session_db.get(User, int(user_id))
+        if user is None:
+            return jsonify({"error": "user not found"}), 400
+
+        existing = (
+            session_db.query(WebAuthnCredential)
+            .filter(
+                WebAuthnCredential.user_id == user.id,
+                WebAuthnCredential.credential_id == credential_id,
+            )
+            .first()
+        )
+        if existing is None:
+            cred = WebAuthnCredential(
+                user_id=user.id,
+                credential_id=credential_id,
+                public_key=public_key,
+                sign_count=sign_count,
+                transports=None,
+                nickname=nickname or None,
+            )
+            session_db.add(cred)
+        else:
+            existing.public_key = public_key
+            existing.sign_count = sign_count
+            existing.nickname = nickname or existing.nickname
+            session_db.add(existing)
+        session_db.commit()
+
+    session.pop("webauthn_register_state", None)
+    session.pop("webauthn_register_user_id", None)
+
+    log_event("AUTH_WEBAUTHN_REGISTER_COMPLETE", user_id=int(user_id))
+    return jsonify({"ok": True})
+
+
+@bp.post("/passkeys/login/begin")
+def passkey_login_begin():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "email is required"}), 400
+
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    with Session(engine) as session_db:
+        user = session_db.scalar(select(User).where(User.email == email))
+        if user is None:
+            log_event("AUTH_WEBAUTHN_LOGIN_BEGIN_FAILURE", details=f"unknown email={email}")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        creds = (
+            session_db.query(WebAuthnCredential)
+            .filter(WebAuthnCredential.user_id == user.id)
+            .all()
+        )
+        if not creds:
+            return jsonify({"error": "no passkeys registered"}), 400
+
+        server = _webauthn_server()
+        options, state = server.authenticate_begin(_credential_descriptors(creds))
+
+        session["webauthn_login_state"] = state
+        session["webauthn_login_user_id"] = user.id
+
+        log_event("AUTH_WEBAUTHN_LOGIN_BEGIN", user_id=user.id)
+        return jsonify(_webauthn_json(options))
+
+
+@bp.post("/passkeys/login/complete")
+def passkey_login_complete():
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    state = session.get("webauthn_login_state")
+    user_id = session.get("webauthn_login_user_id")
+    if not state or not user_id:
+        return jsonify({"error": "no pending authentication"}), 400
+
+    data = request.get_json(silent=True) or {}
+    raw_id = data.get("id") or data.get("rawId")
+    response = data.get("response") or {}
+    client_data_b64 = response.get("clientDataJSON")
+    auth_data_b64 = response.get("authenticatorData")
+    signature_b64 = response.get("signature")
+    if not raw_id or not client_data_b64 or not auth_data_b64 or not signature_b64:
+        return jsonify({"error": "invalid assertion payload"}), 400
+
+    credential_id = websafe_decode(raw_id)
+    client_data = CollectedClientData(websafe_decode(client_data_b64))
+    auth_data = websafe_decode(auth_data_b64)
+    signature = websafe_decode(signature_b64)
+
+    server = _webauthn_server()
+
+    with Session(engine) as session_db:
+        user = session_db.get(User, int(user_id))
+        if user is None:
+            return jsonify({"error": "user not found"}), 400
+
+        creds = (
+            session_db.query(WebAuthnCredential)
+            .filter(WebAuthnCredential.user_id == user.id)
+            .all()
+        )
+        if not creds:
+            return jsonify({"error": "no passkeys registered"}), 400
+
+        cred_map = {c.credential_id: c for c in creds}
+        cred_obj = cred_map.get(credential_id)
+        if cred_obj is None:
+            log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE", user_id=user.id, details="unknown credential")
+            return jsonify({"error": "unknown credential"}), 400
+
+        try:
+            auth_result = server.authenticate_complete(
+                state,
+                _credential_descriptors(creds),
+                credential_id,
+                client_data,
+                auth_data,
+                signature,
+            )
+        except Exception:
+            log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE", user_id=user.id, details="verification failed")
+            return jsonify({"error": "failed to verify assertion"}), 400
+
+        cred_obj.sign_count = auth_result.new_sign_count
+        cred_obj.last_used_at = datetime.now(timezone.utc)
+        session_db.add(cred_obj)
+        session_db.commit()
+
+    session.pop("webauthn_login_state", None)
+    session.pop("webauthn_login_user_id", None)
+
+    token = _issue_token(int(user_id))
+    log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE", user_id=int(user_id))
+    return jsonify({"access_token": token}), 200

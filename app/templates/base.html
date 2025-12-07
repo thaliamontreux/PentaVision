@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{% block title %}PentaVision{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+  </head>
+  <body>
+    <a href="#pv-main-content" class="pv-skip-link">Skip to main content</a>
+    <div id="pv-splash" class="pv-splash-overlay">
+      <div class="pv-splash-inner">
+        <img
+          src="{{ url_for('static', filename='img/pentavision.png') }}"
+          alt="PentaVision"
+          class="pv-splash-logo"
+        />
+      </div>
+    </div>
+
+    <header class="pv-header" role="banner">
+      <div class="pv-header-inner">
+        <div class="pv-brand">PentaVision</div>
+        <nav class="pv-nav" role="navigation" aria-label="Main navigation">
+          <a href="{{ url_for('main.index') }}">Dashboard</a>
+          <a href="{{ url_for('installer.install') }}">Installer</a>
+          <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
+          <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URLs</a>
+          <a href="{{ url_for('main.recordings') }}">Recordings</a>
+          <a href="{{ url_for('main.faces_demo') }}">Faces</a>
+          <a href="{{ url_for('main.storage_settings') }}">Storage</a>
+          <a href="{{ url_for('main.audit_events') }}">Audit</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="pv-main" id="pv-main-content" role="main">
+      {% block content %}{% endblock %}
+    </main>
+
+    <script>
+      (function () {
+        var splash = document.getElementById('pv-splash');
+        if (!splash) {
+          return;
+        }
+
+        var hasSessionStorage = false;
+        try {
+          hasSessionStorage = typeof window.sessionStorage !== 'undefined';
+        } catch (e) {
+          hasSessionStorage = false;
+        }
+
+        function hideSoon() {
+          setTimeout(function () {
+            splash.classList.add('pv-splash-hide');
+          }, 5000);
+        }
+
+        // If PerformanceNavigationTiming is available, detect reload vs navigate.
+        var navType = 'navigate';
+        try {
+          if (window.performance && performance.getEntriesByType) {
+            var entries = performance.getEntriesByType('navigation');
+            if (entries && entries.length > 0 && entries[0].type) {
+              navType = entries[0].type;
+            }
+          }
+        } catch (e) {
+          navType = 'navigate';
+        }
+
+        // Always show splash on explicit reloads.
+        if (navType === 'reload') {
+          hideSoon();
+          return;
+        }
+
+        if (!hasSessionStorage) {
+          // Fallback: show on every navigation if we cannot track state.
+          hideSoon();
+          return;
+        }
+
+        var seen = window.sessionStorage.getItem('pvSplashSeen') === '1';
+        if (seen) {
+          // Already shown once in this tab: hide immediately for internal navigations.
+          splash.classList.add('pv-splash-hide');
+          return;
+        }
+
+        // First visit in this tab: record and show splash once.
+        window.sessionStorage.setItem('pvSplashSeen', '1');
+        hideSoon();
+      })();
+    </script>
+  </body>
+</html>

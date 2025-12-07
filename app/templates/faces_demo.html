@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+
+{% block title %}Faces Demo · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Face enrollment and recognition</h1>
+    <p style="margin-bottom: 1rem; color: #9ca3af; font-size: 0.9rem;">
+      Use your webcam to enroll a face for an existing user email, then capture frames
+      to test recognition against stored embeddings.
+    </p>
+
+    <div class="pv-dashboard-grid">
+      <div class="pv-card">
+        <h2>Live camera</h2>
+        <div style="position: relative; max-width: 480px;">
+          <video
+            id="face-video"
+            autoplay
+            playsinline
+            style="width: 100%; border-radius: 0.5rem; background: #000;"
+          ></video>
+          <canvas
+            id="face-overlay"
+            style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none;"
+          ></canvas>
+        </div>
+        <button
+          type="button"
+          class="pv-button pv-button-primary"
+          id="face-start-btn"
+          style="margin-top: 0.75rem;"
+        >
+          Start camera
+        </button>
+      </div>
+
+      <div class="pv-card">
+        <h2>Enroll / recognize</h2>
+
+        <div class="pv-form-group">
+          <label class="pv-form-label" for="face-email">User email</label>
+          <input
+            id="face-email"
+            class="pv-input"
+            type="email"
+            placeholder="user@example.com"
+            autocomplete="username"
+          />
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem;">
+          <button type="button" class="pv-button pv-button-primary" id="face-enroll-btn">
+            Capture &amp; enroll
+          </button>
+          <button type="button" class="pv-button" id="face-recognize-btn">
+            Capture &amp; recognize
+          </button>
+        </div>
+
+        <p style="margin-top: 0.75rem; font-size: 0.8rem; color: #9ca3af;">
+          Enrollment stores one primary embedding per capture for the given email.
+          Recognition returns best matches for each detected face with distances.
+        </p>
+      </div>
+      <div class="pv-card">
+        <h2>Privacy controls</h2>
+        <p style="margin-bottom: 0.75rem; font-size: 0.8rem; color: #9ca3af;">
+          Use these controls to opt out of facial recognition for a user. Opting
+          out deletes existing embeddings for that email and prevents future
+          recognition matches until they opt back in and re-enroll.
+        </p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="pv-button" id="face-optout-btn">
+            Opt out of recognition
+          </button>
+          <button type="button" class="pv-button" id="face-optin-btn">
+            Opt back in
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
+      <h2>Face API response</h2>
+      <pre
+        id="face-output"
+        style="min-height: 4rem; font-size: 0.8rem; white-space: pre-wrap;"
+        aria-live="polite"
+      ></pre>
+    </div>
+
+    <canvas id="face-canvas" style="display: none;"></canvas>
+  </section>
+
+  <script>
+    (function () {
+      var video = document.getElementById('face-video');
+      var overlay = document.getElementById('face-overlay');
+      var canvas = document.getElementById('face-canvas');
+      var outputEl = document.getElementById('face-output');
+      var stream = null;
+
+      function setOutput(value) {
+        if (!outputEl) return;
+        if (typeof value === 'string') {
+          outputEl.textContent = value;
+        } else {
+          try {
+            outputEl.textContent = JSON.stringify(value, null, 2);
+          } catch (e) {
+            outputEl.textContent = String(value);
+          }
+        }
+      }
+
+      function apiPostJson(url, body) {
+        return fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(body || {})
+        }).then(function (resp) {
+          return resp.json().catch(function () {
+            return { error: 'invalid JSON response', status: resp.status };
+          });
+        });
+      }
+
+      function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setOutput('getUserMedia is not supported in this browser.');
+          return;
+        }
+        navigator.mediaDevices.getUserMedia({ video: true }).then(function (s) {
+          stream = s;
+          if ('srcObject' in video) {
+            video.srcObject = s;
+          } else {
+            video.src = window.URL.createObjectURL(s);
+          }
+        }).catch(function (err) {
+          setOutput('Failed to start camera: ' + err);
+        });
+      }
+
+      function captureFrameAsDataUrl() {
+        if (!video || !canvas) return null;
+        var w = video.videoWidth || 640;
+        var h = video.videoHeight || 480;
+        if (!w || !h) return null;
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, w, h);
+        return canvas.toDataURL('image/jpeg', 0.9);
+      }
+
+      function clearOverlay() {
+        if (!overlay) return;
+        var ctx = overlay.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+      }
+
+      function drawFacesOverlay(faces) {
+        if (!overlay || !video) return;
+        var w = video.clientWidth || overlay.clientWidth || 0;
+        var h = video.clientHeight || overlay.clientHeight || 0;
+        if (!w || !h) return;
+        overlay.width = w;
+        overlay.height = h;
+        var ctx = overlay.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.font = '12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillStyle = 'rgba(34,197,94,0.7)';
+
+        faces.forEach(function (face) {
+          var top = face.top;
+          var right = face.right;
+          var bottom = face.bottom;
+          var left = face.left;
+          var label = face.email || ('ID ' + face.user_id) || 'Unknown';
+
+          var fw = (right - left);
+          var fh = (bottom - top);
+          var sx = left / (video.videoWidth || fw || 1) * w;
+          var sy = top / (video.videoHeight || fh || 1) * h;
+          var sw = fw / (video.videoWidth || fw || 1) * w;
+          var sh = fh / (video.videoHeight || fh || 1) * h;
+
+          ctx.strokeRect(sx, sy, sw, sh);
+          var text = label + (face.distance != null ? (' [' + face.distance.toFixed(2) + ']') : '');
+          var tw = ctx.measureText(text).width + 6;
+          var th = 14;
+          ctx.fillRect(sx, sy - th, tw, th);
+          ctx.fillStyle = '#0b1120';
+          ctx.fillText(text, sx + 3, sy - 3);
+          ctx.fillStyle = 'rgba(34,197,94,0.7)';
+        });
+      }
+
+      var startBtn = document.getElementById('face-start-btn');
+      if (startBtn) {
+        startBtn.addEventListener('click', function () {
+          startCamera();
+        });
+      }
+
+      var enrollBtn = document.getElementById('face-enroll-btn');
+      if (enrollBtn) {
+        enrollBtn.addEventListener('click', function () {
+          var email = document.getElementById('face-email').value.trim();
+          if (!email) {
+            setOutput('Enter an email for enrollment.');
+            return;
+          }
+          var dataUrl = captureFrameAsDataUrl();
+          if (!dataUrl) {
+            setOutput('No video frame available yet. Start the camera and try again.');
+            return;
+          }
+          clearOverlay();
+          apiPostJson('{{ url_for("main.face_enroll") }}', {
+            email: email,
+            image: dataUrl
+          }).then(function (data) {
+            setOutput(data);
+          }).catch(function (err) {
+            setOutput(String(err));
+          });
+        });
+      }
+
+      var optOutBtn = document.getElementById('face-optout-btn');
+      if (optOutBtn) {
+        optOutBtn.addEventListener('click', function () {
+          var email = document.getElementById('face-email').value.trim();
+          if (!email) {
+            setOutput('Enter an email to opt out.');
+            return;
+          }
+          apiPostJson('{{ url_for("main.face_opt_out") }}', {
+            email: email
+          }).then(function (data) {
+            setOutput(data);
+          }).catch(function (err) {
+            setOutput(String(err));
+          });
+        });
+      }
+
+      var optInBtn = document.getElementById('face-optin-btn');
+      if (optInBtn) {
+        optInBtn.addEventListener('click', function () {
+          var email = document.getElementById('face-email').value.trim();
+          if (!email) {
+            setOutput('Enter an email to opt back in.');
+            return;
+          }
+          apiPostJson('{{ url_for("main.face_opt_in") }}', {
+            email: email
+          }).then(function (data) {
+            setOutput(data);
+          }).catch(function (err) {
+            setOutput(String(err));
+          });
+        });
+      }
+
+      var recognizeBtn = document.getElementById('face-recognize-btn');
+      if (recognizeBtn) {
+        recognizeBtn.addEventListener('click', function () {
+          var dataUrl = captureFrameAsDataUrl();
+          if (!dataUrl) {
+            setOutput('No video frame available yet. Start the camera and try again.');
+            return;
+          }
+          apiPostJson('{{ url_for("main.face_recognize") }}', {
+            image: dataUrl
+          }).then(function (data) {
+            setOutput(data);
+            if (data && Array.isArray(data.faces)) {
+              drawFacesOverlay(data.faces);
+            }
+          }).catch(function (err) {
+            setOutput(String(err));
+          });
+        });
+      }
+
+      window.addEventListener('beforeunload', function () {
+        if (stream) {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+        }
+      });
+    })();
+  </script>
+{% endblock %}

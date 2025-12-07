@@ -1,0 +1,135 @@
+Project Deployment and Security Specifications
+
+On a Ubuntu 24.04 minimal server, the first step is to install Apache and related packages via apt. For example, update the package index and install Apache with: sudo apt update && sudo apt install apache2 -y
+docs.vultr.com
+. Also install essential modules (e.g. libapache2-mod-security2 for ModSecurity, libapache2-mod-rewrite, PHP/Python/Node runtimes if needed) and enable TLS (mod_ssl) for encrypted connections. Apply security hardening: disable default sites, remove sample files, enforce strong SSL ciphers, enable firewall (allow only ports 80/443), and enable mod_security and mod_evasive to block common exploits. Use the Apache systemctl service to enable and start the server on boot
+docs.vultr.com
+.
+
+APT packages: Always use apt update and install packages in one command to reduce errors. Example setup script steps:
+
+sudo apt update && sudo apt install -y apache2 apache2-utils libapache2-mod-security2 ufw
+
+(Optional) Install language support (e.g. php8.2 libapache2-mod-php or python3 libapache2-mod-wsgi-py3), and tools like git, curl, vim.
+
+Enable and start Apache (sudo systemctl enable --now apache2).
+
+Configure UFW: sudo ufw allow 80/tcp && sudo ufw allow 443/tcp.
+
+Security checks: After install, verify apache2 -v and test via browser. Remove unnecessary open ports, disable directory listing, and keep the system updated. Regularly apply Ubuntu security updates and audit installed packages to prevent known vulnerabilities.
+
+Graphical Web Installer
+
+We will create a web-based installation wizard (e.g. under /install/installer.php) to gather configuration from the administrator. The wizard flows through pages for each section: setting up database servers, creating an admin user, and configuring options. (For example, Mautic’s web installer runs at /installer
+linuxbabe.com
+.) The installer UI must validate all inputs and protect against injection and CSRF: use server-side form validation, parameterized queries, and random tokens in forms. After the user submits settings, the script writes them to protected config files or environment variables (outside the webroot).
+
+Steps: Present form pages for each component (e.g. Database Setup, Admin Account, Security Settings). After submission, run checks (e.g. test DB connections) and write out a locked-down configuration file. Create any necessary schemas or tables using prepared statements to avoid SQL injection.
+
+Error handling: Provide clear messages on failure (invalid DB credentials, permission issues). Ensure the installer directory is disabled (or removed) after setup to prevent reuse.
+
+Hardening: Protect the install directory by a one-time code or session token, and remove write permissions on config files after they are created. Use HTTPS for the installer pages to protect credentials in transit.
+
+docs.vultr.com
+linuxbabe.com
+
+Database Architecture and Segmentation
+
+For security and reliability, use multiple MariaDB servers (or instances) with one database per component. For example, host three separate databases on isolated servers: one for user accounts/authentication, one for facial recognition data, and one for video recordings/metadata. This follows the database-per-service pattern, which “decouples data stores” so that “a single database can’t be a single point of failure”
+docs.aws.amazon.com
+. Each database server has its own credentials and minimal network access (only the application backend can reach it).
+
+Isolation: Place each DB server on a private network segment or VLAN. Use strong passwords and SSL/TLS for database connections.
+
+Principle of least privilege: Grant each part of the application only the necessary DB permissions (e.g. the recording module cannot read the user table). Do not share database credentials between modules.
+
+No shared tables: Keep tables separate; there is no single master DB. If you need to join across systems (e.g. to audit who recorded what), do so in the application layer rather than with cross-DB queries.
+
+By isolating the databases (as in microservices), you gain resilience and security
+docs.aws.amazon.com
+. Even if one DB server is compromised, attackers cannot easily access the others without separate breaches.
+
+Authentication, Passkeys and Activity Logging
+
+Authentication uses modern standards: implement WebAuthn/FIDO2 “passkeys” for passwordless login
+fidoalliance.org
+, with a fallback two-factor (2FA) like TOTP or SMS for devices without passkeys. In practice, a user registers a passkey via browser (biometric or PIN on their device) which yields a public key stored on our server. On login, we challenge the passkey, ensuring phishing-resistant security
+fidoalliance.org
+. When passkeys are unavailable, users enter username/password and a time-based OTP. Store any secrets (e.g. OTP seeds) in a secure vault.
+
+WebAuthn/Passkeys: Use an established library or framework to handle FIDO2 flows. Passkeys “replace passwords with cryptographic key pairs”
+fidoalliance.org
+, meaning servers never store plaintext passwords. This guards against credential leaks and phishing.
+
+2FA: As an alternative, use TOTP apps (Google Authenticator, Authy) or SMS as a backup factor. Encourage users to set up passkeys primarily, since passkeys alone offer better security than password+OTP combos
+fidoalliance.org
+.
+
+Hashing: If any passwords are used (e.g. admin login), hash them with a strong algorithm (Argon2id) and salt. Never store raw passwords.
+
+Every login attempt and critical action must be logged (audit trail). As OWASP advises, “application logging should always be included for security events”
+cheatsheetseries.owasp.org
+. Record successful and failed logins, user role changes, configuration changes, and video start/stop events. Store logs in a write-once or tamper-evident store.
+
+fidoalliance.org
+cheatsheetseries.owasp.org
+
+Facial Recognition Module
+
+The system supports facial detection and recognition via user webcams. Each user scans their face once during enrollment: the server captures an image and computes a facial embedding (using a library like face-recognition built on dlib’s deep-learning model
+pypi.org
+). Store these embeddings (and associated user ID) in the Face DB. At runtime, the video stream is processed frame-by-frame: detect faces (e.g. with OpenCV or MediaPipe) and compare to stored embeddings to identify users in real time. Recognized names are overlaid onto the live video and recorded output.
+
+Implementation: Use a proven open-source library. The face-recognition Python library (MIT-licensed) provides simple commands to find and identify faces with ~99% accuracy on benchmark datasets
+pypi.org
+. Embeddings are vectors compared via cosine distance or similar.
+
+Security: Keep the Face DB on a secure, isolated server. Encrypt it at rest and only allow the recognition service to query it. Personal biometric data is sensitive: ensure GDPR-type compliance (inform users, allow deletion of their face data).
+
+Integration: The front-end will prompt users to use their camera. The back-end can stream video frames to the recognition service or run it client-side (if privacy-desired). Label each recognized face in real time and append that metadata to the recorded video file or database.
+
+By leveraging high-accuracy open models
+pypi.org
+, the system reliably tags people on camera. Allow users to optionally disable face tagging if privacy is a concern.
+
+pypi.org
+
+Storage Provider Integration
+
+Users can choose any cloud or remote storage provider to store videos. We will write each provider as a plugin/module, using its API to upload/stream recordings. Top providers include both enterprise object stores and consumer file-sync services. For example, leading platforms (by market share and features) are:
+
+Amazon S3 (AWS) – widely used object storage with an S3 API (virtually standard).
+
+Google Cloud Storage – Google’s equivalent to S3 with global infrastructure.
+
+Microsoft Azure Blob Storage – Microsoft’s high-availability object store.
+
+Dropbox – popular file-sync service (offers business APIs).
+
+Google Drive – ubiquitous personal storage (with generous free tier).
+
+Microsoft OneDrive – integrated with Office 365 ecosystem.
+
+Apple iCloud Drive – for Apple users’ backups.
+
+Box – enterprise file storage with strong sharing controls.
+
+Backblaze B2 – low-cost S3-compatible cloud storage.
+
+Wasabi Hot Cloud – budget-friendly S3-compatible provider.
+
+Mega – secure cloud storage with client-side encryption.
+
+pCloud – offers lifetime plans and media streaming features.
+
+Sync.com – zero-knowledge encrypted file sync.
+
+IDrive – backup-focused provider with shareable links.
+
+IBM Cloud Object Storage – enterprise-grade S3 service.
+
+These choices cover the “best cloud storage apps” cited in 2025 reviews
+zapier.com
+, as well as major cloud vendors
+docs.aws.amazon.com
+. The software will use each provider’s SDK or REST API: for S3-like providers (AWS, Azure, GCP, Backblaze, Wasabi, IBM), use their S3/HTTP APIs; for Drive/Dropbox/OneDrive, use OAuth2-based file APIs. The design ensures the app only calls the enabled provider’s module when saving or fetching videos, making storage fully pluggable.

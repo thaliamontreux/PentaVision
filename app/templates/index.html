@@ -1,0 +1,338 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>System overview</h1>
+    <p style="margin-bottom: 1rem;">
+      Overall status:
+      {% if overall_status == 'ok' %}
+        <span class="pv-chip pv-chip-ok">All systems nominal</span>
+      {% else %}
+        <span class="pv-chip pv-chip-warn">Degraded &mdash; check database connectivity</span>
+      {% endif %}
+    </p>
+
+    <div class="pv-dashboard-grid">
+      <div class="pv-card">
+        <h2>Databases</h2>
+        <ul class="pv-status-list">
+          <li>
+            <span>User DB</span>
+            {% set status = db_status.get('user', 'not_configured') %}
+            <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
+          </li>
+          <li>
+            <span>Face DB</span>
+            {% set status = db_status.get('face', 'not_configured') %}
+            <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
+          </li>
+          <li>
+            <span>Record DB</span>
+            {% set status = db_status.get('record', 'not_configured') %}
+            <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
+          </li>
+        </ul>
+        <p style="font-size: 0.85rem; color: #9ca3af; margin-top: 0.75rem;">
+          Use the <strong>Installer</strong> to adjust database configuration.
+        </p>
+      </div>
+
+      <div class="pv-card pv-card-wide">
+        <div class="pv-card-header">
+          <div>
+            <h2>Cameras</h2>
+            <p class="pv-card-subtitle">
+              Configured cameras using the templates in Camera URLs.
+            </p>
+          </div>
+          <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-link-muted">
+            Manage cameras
+          </a>
+        </div>
+
+        {% if devices %}
+          <div class="pv-camera-grid">
+            {% for d in devices %}
+              {% set pat = patterns.get(d.pattern_id) if patterns else None %}
+              <div class="pv-camera-tile" role="group" aria-label="Camera {{ d.name }}">
+                <div class="pv-camera-header">
+                  <div class="pv-camera-title">{{ d.name }}</div>
+                  <span class="pv-chip pv-chip-small">
+                    {% if pat %}
+                      {{ pat.protocol or 'RTSP' }}
+                    {% else %}
+                      Unknown
+                    {% endif %}
+                  </span>
+                </div>
+                <div class="pv-camera-meta">
+                  <div>
+                    {% if pat %}
+                      <span class="pv-camera-model">{{ pat.manufacturer }} {{ pat.model_or_note or '' }}</span>
+                    {% else %}
+                      <span class="pv-camera-model">No template selected</span>
+                    {% endif %}
+                  </div>
+                  <div class="pv-camera-model">{{ d.ip_address }}{% if d.port %}:{{ d.port }}{% endif %}</div>
+                </div>
+                <div
+                  class="pv-camera-preview"
+                  data-device-id="{{ d.id }}"
+                  style="position: relative;"
+                >
+                  <img
+                    src="{{ url_for('main.camera_preview_low', device_id=d.id) }}"
+                    alt="Live preview for {{ d.name }}"
+                    class="pv-camera-live"
+                  />
+                  <canvas
+                    class="pv-camera-face-overlay"
+                    data-face-overlay="{{ d.id }}"
+                    style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; display: none;"
+                  ></canvas>
+                </div>
+                <div class="pv-camera-footer">
+                  <div class="pv-camera-status-block">
+                    {% set status = camera_status.get(d.id, 'unknown') if camera_status else 'unknown' %}
+                    {% set last_seen = camera_last_seen.get(d.id) if camera_last_seen else None %}
+                    <span class="pv-status-chip pv-status-{{ status }}">
+                      {% if status == 'online' %}
+                        Online · recording
+                      {% elif status == 'offline' %}
+                        Offline
+                      {% else %}
+                        Status unknown
+                      {% endif %}
+                    </span>
+                    {% if last_seen %}
+                      <span class="pv-camera-lastseen">
+                        Last segment {{ last_seen.strftime('%H:%M:%S') }}
+                      </span>
+                    {% endif %}
+                    <span
+                      class="pv-status-chip pv-status-unknown pv-camera-streamhealth"
+                      data-stream-health
+                      data-device-id="{{ d.id }}"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      Stream: checking…
+                    </span>
+                  </div>
+                  <div class="pv-camera-actions">
+                    <a
+                      href="{{ url_for('main.camera_session', device_id=d.id) }}"
+                      class="pv-button"
+                    >
+                      Start session
+                    </a>
+                    <button
+                      type="button"
+                      class="pv-link-muted"
+                      data-face-recognize="{{ d.id }}"
+                    >
+                      Recognize faces
+                    </button>
+                    <a
+                      href="{{ url_for('camera_admin.edit_device', device_id=d.id) }}"
+                      class="pv-link-muted"
+                    >
+                      Configure
+                    </a>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p style="font-size: 0.9rem; color: #9ca3af;">
+            No cameras configured yet. Use the <strong>Cameras</strong> page to add your first
+            device.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  <script>
+    (function () {
+      var POLL_INTERVAL_MS = 10000;
+      var statusEls = document.querySelectorAll('[data-stream-health]');
+
+      function updateStreamStatus() {
+        if (!statusEls.length) {
+          return;
+        }
+        fetch('{{ url_for("main.streams_status") }}', { cache: 'no-store' })
+          .then(function (resp) { return resp.json(); })
+          .then(function (data) {
+            if (!data || data.ok === false || !Array.isArray(data.streams)) {
+              return;
+            }
+            var byId = {};
+            data.streams.forEach(function (s) {
+              byId[String(s.device_id)] = s;
+            });
+
+            statusEls.forEach(function (el) {
+              var id = el.getAttribute('data-device-id');
+              var info = byId[id];
+              if (!info) {
+                el.textContent = 'Stream: not running';
+                el.className = 'pv-status-chip pv-status-offline pv-camera-streamhealth';
+                el.title = '';
+                return;
+              }
+              var lastError = info.last_error || null;
+              var age = typeof info.age_seconds === 'number' ? info.age_seconds : null;
+
+              if (lastError && lastError.stage) {
+                el.textContent = 'Stream error: ' + lastError.stage;
+                el.className = 'pv-status-chip pv-status-offline pv-camera-streamhealth';
+                el.title = lastError.message || '';
+              } else if (!info.thread_alive || age === null || age > 10) {
+                el.textContent = 'Stream: stale';
+                el.className = 'pv-status-chip pv-status-offline pv-camera-streamhealth';
+                el.title = '';
+              } else {
+                el.textContent = 'Stream: OK';
+                el.className = 'pv-status-chip pv-status-online pv-camera-streamhealth';
+                el.title = '';
+              }
+            });
+          })
+          .catch(function () {
+            // Do not surface fetch errors in the UI; this is best-effort only.
+          });
+      }
+
+      if (statusEls.length) {
+        updateStreamStatus();
+        window.setInterval(updateStreamStatus, POLL_INTERVAL_MS);
+      }
+
+      var faceButtons = document.querySelectorAll('[data-face-recognize]');
+
+      function clearFaceOverlay(deviceId) {
+        var canvas = document.querySelector(
+          '.pv-camera-preview[data-device-id="' + deviceId + '"] .pv-camera-face-overlay'
+        );
+        if (!canvas) {
+          return;
+        }
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.display = 'none';
+      }
+
+      function drawFaceOverlay(deviceId, faces, imageWidth, imageHeight) {
+        var container = document.querySelector(
+          '.pv-camera-preview[data-device-id="' + deviceId + '"]'
+        );
+        if (!container) {
+          return;
+        }
+        var img = container.querySelector('.pv-camera-live');
+        var canvas = container.querySelector('.pv-camera-face-overlay');
+        if (!img || !canvas) {
+          return;
+        }
+
+        var w = img.clientWidth || img.naturalWidth || 0;
+        var h = img.clientHeight || img.naturalHeight || 0;
+        if (!w || !h || !imageWidth || !imageHeight) {
+          return;
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return;
+        }
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.font = '11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillStyle = 'rgba(34,197,94,0.7)';
+
+        var scaleX = w / imageWidth;
+        var scaleY = h / imageHeight;
+
+        faces.forEach(function (face) {
+          var top = face.top;
+          var right = face.right;
+          var bottom = face.bottom;
+          var left = face.left;
+          var label = face.email || (face.user_id != null ? ('ID ' + face.user_id) : 'Unknown');
+          var distance = typeof face.distance === 'number' ? face.distance.toFixed(2) : null;
+
+          var x = left * scaleX;
+          var y = top * scaleY;
+          var fw = (right - left) * scaleX;
+          var fh = (bottom - top) * scaleY;
+
+          ctx.strokeRect(x, y, fw, fh);
+          var text = label + (distance ? (' [' + distance + ']') : '');
+          var tw = ctx.measureText(text).width + 6;
+          var th = 14;
+          ctx.fillRect(x, y - th, tw, th);
+          ctx.fillStyle = '#0b1120';
+          ctx.fillText(text, x + 3, y - 3);
+          ctx.fillStyle = 'rgba(34,197,94,0.7)';
+        });
+
+        canvas.style.display = 'block';
+        window.setTimeout(function () {
+          clearFaceOverlay(deviceId);
+        }, 2500);
+      }
+
+      if (faceButtons.length) {
+        faceButtons.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var deviceId = btn.getAttribute('data-face-recognize');
+            if (!deviceId) {
+              return;
+            }
+            var originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Recognizing…';
+            clearFaceOverlay(deviceId);
+
+            fetch('/api/cameras/' + deviceId + '/face-recognize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: '{}',
+            })
+              .then(function (resp) { return resp.json(); })
+              .then(function (data) {
+                if (data && Array.isArray(data.faces) && data.faces.length) {
+                  drawFaceOverlay(
+                    deviceId,
+                    data.faces,
+                    data.image_width || 0,
+                    data.image_height || 0,
+                  );
+                } else {
+                  clearFaceOverlay(deviceId);
+                }
+                btn.disabled = false;
+                btn.textContent = originalText;
+              })
+              .catch(function () {
+                clearFaceOverlay(deviceId);
+                btn.disabled = false;
+                btn.textContent = originalText;
+              });
+          });
+        });
+      }
+    })();
+  </script>
+{% endblock %}
