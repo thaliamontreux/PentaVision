@@ -27,6 +27,14 @@ def _get_int_env(name: str, default: int) -> int:
         return default
 
 
+def _get_bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    text = value.strip().lower()
+    return text in {"1", "true", "yes", "on"}
+
+
 def load_config() -> Dict[str, Any]:
     return {
         "SECRET_KEY": os.getenv("APP_SECRET_KEY", "change-me"),
@@ -46,6 +54,9 @@ def load_config() -> Dict[str, Any]:
         "PREVIEW_MAX_WIDTH": _get_int_env("PREVIEW_MAX_WIDTH", 0),
         "PREVIEW_MAX_HEIGHT": _get_int_env("PREVIEW_MAX_HEIGHT", 0),
         "PREVIEW_CAPTURE_FPS": _get_float_env("PREVIEW_CAPTURE_FPS", 10.0),
+        "USE_GSTREAMER_CAPTURE": _get_bool_env("USE_GSTREAMER_CAPTURE", False),
+        "USE_GSTREAMER_RECORDING": _get_bool_env("USE_GSTREAMER_RECORDING", False),
+        "GST_RTSP_LATENCY_MS": _get_int_env("GST_RTSP_LATENCY_MS", 200),
         "STREAM_FFMPEG_DIAGNOSTICS": os.getenv("STREAM_FFMPEG_DIAGNOSTICS", "0"),
         "WEBAUTHN_RP_ID": os.getenv("WEBAUTHN_RP_ID", ""),
         "WEBAUTHN_RP_NAME": os.getenv("WEBAUTHN_RP_NAME", "PentaVision"),

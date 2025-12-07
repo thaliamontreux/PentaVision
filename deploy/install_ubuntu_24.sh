@@ -22,6 +22,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ${PYTHON_BIN} ${PYTHON_BIN}-venv ${PYTHON_BIN}-dev \
   build-essential libffi-dev libssl-dev \
   ffmpeg libopencv-dev \
+  gstreamer1.0-tools gstreamer1.0-libav \
+  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
   default-libmysqlclient-dev \
   apache2 libxml2-dev \
   git cmake python-is-python3
@@ -84,6 +86,11 @@ PREVIEW_HIGH_FPS=5.0
 PREVIEW_CAPTURE_FPS=5.0
 PREVIEW_MAX_WIDTH=640
 PREVIEW_MAX_HEIGHT=360
+
+# GStreamer / pipeline tuning
+USE_GSTREAMER_CAPTURE=1
+USE_GSTREAMER_RECORDING=1
+GST_RTSP_LATENCY_MS=200
 
 # WebAuthn
 WEBAUTHN_RP_ID=example.com

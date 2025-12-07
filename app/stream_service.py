@@ -66,6 +66,15 @@ class CameraStream(threading.Thread):
         self._preview_dir_ready = False
         raw_diag = str(app.config.get("STREAM_FFMPEG_DIAGNOSTICS", "0") or "0")
         self._enable_ffmpeg_diag = raw_diag.strip().lower() not in {"0", "false", "no", ""}
+        raw_use_gst = str(app.config.get("USE_GSTREAMER_CAPTURE", "0") or "0")
+        self._use_gstreamer = raw_use_gst.strip().lower() in {"1", "true", "yes", "on"}
+        try:
+            latency_ms = int(app.config.get("GST_RTSP_LATENCY_MS", 200) or 200)
+        except (TypeError, ValueError):
+            latency_ms = 200
+        if latency_ms < 0:
+            latency_ms = 0
+        self._gst_latency_ms = latency_ms
 
     def stop(self) -> None:
         self._running = False
@@ -220,13 +229,26 @@ class CameraStream(threading.Thread):
             thread.start()
 
         with self.app.app_context():
+            use_gst = getattr(self, "_use_gstreamer", False)
+            gst_latency_ms = getattr(self, "_gst_latency_ms", 200)
+
+            def _open_capture():
+                if use_gst:
+                    pipeline = (
+                        f"rtspsrc location={self.url} latency={gst_latency_ms} ! "
+                        "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
+                        "appsink sync=false drop=true max-buffers=1"
+                    )
+                    return cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+                return cv2.VideoCapture(self.url)
+
             backoff = 1.0
             capture_fps = float(self.app.config.get("PREVIEW_CAPTURE_FPS", 0.0) or 0.0)
             capture_interval = 1.0 / capture_fps if capture_fps > 0.0 else 0.0
             last_capture = 0.0
             open_failures = 0
             while self._running:
-                cap = cv2.VideoCapture(self.url)
+                cap = _open_capture()
                 if not cap.isOpened():
                     open_failures += 1
                     if open_failures >= 5:

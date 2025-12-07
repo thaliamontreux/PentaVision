@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 import subprocess
 import threading
 import time
@@ -90,6 +91,13 @@ class CameraWorker(threading.Thread):
                     time.sleep(self.retry_delay)
 
     def _record_segment(self) -> None:
+        use_gst = bool(self.app.config.get("USE_GSTREAMER_RECORDING"))
+        if use_gst:
+            self._record_segment_gstreamer()
+        else:
+            self._record_segment_ffmpeg()
+
+    def _record_segment_ffmpeg(self) -> None:
         base_dir = self._segment_temp_dir()
         base_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
@@ -141,6 +149,94 @@ class CameraWorker(threading.Thread):
                     self.config.device_id,
                     masked_url,
                     result.returncode,
+                    stderr_text.strip(),
+                )
+            except Exception:
+                # Logging must not crash the worker.
+                pass
+            raise RuntimeError("recording command failed")
+        data = temp_path.read_bytes()
+        key_hint = f"camera{self.config.device_id}_{timestamp}"
+        for provider in self.providers:
+            try:
+                storage_key = provider.upload(data, key_hint)
+            except Exception as exc:  # noqa: BLE001
+                self._enqueue_upload_failure(
+                    provider.name,
+                    key_hint,
+                    data,
+                    str(exc),
+                )
+                continue
+            self._create_camera_recording(provider.name, storage_key)
+        temp_path.unlink(missing_ok=True)
+
+    def _record_segment_gstreamer(self) -> None:
+        base_dir = self._segment_temp_dir()
+        base_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        temp_path = base_dir / f"{self.config.device_id}_{timestamp}.mp4"
+        try:
+            latency_ms = int(self.app.config.get("GST_RTSP_LATENCY_MS", 200) or 200)
+        except (TypeError, ValueError):
+            latency_ms = 200
+        if latency_ms < 0:
+            latency_ms = 0
+
+        command = [
+            "gst-launch-1.0",
+            "-e",
+            "rtspsrc",
+            f"location={self.config.url}",
+            f"latency={latency_ms}",
+            "!",
+            "rtph264depay",
+            "!",
+            "h264parse",
+            "!",
+            "mp4mux",
+            "!",
+            "filesink",
+            f"location={str(temp_path)}",
+        ]
+
+        masked_url = _mask_url_password(self.config.url)
+        proc: Optional[subprocess.Popen[str]] = None
+        try:
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                _ = proc.wait(timeout=self.segment_seconds + 5)
+            except subprocess.TimeoutExpired:
+                try:
+                    proc.send_signal(signal.SIGINT)
+                    _ = proc.wait(timeout=10)
+                except Exception:
+                    proc.kill()
+                    _ = proc.wait(timeout=5)
+        except FileNotFoundError as exc:
+            raise RuntimeError("gst-launch-1.0 executable not found") from exc
+
+        returncode = proc.returncode if proc is not None else -1
+        if returncode != 0 or not temp_path.exists():
+            if temp_path.exists():
+                temp_path.unlink()
+            stderr_text = ""
+            if proc is not None and proc.stderr is not None:
+                try:
+                    stderr_text = proc.stderr.read() or ""
+                except Exception:
+                    stderr_text = ""
+            try:
+                self.app.logger.warning(
+                    "Recording GStreamer error for device=%s url=%s returncode=%s stderr=%s",
+                    self.config.device_id,
+                    masked_url,
+                    returncode,
                     stderr_text.strip(),
                 )
             except Exception:
@@ -218,6 +314,15 @@ class RecordingManager:
         self.providers = build_storage_providers(app)
         self.workers: Dict[int, CameraWorker] = {}
         self.lock = threading.Lock()
+        try:
+            segment_seconds = int(
+                self.app.config.get("RECORD_SEGMENT_SECONDS", 60) or 60
+            )
+        except (TypeError, ValueError):
+            segment_seconds = 60
+        if segment_seconds <= 0:
+            segment_seconds = 60
+        self.segment_seconds = segment_seconds
 
     def start(self) -> None:
         if not self.providers:
@@ -283,6 +388,7 @@ class RecordingManager:
                 self.app,
                 CameraConfig(device.id, device.name, url),
                 device_providers,
+                segment_seconds=self.segment_seconds,
             )
             worker.start()
             self.workers[device.id] = worker
