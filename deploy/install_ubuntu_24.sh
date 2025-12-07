@@ -95,6 +95,20 @@ fi
 mkdir -p /var/lib/pentavision/recordings /var/lib/pentavision/storage
 chown -R "${APP_USER}:${APP_USER}" /var/lib/pentavision
 
+WRAPPER_SCRIPT="${APP_DIR}/video_worker_wrapper.sh"
+echo "==> Writing video worker wrapper script: ${WRAPPER_SCRIPT}"
+cat >"${WRAPPER_SCRIPT}" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+exec "${APP_DIR}/venv/bin/python" "${APP_DIR}/app/video_worker.py" 2> >(\
+  grep -v '\[h264 @' | \
+  grep -v 'error while decoding MB' | \
+  grep -v 'cabac decode of qscale diff failed' | \
+  grep -v 'left block unavailable for requested intra' >&2)
+EOF
+chown "${APP_USER}:${APP_USER}" "${WRAPPER_SCRIPT}"
+chmod +x "${WRAPPER_SCRIPT}"
+
 WEB_UNIT="/etc/systemd/system/pentavision-web.service"
 VIDEO_UNIT="/etc/systemd/system/pentavision-video.service"
 
@@ -127,7 +141,7 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${APP_DIR}/app
 Environment="PATH=${APP_DIR}/venv/bin"
-ExecStart=${APP_DIR}/venv/bin/python ${APP_DIR}/app/video_worker.py
+ExecStart=${APP_DIR}/video_worker_wrapper.sh
 Restart=on-failure
 
 [Install]
