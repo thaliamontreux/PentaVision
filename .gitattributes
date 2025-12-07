@@ -1,0 +1,4 @@
+* text=auto
+
+# Always keep scripts as LF
+*.sh text eol=lf
