@@ -63,6 +63,32 @@ sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install --upgrade pip --break-sy
 sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install -r requirements.txt --break-system-packages
 sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install "git+https://github.com/ageitgey/face_recognition_models" --break-system-packages
 
+OPENCV_DONE_MARKER="${APP_DIR}/opencv_build.done"
+if [[ ! -f "${OPENCV_DONE_MARKER}" ]]; then
+  echo "==> Building custom OpenCV with FFmpeg + GStreamer (this may take a while)"
+  bash scripts/Build_OpenCV_FFMpeg_GSteamer_Pipeline.sh
+  touch "${OPENCV_DONE_MARKER}"
+  chown "${APP_USER}:${APP_USER}" "${OPENCV_DONE_MARKER}"
+else
+  echo "==> Custom OpenCV build marker found at ${OPENCV_DONE_MARKER}; skipping rebuild"
+fi
+
+PY_VERSION="$(${APP_DIR}/venv/bin/python - <<'EOF'
+import sys
+print(f"{sys.version_info.major}.{sys.version_info.minor}", end="")
+EOF
+)"
+VENV_SITE="${APP_DIR}/venv/lib/python${PY_VERSION}/site-packages"
+GLOBAL_SITE="/usr/local/lib/python${PY_VERSION}/dist-packages"
+if [[ -d "${GLOBAL_SITE}" ]]; then
+  echo "==> Linking custom OpenCV from ${GLOBAL_SITE} into venv site-packages"
+  mkdir -p "${VENV_SITE}"
+  echo "${GLOBAL_SITE}" > "${VENV_SITE}/opencv_custom.pth"
+  chown "${APP_USER}:${APP_USER}" "${VENV_SITE}/opencv_custom.pth"
+else
+  echo "WARNING: Expected custom OpenCV directory ${GLOBAL_SITE} not found; cv2 may not be available in venv" >&2
+fi
+
 if [[ ! -f "${APP_DIR}/app/.env" ]]; then
   echo "==> Creating default .env template at ${APP_DIR}/app/.env"
   cat >"${APP_DIR}/app/.env" <<'EOF'
@@ -86,6 +112,7 @@ PREVIEW_HIGH_FPS=5.0
 PREVIEW_CAPTURE_FPS=5.0
 PREVIEW_MAX_WIDTH=640
 PREVIEW_MAX_HEIGHT=360
+PREVIEW_CACHE_DIR=/dev/shm/pentavision_previews
 
 # GStreamer / pipeline tuning
 USE_GSTREAMER_CAPTURE=1
@@ -107,6 +134,8 @@ echo "==> Writing video worker wrapper script: ${WRAPPER_SCRIPT}"
 cat >"${WRAPPER_SCRIPT}" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+PREVIEW_DIR="\${PREVIEW_CACHE_DIR:-/dev/shm/pentavision_previews}"
+mkdir -p "\${PREVIEW_DIR}"
 exec "${APP_DIR}/venv/bin/python" "${APP_DIR}/app/video_worker.py" 2> >(\
   grep -v '\[h264 @' | \
   grep -v 'error while decoding MB' | \
@@ -130,6 +159,7 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${APP_DIR}/app
 Environment="PATH=${APP_DIR}/venv/bin"
+EnvironmentFile=${APP_DIR}/app/.env
 ExecStart=${APP_DIR}/venv/bin/gunicorn "app:create_app()" --bind 127.0.0.1:8000 --workers 4 --threads 4
 Restart=on-failure
 
@@ -148,6 +178,7 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${APP_DIR}/app
 Environment="PATH=${APP_DIR}/venv/bin"
+EnvironmentFile=${APP_DIR}/app/.env
 ExecStart=${APP_DIR}/video_worker_wrapper.sh
 Restart=on-failure
 

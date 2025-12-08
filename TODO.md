@@ -93,3 +93,55 @@
 - [x] Document configuration of databases, storage, and security options (see `docs/configuration.md` and `docs/database-architecture.md`).
 - [x] Document facial recognition data handling, retention, and deletion procedures (see `docs/facial-recognition.md`).
 - [x] Prepare privacy/security notes (GDPR-like considerations for biometrics and logs) (see `docs/privacy-security.md` and `docs/logging-monitoring.md`).
+
+## Advanced security, RBAC, and user profiles
+
+- [ ] Design extended user profile and identity model to capture:
+  - Core identity (full legal name, preferred name, optional date of birth).
+  - Contact channels (primary/secondary phone and email, emergency contact name/phone, SMS/email alert targets).
+  - Addressing/residency (primary residence address, additional properties, residency status per property: Owner/Tenant/Guest/Staff/Remote Viewer).
+  - Authentication metadata (MFA preference, login lockout counters, account status, created/modified timestamps, deactivation reason notes).
+- [ ] Implement database schema changes for security and access control:
+  - Property table (id, address, timezone, descriptive metadata).
+  - UserProperty association table (user ↔ property, residency status, authorized zones, camera access scope, time-based access windows, role overrides).
+  - Role/Permission mapping tables (Role, Permission, RolePermission, UserRole) to support global and per-property roles.
+  - UserNotificationSettings table for per-user alert preferences and escalation tiering.
+- [ ] Integrate timezone resolution based on the user's primary residence ZIP code using the `uszipcode` module and persist the resolved timezone on the profile.
+- [ ] Design and implement role-based access control (RBAC):
+  - Global roles: System Administrator, Property Manager, Technician, Auditor/Read-Only.
+  - Site-level roles (per property): Homeowner, Adult Resident, Child Resident, Guest, Housekeeper/Staff, Temporary Contractor, Monitoring Center Viewer.
+  - Permission flags for alarms (arm/disarm, silence alarm, bypass/configure zones, view logs, acknowledge alerts, fire panel diagnostics), cameras (live view, playback, export footage, manage cameras, configure retention), and automation (locks, HVAC, lighting, garage/gate, intercom, external integrations).
+  - Central helper/decorator for enforcing permissions on Flask routes and APIs.
+- [ ] Implement secure login and logout hardening:
+  - Enforce failed-attempt lockout counters for both login and disarm PIN, with backoff and unlock policies.
+  - Store an 8-digit disarm PIN per user (securely hashed), with PIN history and last-use metadata (panel/app/station).
+  - Respect MFA preference (TOTP/email/hardware token/passkeys) and ensure it is enforced where configured.
+  - Track account status (Active/Suspended/Disabled) and prevent access appropriately.
+- [ ] Implement CSRF and per-page security tokens:
+  - Ensure all state-changing endpoints (form posts and JSON APIs) require CSRF tokens.
+  - For sensitive pages (e.g., alarm control, camera management, admin actions), generate short-lived per-page tokens bound to user, route, and expiry, and validate them on submit.
+- [ ] Build a user-facing profile UI and user menu:
+  - Show core profile data, associated properties, roles, and notification preferences.
+  - Allow users to edit only permitted fields (e.g., contact info, notification prefs, some MFA options) while keeping role and high-risk settings admin-only.
+- [ ] Build an administrator control panel:
+  - List/search users, properties, and roles with filtering.
+  - Manage user accounts (create, disable/suspend, reset MFA/PIN, set account status and notes).
+  - Manage properties (addresses, zones, camera groupings, alarm panels) and user-property associations.
+  - Manage roles and permission assignments, both globally and per property.
+  - View detailed security and operational audit logs.
+- [ ] Implement the property-level association and access layer:
+  - Configure authorized zones (perimeter, interior, restricted) per user/property.
+  - Configure time-based access windows (e.g., housekeeper Tue/Thu 13:00–16:00) and enforce them in RBAC checks.
+  - Define camera access scope (zones, floors, individual cameras) and alarm panel stations each user can interact with.
+  - Support per-property role overrides for exceptional cases.
+- [ ] Implement notification and escalation settings:
+  - Per-user toggles for intrusion, fire, system faults, camera motion, door/window activity, environmental alerts (CO2, temperature, flood).
+  - Escalation rules (first-tier vs secondary notifications; suppressed except during access windows).
+- [ ] Extend audit logging and behavioral telemetry:
+  - Log all security-sensitive actions (login/logout, arm/disarm, silencing, configuration changes, role changes, PIN uses, property and camera access changes).
+  - Track last login timestamp, last PIN use, and context (where/how it was used).
+- [ ] Seed an initial system administrator account for user "Thalia" and implement safe admin promotion/demotion tools and UI for future administrators.
+- [ ] Implement advanced identity enhancements:
+  - Link facial recognition templates to user identities in a controlled, privacy-respecting way.
+  - Associate hardware tokens and mobile credentials with user accounts.
+  - Store geofencing and geolocation metadata where permitted, and support auto-arm/disarm preferences driven by location and schedules.

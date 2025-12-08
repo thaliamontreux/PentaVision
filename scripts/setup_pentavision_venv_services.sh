@@ -39,6 +39,8 @@ echo "==> Writing video worker wrapper script: ${WRAPPER_SCRIPT}"
 cat >"${WRAPPER_SCRIPT}" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+PREVIEW_DIR="\${PREVIEW_CACHE_DIR:-/dev/shm/pentavision_previews}"
+mkdir -p "\${PREVIEW_DIR}"
 exec "${VENV_DIR}/bin/python" "${APP_SRC_DIR}/video_worker.py" 2> >(\
   grep -v '\\[h264 @' | \
   grep -v 'error while decoding MB' | \
@@ -59,6 +61,7 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${APP_SRC_DIR}
 Environment="PATH=${VENV_DIR}/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=${APP_SRC_DIR}/.env
 ExecStart=${VENV_DIR}/bin/gunicorn "app:create_app()" --bind 127.0.0.1:8000 --workers 4 --threads 4
 Restart=on-failure
 
@@ -78,6 +81,7 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${APP_SRC_DIR}
 Environment="PATH=${VENV_DIR}/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=${APP_SRC_DIR}/.env
 ExecStart=${WRAPPER_SCRIPT}
 Restart=on-failure
 

@@ -54,6 +54,7 @@ def load_config() -> Dict[str, Any]:
         "PREVIEW_MAX_WIDTH": _get_int_env("PREVIEW_MAX_WIDTH", 0),
         "PREVIEW_MAX_HEIGHT": _get_int_env("PREVIEW_MAX_HEIGHT", 0),
         "PREVIEW_CAPTURE_FPS": _get_float_env("PREVIEW_CAPTURE_FPS", 10.0),
+        "PREVIEW_CACHE_DIR": os.getenv("PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews"),
         "USE_GSTREAMER_CAPTURE": _get_bool_env("USE_GSTREAMER_CAPTURE", False),
         "USE_GSTREAMER_RECORDING": _get_bool_env("USE_GSTREAMER_RECORDING", False),
         "GST_RTSP_LATENCY_MS": _get_int_env("GST_RTSP_LATENCY_MS", 200),

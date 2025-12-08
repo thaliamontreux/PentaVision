@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
-from sqlalchemy import DateTime, Integer, LargeBinary, String, func
+from sqlalchemy import Date, DateTime, Integer, LargeBinary, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -34,6 +34,62 @@ class User(UserBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    preferred_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    primary_phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    secondary_phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    secondary_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    emergency_contact_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    emergency_contact_phone: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
+    sms_alert_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    email_alert_address: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    primary_address_line1: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    primary_address_line2: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    primary_city: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    primary_state: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    primary_postal_code: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
+    primary_country: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
+    timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    mfa_preference: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    account_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    created_by_admin_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True
+    )
+    modified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    deactivation_reason: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True
+    )
+    disarm_pin_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    failed_pin_attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    pin_locked_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_pin_use_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_pin_use_context: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -59,6 +115,105 @@ class WebAuthnCredential(UserBase):
     )
     last_used_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+
+class Property(UserBase):
+    __tablename__ = "properties"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserProperty(UserBase):
+    __tablename__ = "user_properties"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    residency_status: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
+    authorized_zones: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True
+    )
+    camera_scope: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    access_windows: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    role_overrides: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class Role(UserBase):
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    scope: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class Permission(UserBase):
+    __tablename__ = "permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class RolePermission(UserBase):
+    __tablename__ = "role_permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role_id: Mapped[int] = mapped_column(Integer, index=True)
+    permission_id: Mapped[int] = mapped_column(Integer, index=True)
+
+
+class UserRole(UserBase):
+    __tablename__ = "user_roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    role_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserNotificationSettings(UserBase):
+    __tablename__ = "user_notification_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True, unique=True)
+    intrusion_alerts: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    fire_alerts: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    system_faults: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    camera_motion_events: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    door_window_activity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    environmental_alerts: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    escalation_level: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 
