@@ -5,9 +5,10 @@ import sys
 from getpass import getpass
 
 from argon2 import PasswordHasher
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.db import get_user_engine
+from app.config import load_config
 from app.models import User
 
 
@@ -47,9 +48,16 @@ def main() -> int:
             return 1
         password = pw1
 
-    engine = get_user_engine()
-    if engine is None:
-        print("User database engine is not configured.", file=sys.stderr)
+    config = load_config()
+    url = config.get("USER_DB_URL") or ""
+    if not url:
+        print("USER_DB_URL is not configured.", file=sys.stderr)
+        return 1
+
+    try:
+        engine = create_engine(url, future=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Failed to create engine: {exc}", file=sys.stderr)
         return 1
 
     ph = PasswordHasher()
