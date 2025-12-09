@@ -14,7 +14,7 @@ import dropbox
 import requests
 
 from .db import get_record_engine
-from .models import RecordingData
+from .models import RecordingData, StorageSettings
 
 
 class StorageProvider:
@@ -274,13 +274,58 @@ class WebDAVStorageProvider(StorageProvider):
             return
 
 
+def _load_storage_settings() -> dict | None:
+    """Load global storage settings from the recordings database, if present.
+
+    Returns a plain dict so callers do not depend on an active SQLAlchemy
+    session. If the table or row does not exist, returns None.
+    """
+
+    engine = get_record_engine()
+    if engine is None:
+        return None
+    # Ensure the table exists before querying.
+    StorageSettings.__table__.create(bind=engine, checkfirst=True)
+    with Session(engine) as session:
+        row = (
+            session.query(StorageSettings)
+            .order_by(StorageSettings.id)
+            .first()
+        )
+        if row is None:
+            return None
+        return {
+            "storage_targets": row.storage_targets or "",
+            "local_storage_path": row.local_storage_path or "",
+            "recording_base_dir": row.recording_base_dir or "",
+            "s3_bucket": row.s3_bucket or "",
+            "s3_endpoint": row.s3_endpoint or "",
+            "s3_region": row.s3_region or "",
+            "s3_access_key": row.s3_access_key or "",
+            "s3_secret_key": row.s3_secret_key or "",
+            "gcs_bucket": row.gcs_bucket or "",
+            "azure_blob_connection_string": row.azure_blob_connection_string or "",
+            "azure_blob_container": row.azure_blob_container or "",
+            "dropbox_access_token": row.dropbox_access_token or "",
+            "webdav_base_url": row.webdav_base_url or "",
+            "webdav_username": row.webdav_username or "",
+            "webdav_password": row.webdav_password or "",
+        }
+
+
 def build_storage_providers(app: Flask) -> List[StorageProvider]:
-    raw = str(app.config.get("STORAGE_TARGETS", "local_fs") or "local_fs")
-    targets = [item.strip() for item in raw.split(",") if item.strip()]
+    db_settings = _load_storage_settings() or {}
+
+    raw_targets = db_settings.get("storage_targets") or str(
+        app.config.get("STORAGE_TARGETS", "local_fs") or "local_fs"
+    )
+    targets = [item.strip() for item in raw_targets.split(",") if item.strip()]
     providers: List[StorageProvider] = []
     if "local_fs" in targets:
         base_dir = (
-            app.config.get("LOCAL_STORAGE_PATH")
+            db_settings.get("local_storage_path")
+            or db_settings.get("recording_base_dir")
+            or app.config.get("LOCAL_STORAGE_PATH")
             or app.config.get("RECORDING_BASE_DIR")
             or os.path.join(app.instance_path, "recordings")
         )
@@ -288,32 +333,86 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
     if "db" in targets:
         providers.append(DatabaseStorageProvider())
     if "s3" in targets:
-        bucket = str(app.config.get("S3_BUCKET") or "").strip()
-        access_key = str(app.config.get("S3_ACCESS_KEY") or "").strip()
-        secret_key = str(app.config.get("S3_SECRET_KEY") or "").strip()
+        bucket = str(db_settings.get("s3_bucket") or app.config.get("S3_BUCKET") or "").strip()
+        access_key = str(
+            db_settings.get("s3_access_key")
+            or app.config.get("S3_ACCESS_KEY")
+            or ""
+        ).strip()
+        secret_key = str(
+            db_settings.get("s3_secret_key")
+            or app.config.get("S3_SECRET_KEY")
+            or ""
+        ).strip()
         if bucket and access_key and secret_key:
-            endpoint = str(app.config.get("S3_ENDPOINT") or "").strip() or None
-            region = str(app.config.get("S3_REGION") or "").strip() or None
+            endpoint = (
+                str(
+                    db_settings.get("s3_endpoint")
+                    or app.config.get("S3_ENDPOINT")
+                    or ""
+                ).strip()
+                or None
+            )
+            region = (
+                str(
+                    db_settings.get("s3_region")
+                    or app.config.get("S3_REGION")
+                    or ""
+                ).strip()
+                or None
+            )
             providers.append(
                 S3StorageProvider(endpoint, region, bucket, access_key, secret_key)
             )
     if "gcs" in targets:
-        bucket = str(app.config.get("GCS_BUCKET") or "").strip()
+        bucket = str(
+            db_settings.get("gcs_bucket") or app.config.get("GCS_BUCKET") or ""
+        ).strip()
         if bucket:
             providers.append(GCSStorageProvider(bucket))
     if "azure_blob" in targets:
-        conn = str(app.config.get("AZURE_BLOB_CONNECTION_STRING") or "").strip()
-        container = str(app.config.get("AZURE_BLOB_CONTAINER") or "").strip()
+        conn = str(
+            db_settings.get("azure_blob_connection_string")
+            or app.config.get("AZURE_BLOB_CONNECTION_STRING")
+            or ""
+        ).strip()
+        container = str(
+            db_settings.get("azure_blob_container")
+            or app.config.get("AZURE_BLOB_CONTAINER")
+            or ""
+        ).strip()
         if conn and container:
             providers.append(AzureBlobStorageProvider(conn, container))
     if "dropbox" in targets:
-        token = str(app.config.get("DROPBOX_ACCESS_TOKEN") or "").strip()
+        token = str(
+            db_settings.get("dropbox_access_token")
+            or app.config.get("DROPBOX_ACCESS_TOKEN")
+            or ""
+        ).strip()
         if token:
             providers.append(DropboxStorageProvider(token))
     if "webdav" in targets:
-        base_url = str(app.config.get("WEBDAV_BASE_URL") or "").strip()
-        username = str(app.config.get("WEBDAV_USERNAME") or "").strip() or None
-        password = str(app.config.get("WEBDAV_PASSWORD") or "").strip() or None
+        base_url = str(
+            db_settings.get("webdav_base_url")
+            or app.config.get("WEBDAV_BASE_URL")
+            or ""
+        ).strip()
+        username = (
+            str(
+                db_settings.get("webdav_username")
+                or app.config.get("WEBDAV_USERNAME")
+                or ""
+            ).strip()
+            or None
+        )
+        password = (
+            str(
+                db_settings.get("webdav_password")
+                or app.config.get("WEBDAV_PASSWORD")
+                or ""
+            ).strip()
+            or None
+        )
         if base_url:
             providers.append(WebDAVStorageProvider(base_url, username, password))
     return providers

@@ -82,6 +82,59 @@
         </div>
 
         <div class="pv-field-group">
+          <label for="placement">Placement</label>
+          <select id="placement" name="placement">
+            {% for value, label in placement_options %}
+              <option
+                value="{{ value }}"
+                {% if form.placement == value %}selected{% endif %}
+              >
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+          <p class="pv-card-subtitle">
+            Whether this camera is installed inside or outside the building.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="location">Location</label>
+          <select id="location" name="location">
+            {% for value, label in location_options %}
+              <option
+                value="{{ value }}"
+                {% if form.location == value %}selected{% endif %}
+              >
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+          <p class="pv-card-subtitle">
+            Common room or area where this camera is installed, such as Kitchen or
+            Living Room.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="facing_direction">Facing direction</label>
+          <select id="facing_direction" name="facing_direction">
+            {% for value, label in direction_options %}
+              <option
+                value="{{ value }}"
+                {% if form.facing_direction == value %}selected{% endif %}
+              >
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+          <p class="pv-card-subtitle">
+            Cardinal direction the camera faces (for example, NE toward the
+            driveway).
+          </p>
+        </div>
+
+        <div class="pv-field-group">
           <label for="ip_address">IP address</label>
           <input
             id="ip_address"

@@ -40,6 +40,7 @@ from .models import (
     FaceEmbedding,
     FacePrivacySetting,
     RecordingData,
+    StorageSettings,
     User,
     UserNotificationSettings,
     WebAuthnCredential,
@@ -53,7 +54,7 @@ from .security import (
     validate_global_csrf_token,
 )
 from .stream_service import get_stream_manager
-from .storage_providers import build_storage_providers
+from .storage_providers import build_storage_providers, _load_storage_settings
 
 
 bp = Blueprint("main", __name__)
@@ -1204,7 +1205,7 @@ def camera_face_recognize(device_id: int):
     )
 
 
-@bp.get("/storage")
+@bp.route("/storage", methods=["GET", "POST"])
 def storage_settings():
     user = get_current_user()
     if user is None:
@@ -1212,6 +1213,157 @@ def storage_settings():
         return redirect(url_for("main.login", next=next_url))
     if not user_has_role(user, "System Administrator"):
         abort(403)
+
+    cfg = current_app.config
+    errors: list[str] = []
+    saved = False
+
+    # Load any existing DB-backed storage settings so we can merge them with
+    # environment defaults for the form and summaries.
+    db_settings = _load_storage_settings() or {}
+
+    raw_targets = db_settings.get("storage_targets") or str(
+        cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
+    )
+
+    form = {
+        "storage_targets": raw_targets,
+        "local_storage_path": db_settings.get("local_storage_path")
+        or str(
+            cfg.get("LOCAL_STORAGE_PATH")
+            or cfg.get("RECORDING_BASE_DIR")
+            or ""
+        ),
+        "recording_base_dir": db_settings.get("recording_base_dir")
+        or str(cfg.get("RECORDING_BASE_DIR") or ""),
+        "s3_bucket": db_settings.get("s3_bucket")
+        or str(cfg.get("S3_BUCKET") or ""),
+        "s3_endpoint": db_settings.get("s3_endpoint")
+        or str(cfg.get("S3_ENDPOINT") or ""),
+        "s3_region": db_settings.get("s3_region")
+        or str(cfg.get("S3_REGION") or ""),
+        # Secrets are never echoed back in the form; admins can enter new
+        # values to override the current effective configuration.
+        "s3_access_key": "",
+        "s3_secret_key": "",
+        "gcs_bucket": db_settings.get("gcs_bucket")
+        or str(cfg.get("GCS_BUCKET") or ""),
+        "azure_blob_connection_string": "",
+        "azure_blob_container": db_settings.get("azure_blob_container")
+        or str(cfg.get("AZURE_BLOB_CONTAINER") or ""),
+        "dropbox_access_token": "",
+        "webdav_base_url": db_settings.get("webdav_base_url")
+        or str(cfg.get("WEBDAV_BASE_URL") or ""),
+        "webdav_username": db_settings.get("webdav_username")
+        or str(cfg.get("WEBDAV_USERNAME") or ""),
+        "webdav_password": "",
+    }
+
+    record_engine = get_record_engine()
+
+    if request.method == "POST":
+        if not validate_global_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+
+        # Update form values from submitted data so we can re-render on error.
+        for key in form.keys():
+            form[key] = (request.form.get(key) or "").strip()
+
+        if not form["storage_targets"]:
+            form["storage_targets"] = "local_fs"
+
+        if record_engine is None:
+            errors.append("Record database is not configured.")
+
+        if not errors and record_engine is not None:
+            with Session(record_engine) as session_db:
+                StorageSettings.__table__.create(bind=record_engine, checkfirst=True)
+                settings = (
+                    session_db.query(StorageSettings)
+                    .order_by(StorageSettings.id)
+                    .first()
+                )
+                if settings is None:
+                    settings = StorageSettings()
+                    session_db.add(settings)
+
+                settings.storage_targets = form["storage_targets"] or None
+                settings.local_storage_path = form["local_storage_path"] or None
+                settings.recording_base_dir = form["recording_base_dir"] or None
+                settings.s3_bucket = form["s3_bucket"] or None
+                settings.s3_endpoint = form["s3_endpoint"] or None
+                settings.s3_region = form["s3_region"] or None
+                # Secret fields: only update when a non-empty value is provided,
+                # so leaving the field blank keeps the existing secret or
+                # environment-backed value.
+                if form["s3_access_key"]:
+                    settings.s3_access_key = form["s3_access_key"]
+                if form["s3_secret_key"]:
+                    settings.s3_secret_key = form["s3_secret_key"]
+                settings.gcs_bucket = form["gcs_bucket"] or None
+                if form["azure_blob_connection_string"]:
+                    settings.azure_blob_connection_string = form[
+                        "azure_blob_connection_string"
+                    ]
+                settings.azure_blob_container = (
+                    form["azure_blob_container"] or None
+                )
+                if form["dropbox_access_token"]:
+                    settings.dropbox_access_token = form["dropbox_access_token"]
+                settings.webdav_base_url = form["webdav_base_url"] or None
+                settings.webdav_username = form["webdav_username"] or None
+                if form["webdav_password"]:
+                    settings.webdav_password = form["webdav_password"]
+                settings.updated_at = datetime.now(timezone.utc)
+
+                session_db.add(settings)
+                session_db.commit()
+
+            saved = True
+            # Reload DB settings so the provider summary reflects the new
+            # configuration.
+            db_settings = _load_storage_settings() or {}
+
+            raw_targets = db_settings.get("storage_targets") or str(
+                cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
+            )
+            form["storage_targets"] = raw_targets
+            form["local_storage_path"] = db_settings.get("local_storage_path") or str(
+                cfg.get("LOCAL_STORAGE_PATH")
+                or cfg.get("RECORDING_BASE_DIR")
+                or ""
+            )
+            form["recording_base_dir"] = db_settings.get("recording_base_dir") or str(
+                cfg.get("RECORDING_BASE_DIR") or ""
+            )
+            form["s3_bucket"] = db_settings.get("s3_bucket") or str(
+                cfg.get("S3_BUCKET") or ""
+            )
+            form["s3_endpoint"] = db_settings.get("s3_endpoint") or str(
+                cfg.get("S3_ENDPOINT") or ""
+            )
+            form["s3_region"] = db_settings.get("s3_region") or str(
+                cfg.get("S3_REGION") or ""
+            )
+            form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
+                cfg.get("GCS_BUCKET") or ""
+            )
+            form["azure_blob_container"] = db_settings.get(
+                "azure_blob_container"
+            ) or str(cfg.get("AZURE_BLOB_CONTAINER") or "")
+            form["webdav_base_url"] = db_settings.get("webdav_base_url") or str(
+                cfg.get("WEBDAV_BASE_URL") or ""
+            )
+            form["webdav_username"] = db_settings.get("webdav_username") or str(
+                cfg.get("WEBDAV_USERNAME") or ""
+            )
+            # Secret fields remain blank after save so that we never echo
+            # sensitive values back to the browser.
+            form["s3_access_key"] = ""
+            form["s3_secret_key"] = ""
+            form["azure_blob_connection_string"] = ""
+            form["dropbox_access_token"] = ""
+            form["webdav_password"] = ""
 
     providers_raw = build_storage_providers(current_app)
     providers = []
@@ -1248,13 +1400,6 @@ def storage_settings():
             details = f"Base URL: {base_url}"
         providers.append({"name": name, "type": p_type, "details": details})
 
-    cfg = current_app.config
-    s3_bucket = str(cfg.get("S3_BUCKET") or "")
-    s3_endpoint = str(cfg.get("S3_ENDPOINT") or "")
-    s3_region = str(cfg.get("S3_REGION") or "")
-    s3_access_key = str(cfg.get("S3_ACCESS_KEY") or "")
-    s3_secret_key = str(cfg.get("S3_SECRET_KEY") or "")
-
     def _mask(value: str, keep: int = 4) -> str:
         if not value:
             return ""
@@ -1262,38 +1407,64 @@ def storage_settings():
             return "*" * len(value)
         return "*" * (len(value) - keep) + value[-keep:]
 
+    # Effective config for summary blocks: DB overrides env, otherwise env is
+    # used. Secrets are masked.
+    s3_bucket = db_settings.get("s3_bucket") or str(cfg.get("S3_BUCKET") or "")
+    s3_endpoint = db_settings.get("s3_endpoint") or str(
+        cfg.get("S3_ENDPOINT") or ""
+    )
+    s3_region = db_settings.get("s3_region") or str(cfg.get("S3_REGION") or "")
+    s3_access_key_effective = db_settings.get("s3_access_key") or str(
+        cfg.get("S3_ACCESS_KEY") or ""
+    )
+    s3_secret_key_effective = db_settings.get("s3_secret_key") or str(
+        cfg.get("S3_SECRET_KEY") or ""
+    )
+
     s3_info = {
         "bucket": s3_bucket,
         "endpoint": s3_endpoint,
         "region": s3_region,
-        "access_key_masked": _mask(s3_access_key),
-        "secret_key_masked": _mask(s3_secret_key),
+        "access_key_masked": _mask(s3_access_key_effective),
+        "secret_key_masked": _mask(s3_secret_key_effective),
     }
 
-    gcs_bucket = str(cfg.get("GCS_BUCKET") or "")
+    gcs_bucket = db_settings.get("gcs_bucket") or str(cfg.get("GCS_BUCKET") or "")
     gcs_info = {
         "bucket": gcs_bucket,
     }
 
-    azure_conn = str(cfg.get("AZURE_BLOB_CONNECTION_STRING") or "")
-    azure_container = str(cfg.get("AZURE_BLOB_CONTAINER") or "")
+    azure_conn_effective = db_settings.get("azure_blob_connection_string") or str(
+        cfg.get("AZURE_BLOB_CONNECTION_STRING") or ""
+    )
+    azure_container = db_settings.get("azure_blob_container") or str(
+        cfg.get("AZURE_BLOB_CONTAINER") or ""
+    )
     azure_info = {
         "container": azure_container,
-        "connection_string_masked": _mask(azure_conn),
+        "connection_string_masked": _mask(azure_conn_effective),
     }
 
-    dropbox_token = str(cfg.get("DROPBOX_ACCESS_TOKEN") or "")
+    dropbox_token_effective = db_settings.get("dropbox_access_token") or str(
+        cfg.get("DROPBOX_ACCESS_TOKEN") or ""
+    )
     dropbox_info = {
-        "access_token_masked": _mask(dropbox_token),
+        "access_token_masked": _mask(dropbox_token_effective),
     }
 
-    webdav_base = str(cfg.get("WEBDAV_BASE_URL") or "")
-    webdav_username = str(cfg.get("WEBDAV_USERNAME") or "")
-    webdav_password = str(cfg.get("WEBDAV_PASSWORD") or "")
+    webdav_base = db_settings.get("webdav_base_url") or str(
+        cfg.get("WEBDAV_BASE_URL") or ""
+    )
+    webdav_username = db_settings.get("webdav_username") or str(
+        cfg.get("WEBDAV_USERNAME") or ""
+    )
+    webdav_password_effective = db_settings.get("webdav_password") or str(
+        cfg.get("WEBDAV_PASSWORD") or ""
+    )
     webdav_info = {
         "base_url": webdav_base,
         "username": webdav_username,
-        "password_masked": _mask(webdav_password),
+        "password_masked": _mask(webdav_password_effective),
     }
 
     return render_template(
@@ -1304,6 +1475,9 @@ def storage_settings():
         azure=azure_info,
         dropbox=dropbox_info,
         webdav=webdav_info,
+        form=form,
+        errors=errors,
+        saved=saved,
     )
 
 

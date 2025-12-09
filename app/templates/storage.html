@@ -7,10 +7,268 @@
     <h1>Storage providers</h1>
     {% include 'admin/_nav.html' %}
     <p style="margin-bottom: 1rem; color: #9ca3af; font-size: 0.9rem;">
-      These providers are used for storing camera recordings. Configuration is read
-      from environment variables and the application config; update those to change
-      providers. Multiple providers can be active at once.
+      These providers are used for storing camera recordings. Configuration is
+      stored in the <code>storage_settings</code> table and can be edited here.
+      Environment variables still provide sensible defaults when no value has
+      been saved yet.
     </p>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if saved %}
+      <div class="pv-alert pv-alert-success" role="status">
+        <p>Storage settings updated.</p>
+      </div>
+    {% endif %}
+
+    <form method="post" class="pv-form" style="margin-bottom: 1.5rem;">
+      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+
+      <div class="pv-card">
+        <h2>Global storage configuration</h2>
+        <p class="pv-card-subtitle">
+          Choose which providers are active and where local recordings are written
+          before upload.
+        </p>
+
+        <div class="pv-field-group">
+          <label for="storage_targets">Active targets</label>
+          <input
+            id="storage_targets"
+            name="storage_targets"
+            type="text"
+            value="{{ form.storage_targets }}"
+            placeholder="e.g. local_fs,s3"
+          />
+          <p class="pv-card-subtitle">
+            Comma-separated list of providers to use for new recordings:
+            <code>local_fs</code>, <code>db</code>, <code>s3</code>,
+            <code>gcs</code>, <code>azure_blob</code>, <code>dropbox</code>,
+            <code>webdav</code>.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="local_storage_path">Local filesystem path</label>
+          <input
+            id="local_storage_path"
+            name="local_storage_path"
+            type="text"
+            value="{{ form.local_storage_path }}"
+            placeholder="/var/lib/pentavision/recordings"
+          />
+          <p class="pv-card-subtitle">
+            Base directory for the <code>local_fs</code> provider. If empty,
+            the app falls back to <code>RECORDING_BASE_DIR</code> or a default
+            under the instance path.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="recording_base_dir">Recording base directory (legacy)</label>
+          <input
+            id="recording_base_dir"
+            name="recording_base_dir"
+            type="text"
+            value="{{ form.recording_base_dir }}"
+          />
+          <p class="pv-card-subtitle">
+            Optional compatibility setting used by some background workers. Most
+            deployments can leave this blank and rely on <em>Local filesystem
+            path</em> instead.
+          </p>
+        </div>
+      </div>
+
+      <div class="pv-card" style="margin-top: 1.5rem;">
+        <h2>S3-compatible configuration</h2>
+        <p class="pv-card-subtitle">
+          When <code>s3</code> is included in the active targets, recordings are
+          uploaded to an S3-compatible bucket.
+        </p>
+
+        <div class="pv-field-group">
+          <label for="s3_bucket">Bucket</label>
+          <input
+            id="s3_bucket"
+            name="s3_bucket"
+            type="text"
+            value="{{ form.s3_bucket }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="s3_endpoint">Endpoint</label>
+          <input
+            id="s3_endpoint"
+            name="s3_endpoint"
+            type="text"
+            value="{{ form.s3_endpoint }}"
+            placeholder="https://s3.amazonaws.com or custom endpoint"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="s3_region">Region</label>
+          <input
+            id="s3_region"
+            name="s3_region"
+            type="text"
+            value="{{ form.s3_region }}"
+            placeholder="us-east-1"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="s3_access_key">Access key ID</label>
+          <input
+            id="s3_access_key"
+            name="s3_access_key"
+            type="password"
+            value="{{ form.s3_access_key }}"
+            autocomplete="off"
+          />
+          <p class="pv-card-subtitle">
+            Leave blank to keep the existing key (from the database or
+            environment).
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="s3_secret_key">Secret access key</label>
+          <input
+            id="s3_secret_key"
+            name="s3_secret_key"
+            type="password"
+            value="{{ form.s3_secret_key }}"
+            autocomplete="off"
+          />
+          <p class="pv-card-subtitle">
+            Leave blank to keep the existing key.
+          </p>
+        </div>
+      </div>
+
+      <div class="pv-card" style="margin-top: 1.5rem;">
+        <h2>Google Cloud Storage</h2>
+        <p class="pv-card-subtitle">
+          When <code>gcs</code> is active, recordings are uploaded to a Google
+          Cloud Storage bucket.
+        </p>
+        <div class="pv-field-group">
+          <label for="gcs_bucket">Bucket</label>
+          <input
+            id="gcs_bucket"
+            name="gcs_bucket"
+            type="text"
+            value="{{ form.gcs_bucket }}"
+          />
+        </div>
+      </div>
+
+      <div class="pv-card" style="margin-top: 1.5rem;">
+        <h2>Azure Blob Storage</h2>
+        <p class="pv-card-subtitle">
+          When <code>azure_blob</code> is active, recordings are uploaded to an
+          Azure Blob container.
+        </p>
+        <div class="pv-field-group">
+          <label for="azure_blob_container">Container</label>
+          <input
+            id="azure_blob_container"
+            name="azure_blob_container"
+            type="text"
+            value="{{ form.azure_blob_container }}"
+          />
+        </div>
+        <div class="pv-field-group">
+          <label for="azure_blob_connection_string">Connection string</label>
+          <input
+            id="azure_blob_connection_string"
+            name="azure_blob_connection_string"
+            type="password"
+            value="{{ form.azure_blob_connection_string }}"
+            autocomplete="off"
+          />
+          <p class="pv-card-subtitle">
+            Leave blank to keep the existing connection string.
+          </p>
+        </div>
+      </div>
+
+      <div class="pv-card" style="margin-top: 1.5rem;">
+        <h2>Dropbox</h2>
+        <p class="pv-card-subtitle">
+          When <code>dropbox</code> is active, recordings are uploaded under
+          <code>/recordings</code> in the configured Dropbox account.
+        </p>
+        <div class="pv-field-group">
+          <label for="dropbox_access_token">Access token</label>
+          <input
+            id="dropbox_access_token"
+            name="dropbox_access_token"
+            type="password"
+            value="{{ form.dropbox_access_token }}"
+            autocomplete="off"
+          />
+          <p class="pv-card-subtitle">
+            Leave blank to keep the existing token.
+          </p>
+        </div>
+      </div>
+
+      <div class="pv-card" style="margin-top: 1.5rem;">
+        <h2>WebDAV / Nextcloud</h2>
+        <p class="pv-card-subtitle">
+          When <code>webdav</code> is active, recordings are uploaded via
+          WebDAV (for example to Nextcloud).
+        </p>
+        <div class="pv-field-group">
+          <label for="webdav_base_url">Base URL</label>
+          <input
+            id="webdav_base_url"
+            name="webdav_base_url"
+            type="text"
+            value="{{ form.webdav_base_url }}"
+            placeholder="https://example.com/remote.php/dav/files/user"
+          />
+        </div>
+        <div class="pv-field-group">
+          <label for="webdav_username">Username</label>
+          <input
+            id="webdav_username"
+            name="webdav_username"
+            type="text"
+            value="{{ form.webdav_username }}"
+          />
+        </div>
+        <div class="pv-field-group">
+          <label for="webdav_password">Password / app token</label>
+          <input
+            id="webdav_password"
+            name="webdav_password"
+            type="password"
+            value="{{ form.webdav_password }}"
+            autocomplete="off"
+          />
+          <p class="pv-card-subtitle">
+            Leave blank to keep the existing password or app token.
+          </p>
+        </div>
+      </div>
+
+      <div class="pv-field-group" style="margin-top: 1rem;">
+        <button type="submit" class="pv-button-primary">Save storage settings</button>
+      </div>
+    </form>
 
     <div class="pv-card">
       <h2>Active providers</h2>
@@ -37,8 +295,8 @@
         </table>
       {% else %}
         <p style="font-size: 0.9rem; color: #9ca3af;">
-          No storage providers are currently active. Set the
-          <code>STORAGE_TARGETS</code> environment variable to one or more of
+          No storage providers are currently active. Update the
+          <em>Active targets</em> field above to include one or more of
           <code>local_fs</code>, <code>db</code>, <code>s3</code>,
           <code>gcs</code>, <code>azure_blob</code>, <code>dropbox</code>, or
           <code>webdav</code>.
@@ -47,10 +305,10 @@
     </div>
 
     <div class="pv-card" style="margin-top: 1.5rem;">
-      <h2>S3-compatible configuration</h2>
+      <h2>S3-compatible configuration (effective)</h2>
       <p style="font-size: 0.85rem; color: #9ca3af;">
-        When <code>s3</code> is included in <code>STORAGE_TARGETS</code>, recordings
-        are uploaded to an S3-compatible bucket. The following config keys are used:
+        Effective configuration after combining database settings and
+        environment defaults (secrets are masked):
       </p>
       <ul style="font-size: 0.85rem; color: #9ca3af;">
         <li><code>S3_BUCKET</code> – bucket name (required).</li>
@@ -72,39 +330,22 @@ Secret key: {{ s3.secret_key_masked or 'not set' }}
     </div>
 
     <div class="pv-card" style="margin-top: 1.5rem;">
-      <h2>Google Cloud Storage</h2>
+      <h2>Google Cloud Storage (effective)</h2>
       <p style="font-size: 0.85rem; color: #9ca3af;">
-        When <code>gcs</code> is included in <code>STORAGE_TARGETS</code>,
-        recordings are uploaded to a Google Cloud Storage bucket. The
-        following config keys are used:
+        Effective GCS configuration (bucket only; credentials are provided via
+        the host environment, for example
+        <code>GOOGLE_APPLICATION_CREDENTIALS</code>).
       </p>
-      <ul style="font-size: 0.85rem; color: #9ca3af;">
-        <li><code>GCS_BUCKET</code> – bucket name (required).</li>
-        <li>
-          Application default credentials for the Google Cloud SDK are used
-          for authentication (for example
-          <code>GOOGLE_APPLICATION_CREDENTIALS</code> on the host).
-        </li>
-      </ul>
       <pre style="font-size: 0.8rem; white-space: pre-wrap;">
 Bucket: {{ gcs.bucket or 'not set' }}
       </pre>
     </div>
 
     <div class="pv-card" style="margin-top: 1.5rem;">
-      <h2>Azure Blob Storage</h2>
+      <h2>Azure Blob Storage (effective)</h2>
       <p style="font-size: 0.85rem; color: #9ca3af;">
-        When <code>azure_blob</code> is included in
-        <code>STORAGE_TARGETS</code>, recordings are uploaded to an Azure
-        Blob container. The following config keys are used:
+        Effective Azure configuration (secrets are masked):
       </p>
-      <ul style="font-size: 0.85rem; color: #9ca3af;">
-        <li><code>AZURE_BLOB_CONTAINER</code> – container name (required).</li>
-        <li>
-          <code>AZURE_BLOB_CONNECTION_STRING</code> – connection string with
-          appropriate access (secrets are masked in this UI).
-        </li>
-      </ul>
       <pre style="font-size: 0.8rem; white-space: pre-wrap;">
 Container: {{ azure.container or 'not set' }}
 Connection string: {{ azure.connection_string_masked or 'not set' }}
@@ -112,41 +353,20 @@ Connection string: {{ azure.connection_string_masked or 'not set' }}
     </div>
 
     <div class="pv-card" style="margin-top: 1.5rem;">
-      <h2>Dropbox</h2>
+      <h2>Dropbox (effective)</h2>
       <p style="font-size: 0.85rem; color: #9ca3af;">
-        When <code>dropbox</code> is included in
-        <code>STORAGE_TARGETS</code>, recordings are uploaded to the
-        configured Dropbox account under <code>/recordings</code>. The
-        following config key is used:
+        Effective Dropbox configuration (token is masked):
       </p>
-      <ul style="font-size: 0.85rem; color: #9ca3af;">
-        <li>
-          <code>DROPBOX_ACCESS_TOKEN</code> – access token with write access
-          (masked below).
-        </li>
-      </ul>
       <pre style="font-size: 0.8rem; white-space: pre-wrap;">
 Access token: {{ dropbox.access_token_masked or 'not set' }}
       </pre>
     </div>
 
     <div class="pv-card" style="margin-top: 1.5rem;">
-      <h2>WebDAV / Nextcloud</h2>
+      <h2>WebDAV / Nextcloud (effective)</h2>
       <p style="font-size: 0.85rem; color: #9ca3af;">
-        When <code>webdav</code> is included in <code>STORAGE_TARGETS</code>,
-        recordings are uploaded via WebDAV to a privacy-focused or
-        self-hosted service such as Nextcloud. The following config keys are
-        used:
+        Effective WebDAV configuration (password is masked):
       </p>
-      <ul style="font-size: 0.85rem; color: #9ca3af;">
-        <li>
-          <code>WEBDAV_BASE_URL</code> – base URL to the WebDAV endpoint (for
-          example the <code>remote.php/dav/files/&lt;user&gt;</code> path in
-          Nextcloud).
-        </li>
-        <li><code>WEBDAV_USERNAME</code> – username for authentication.</li>
-        <li><code>WEBDAV_PASSWORD</code> – password or app token (masked).</li>
-      </ul>
       <pre style="font-size: 0.8rem; white-space: pre-wrap;">
 Base URL: {{ webdav.base_url or 'not set' }}
 Username: {{ webdav.username or 'not set' }}

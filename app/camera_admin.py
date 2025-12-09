@@ -34,6 +34,7 @@ from .models import (
 from .security import get_current_user, user_has_property_access, user_has_role
 from .stream_service import get_stream_manager
 from .camera_utils import build_camera_url
+from .storage_providers import _load_storage_settings
 
 
 bp = Blueprint("camera_admin", __name__, url_prefix="/admin/cameras")
@@ -214,6 +215,41 @@ def _build_url_for_pattern(
     for token, value in replacements.items():
         url = url.replace(token, value)
     return url
+
+
+PLACEMENT_OPTIONS: list[tuple[str, str]] = [
+    ("", "(not set)"),
+    ("INSIDE", "Inside"),
+    ("OUTSIDE", "Outside"),
+]
+
+
+LOCATION_OPTIONS: list[tuple[str, str]] = [
+    ("", "(not set)"),
+    ("Kitchen", "Kitchen"),
+    ("Living Room", "Living Room"),
+    ("Bedroom 1", "Bedroom 1"),
+    ("Bedroom 2", "Bedroom 2"),
+    ("Master Bedroom", "Master Bedroom"),
+    ("Laundry", "Laundry"),
+    ("Garage", "Garage"),
+    ("Front Door", "Front Door"),
+    ("Back Door", "Back Door"),
+    ("Hallway", "Hallway"),
+]
+
+
+DIRECTION_OPTIONS: list[tuple[str, str]] = [
+    ("", "(not set)"),
+    ("N", "North"),
+    ("NE", "North-East"),
+    ("E", "East"),
+    ("SE", "South-East"),
+    ("S", "South"),
+    ("SW", "South-West"),
+    ("W", "West"),
+    ("NW", "North-West"),
+]
 
 
 def _test_rtsp_url(url: str) -> bool:
@@ -765,6 +801,10 @@ def create_device():
         "storage_targets": "",
         "retention_days": "",
         "admin_lock": False,
+        "placement": "",
+        "location": "",
+        "facing_direction": "",
+        "property_id": "",
     }
     csrf_token = _ensure_csrf_token()
 
@@ -772,11 +812,14 @@ def create_device():
     is_admin = user_has_role(user, "System Administrator") if user else False
     properties = _load_properties_for_user(user)
 
-    raw_targets = str(current_app.config.get("STORAGE_TARGETS", "") or "")
-    if not raw_targets:
-        raw_targets = "local_fs"
+    db_settings = _load_storage_settings() or {}
+    raw_targets = (
+        db_settings.get("storage_targets")
+        or str(current_app.config.get("STORAGE_TARGETS", "") or "")
+        or "local_fs"
+    )
     storage_targets_default = ",".join(
-        [item.strip() for item in raw_targets.split(",") if item.strip()]
+        [item.strip() for item in str(raw_targets).split(",") if item.strip()]
     )
 
     if engine is None:
@@ -802,6 +845,9 @@ def create_device():
         form["username"] = (request.form.get("username") or "").strip()
         form["password"] = (request.form.get("password") or "").strip()
         form["notes"] = (request.form.get("notes") or "").strip()
+        form["placement"] = (request.form.get("placement") or "").strip()
+        form["location"] = (request.form.get("location") or "").strip()
+        form["facing_direction"] = (request.form.get("facing_direction") or "").strip()
         form["is_active"] = request.form.get("is_active") == "1"
         form["storage_targets"] = (
             request.form.get("storage_targets") or ""
@@ -878,6 +924,9 @@ def create_device():
                     notes=form["notes"] or None,
                     admin_lock=1 if form["admin_lock"] else 0,
                     is_active=1 if form["is_active"] else 0,
+                    placement=form["placement"] or None,
+                    location=form["location"] or None,
+                    facing_direction=form["facing_direction"] or None,
                 )
                 session_db.add(device)
                 session_db.commit()
@@ -907,6 +956,9 @@ def create_device():
         storage_targets_default=storage_targets_default,
         is_admin=is_admin,
         properties=properties,
+        placement_options=PLACEMENT_OPTIONS,
+        location_options=LOCATION_OPTIONS,
+        direction_options=DIRECTION_OPTIONS,
     )
 
 
@@ -920,11 +972,14 @@ def edit_device(device_id: int):
     is_admin = user_has_role(user, "System Administrator") if user else False
     properties = _load_properties_for_user(user)
 
-    raw_targets = str(current_app.config.get("STORAGE_TARGETS", "") or "")
-    if not raw_targets:
-        raw_targets = "local_fs"
+    db_settings = _load_storage_settings() or {}
+    raw_targets = (
+        db_settings.get("storage_targets")
+        or str(current_app.config.get("STORAGE_TARGETS", "") or "")
+        or "local_fs"
+    )
     storage_targets_default = ",".join(
-        [item.strip() for item in raw_targets.split(",") if item.strip()]
+        [item.strip() for item in str(raw_targets).split(",") if item.strip()]
     )
 
     if engine is None:
@@ -938,6 +993,9 @@ def edit_device(device_id: int):
             is_edit=True,
             storage_targets_default=storage_targets_default,
             is_admin=is_admin,
+            placement_options=PLACEMENT_OPTIONS,
+            location_options=LOCATION_OPTIONS,
+            direction_options=DIRECTION_OPTIONS,
         )
 
     with Session(engine) as session_db:
@@ -972,6 +1030,9 @@ def edit_device(device_id: int):
                 is_edit=True,
                 storage_targets_default=storage_targets_default,
                 is_admin=is_admin,
+                placement_options=PLACEMENT_OPTIONS,
+                location_options=LOCATION_OPTIONS,
+                direction_options=DIRECTION_OPTIONS,
             )
 
         form = {
@@ -991,6 +1052,9 @@ def edit_device(device_id: int):
             ),
             "admin_lock": bool(getattr(device, "admin_lock", 0)),
             "property_id": str(prop_link.property_id) if prop_link else "",
+            "placement": device.placement or "",
+            "location": device.location or "",
+            "facing_direction": device.facing_direction or "",
         }
 
         if request.method == "POST":
@@ -1004,6 +1068,9 @@ def edit_device(device_id: int):
             form["username"] = (request.form.get("username") or "").strip()
             form["password"] = (request.form.get("password") or "").strip()
             form["notes"] = (request.form.get("notes") or "").strip()
+            form["placement"] = (request.form.get("placement") or "").strip()
+            form["location"] = (request.form.get("location") or "").strip()
+            form["facing_direction"] = (request.form.get("facing_direction") or "").strip()
             form["is_active"] = request.form.get("is_active") == "1"
             form["storage_targets"] = (
                 request.form.get("storage_targets") or ""
@@ -1086,6 +1153,9 @@ def edit_device(device_id: int):
                 device.username = form["username"] or None
                 device.password = form["password"] or None
                 device.notes = form["notes"] or None
+                device.placement = form["placement"] or None
+                device.location = form["location"] or None
+                device.facing_direction = form["facing_direction"] or None
                 device.is_active = 1 if form["is_active"] else 0
                 device.admin_lock = 1 if form["admin_lock"] else 0
                 session_db.add(device)
@@ -1120,6 +1190,9 @@ def edit_device(device_id: int):
         storage_targets_default=storage_targets_default,
         is_admin=is_admin,
         properties=properties,
+        placement_options=PLACEMENT_OPTIONS,
+        location_options=LOCATION_OPTIONS,
+        direction_options=DIRECTION_OPTIONS,
     )
 
 
