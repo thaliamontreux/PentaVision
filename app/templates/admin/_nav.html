@@ -14,9 +14,9 @@
 
   {# Advanced system configuration for System Administrators only #}
   {% if is_system_admin %}
-    <a href="{{ url_for('main.recordings') }}">Recordings</a>
-    <a href="{{ url_for('main.storage_settings') }}">Storage</a>
-    <a href="{{ url_for('main.audit_events') }}">Audit log</a>
+    <a href="{{ url_for('admin.recordings_alias') }}">Recordings</a>
+    <a href="{{ url_for('admin.storage_alias') }}">Storage</a>
+    <a href="{{ url_for('admin.audit_alias') }}">Audit log</a>
     <a href="{{ url_for('installer.install') }}">Installer & databases</a>
   {% endif %}
 </nav>

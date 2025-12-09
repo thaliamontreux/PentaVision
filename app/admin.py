@@ -56,6 +56,28 @@ def index():
     return render_template("admin/index.html")
 
 
+@bp.get("/recordings")
+def recordings_alias():
+    """Admin-scoped alias for the main recordings view."""
+    return redirect(url_for("main.recordings"))
+
+
+@bp.get("/storage")
+def storage_alias():
+    """Admin-scoped alias for the main storage settings view.
+
+    This keeps the underlying implementation in the main blueprint but provides
+    a stable /admin URL for navigation and future refactors.
+    """
+    return redirect(url_for("main.storage_settings"))
+
+
+@bp.get("/audit")
+def audit_alias():
+    """Admin-scoped alias for the main audit log view."""
+    return redirect(url_for("main.audit_events"))
+
+
 @bp.get("/users")
 def users_list():
     engine = get_user_engine()
