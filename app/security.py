@@ -184,9 +184,12 @@ def init_security(app) -> None:
 
     @app.context_processor
     def _inject_user() -> dict:  # pragma: no cover - template wiring
+        user = get_current_user()
         return {
-            "current_user": get_current_user(),
+            "current_user": user,
             "global_csrf_token": ensure_global_csrf_token(),
+            "is_system_admin": user_has_role(user, "System Administrator"),
+            "is_technician": user_has_role(user, "Technician"),
         }
 
 

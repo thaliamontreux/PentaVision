@@ -23,13 +23,26 @@
         <div class="pv-brand">PentaVision</div>
         <nav class="pv-nav" role="navigation" aria-label="Main navigation">
           <a href="{{ url_for('main.index') }}">Dashboard</a>
-          <a href="{{ url_for('installer.install') }}">Installer</a>
-          <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
-          <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URLs</a>
-          <a href="{{ url_for('main.recordings') }}">Recordings</a>
-          <a href="{{ url_for('main.faces_demo') }}">Faces</a>
-          <a href="{{ url_for('main.storage_settings') }}">Storage</a>
-          <a href="{{ url_for('main.audit_events') }}">Audit</a>
+
+          {% if current_user %}
+            {# Core features available to any signed-in user #}
+            <a href="{{ url_for('main.recordings') }}">Recordings</a>
+            <a href="{{ url_for('main.faces_demo') }}">Faces</a>
+
+            {# Camera administration is allowed for System Administrators and Technicians #}
+            {% if is_system_admin or is_technician %}
+              <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
+              <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URLs</a>
+            {% endif %}
+
+            {# Admin and advanced configuration links for System Administrators only #}
+            {% if is_system_admin %}
+              <a href="{{ url_for('admin.users_list') }}">Admin</a>
+              <a href="{{ url_for('main.storage_settings') }}">Storage</a>
+              <a href="{{ url_for('main.audit_events') }}">Audit</a>
+              <a href="{{ url_for('installer.install') }}">Installer</a>
+            {% endif %}
+          {% endif %}
         </nav>
         <div class="pv-user-menu">
           {% if current_user %}
