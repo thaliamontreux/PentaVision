@@ -21,6 +21,7 @@ from fido2.webauthn import (
 from .db import get_user_engine
 from .logging_utils import log_event
 from .models import User, WebAuthnCredential
+from .security import seed_system_admin_role_for_email
 
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -96,6 +97,68 @@ def _verify_totp(user: User, code: str) -> bool:
         return False
 
 
+def _authenticate_user(email: str, password: str, totp_code: str = ""):
+    """Authenticate a user by email/password/TOTP.
+
+    Returns a tuple of (user, error_message, status_code). On success, user is
+    a User instance, error_message is None, and status_code is 200. On failure,
+    user is None and error_message/status_code describe the problem.
+    """
+
+    if not email or not password:
+        return None, "email and password are required", 400
+
+    engine = get_user_engine()
+    if engine is None:
+        return None, "user database not configured", 500
+
+    with Session(engine) as session_db:
+        user = session_db.scalar(select(User).where(User.email == email))
+        if user is None:
+            log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
+            return None, "invalid credentials", 401
+
+        now = datetime.now(timezone.utc)
+        if user.locked_until and user.locked_until > now:
+            log_event(
+                "AUTH_LOGIN_LOCKED",
+                user_id=user.id,
+                details=f"locked_until={user.locked_until.isoformat()}",
+            )
+            return None, "account locked. try again later.", 403
+
+        try:
+            _ph.verify(user.password_hash, password)
+        except VerifyMismatchError:
+            user.failed_logins = (user.failed_logins or 0) + 1
+            if user.failed_logins >= 5:
+                user.locked_until = now + timedelta(minutes=15)
+                log_event(
+                    "AUTH_LOGIN_LOCKED_SET",
+                    user_id=user.id,
+                    details="failed_logins>=5",
+                )
+            session_db.add(user)
+            session_db.commit()
+            log_event("AUTH_LOGIN_FAILURE", user_id=user.id, details="bad password")
+            return None, "invalid credentials", 401
+
+        if user.totp_secret:
+            if not _verify_totp(user, totp_code.strip()):
+                log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user.id)
+                return None, "invalid 2FA code", 401
+
+        if _ph.check_needs_rehash(user.password_hash):
+            user.password_hash = _ph.hash(password)
+        user.failed_logins = 0
+        user.locked_until = None
+        user.last_login_at = now
+        session_db.add(user)
+        session_db.commit()
+
+        return user, None, 200
+
+
 @bp.post("/register")
 def register():
     data = request.get_json(silent=True) or {}
@@ -122,6 +185,10 @@ def register():
         session.add(user)
         session.commit()
 
+        # Ensure RBAC roles exist and grant System Administrator to special
+        # accounts where appropriate (including Thalia's email).
+        seed_system_admin_role_for_email(user.email)
+
         token = _issue_token(user.id)
         log_event("AUTH_REGISTER_SUCCESS", user_id=user.id, details=f"email={email}")
         return (
@@ -140,58 +207,13 @@ def login():
     if not email or not password:
         return jsonify({"error": "email and password are required"}), 400
 
-    engine = get_user_engine()
-    if engine is None:
-        return jsonify({"error": "user database not configured"}), 500
+    user, error, status = _authenticate_user(email, password, totp_code)
+    if user is None:
+        return jsonify({"error": error}), status
 
-    with Session(engine) as session:
-        user = session.scalar(select(User).where(User.email == email))
-        if user is None:
-            log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
-            return jsonify({"error": "invalid credentials"}), 401
-
-        now = datetime.now(timezone.utc)
-        if user.locked_until and user.locked_until > now:
-            log_event(
-                "AUTH_LOGIN_LOCKED",
-                user_id=user.id,
-                details=f"locked_until={user.locked_until.isoformat()}",
-            )
-            return jsonify({"error": "account locked. try again later."}), 403
-
-        try:
-            _ph.verify(user.password_hash, password)
-        except VerifyMismatchError:
-            # Increment failed login counter and lock account after too many attempts.
-            user.failed_logins = (user.failed_logins or 0) + 1
-            if user.failed_logins >= 5:
-                user.locked_until = now + timedelta(minutes=15)
-                log_event(
-                    "AUTH_LOGIN_LOCKED_SET",
-                    user_id=user.id,
-                    details="failed_logins>=5",
-                )
-            session.add(user)
-            session.commit()
-            log_event("AUTH_LOGIN_FAILURE", user_id=user.id, details="bad password")
-            return jsonify({"error": "invalid credentials"}), 401
-
-        # If TOTP is enabled, require a valid TOTP code as a second factor.
-        if user.totp_secret:
-            if not _verify_totp(user, totp_code):
-                log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user.id)
-                return jsonify({"error": "invalid 2FA code"}), 401
-
-        if _ph.check_needs_rehash(user.password_hash):
-            user.password_hash = _ph.hash(password)
-        user.failed_logins = 0
-        user.locked_until = None
-        session.add(user)
-        session.commit()
-
-        token = _issue_token(user.id)
-        log_event("AUTH_LOGIN_SUCCESS", user_id=user.id)
-        return jsonify({"access_token": token}), 200
+    token = _issue_token(user.id)
+    log_event("AUTH_LOGIN_SUCCESS", user_id=user.id)
+    return jsonify({"access_token": token}), 200
 
 
 @bp.post("/totp/setup")

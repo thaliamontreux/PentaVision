@@ -228,6 +228,7 @@ class CameraDevice(RecordBase):
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    admin_lock: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_active: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -316,6 +317,17 @@ class CameraStoragePolicy(RecordBase):
     retention_days: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class CameraPropertyLink(RecordBase):
+    __tablename__ = "camera_property_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(Integer, index=True, unique=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

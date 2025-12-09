@@ -21,13 +21,35 @@ from flask import (
 )
 from sqlalchemy.orm import Session
 
-from .db import get_record_engine
-from .models import CameraDevice, CameraStoragePolicy, CameraUrlPattern
+from .db import get_record_engine, get_user_engine
+from .logging_utils import log_event
+from .models import (
+    CameraDevice,
+    CameraPropertyLink,
+    CameraStoragePolicy,
+    CameraUrlPattern,
+    Property,
+    UserProperty,
+)
+from .security import get_current_user, user_has_property_access, user_has_role
 from .stream_service import get_stream_manager
 from .camera_utils import build_camera_url
 
 
 bp = Blueprint("camera_admin", __name__, url_prefix="/admin/cameras")
+
+
+@bp.before_request
+def _require_admin_or_technician():
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("camera_admin.list_devices")
+        return redirect(url_for("main.login", next=next_url))
+    if not (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Technician")
+    ):
+        abort(403)
 
 
 _SCAN_JOBS: dict[str, dict] = {}
@@ -84,6 +106,48 @@ def _ip_already_configured(session_db: Session, ip_address: str) -> bool:
         .first()
     )
     return existing is not None
+
+
+def _upsert_camera_property_link(
+    session_db: Session,
+    device_id: int,
+    property_id: Optional[int],
+) -> None:
+    bind = session_db.get_bind()
+    if bind is not None:
+        CameraPropertyLink.__table__.create(bind=bind, checkfirst=True)
+    link = (
+        session_db.query(CameraPropertyLink)
+        .filter(CameraPropertyLink.device_id == device_id)
+        .first()
+    )
+    if not property_id:
+        if link is not None:
+            session_db.delete(link)
+        return
+    if link is None:
+        link = CameraPropertyLink(device_id=device_id, property_id=property_id)
+    else:
+        link.property_id = property_id
+    session_db.add(link)
+
+
+def _load_properties_for_user(user) -> list[Property]:
+    engine = get_user_engine()
+    if engine is None or user is None:
+        return []
+
+    with Session(engine) as db:
+        if user_has_role(user, "System Administrator"):
+            return db.query(Property).order_by(Property.name).all()
+
+        return (
+            db.query(Property)
+            .join(UserProperty, UserProperty.property_id == Property.id)
+            .filter(UserProperty.user_id == user.id)
+            .order_by(Property.name)
+            .all()
+        )
 
 
 def _upsert_storage_policy(
@@ -615,6 +679,12 @@ def create_pattern():
                 )
                 session_db.add(pattern)
                 session_db.commit()
+                actor = get_current_user()
+                log_event(
+                    "CAMERA_PATTERN_CREATE",
+                    user_id=actor.id if actor else None,
+                    details=f"pattern_id={pattern.id}, manufacturer={pattern.manufacturer}",
+                )
             return redirect(url_for("camera_admin.list_patterns"))
     return render_template(
         "cameras/edit.html",
@@ -631,10 +701,13 @@ def list_devices():
     devices: List[CameraDevice] = []
     patterns_index: dict[int, CameraUrlPattern] = {}
     stream_status: dict[int, dict] = {}
+    device_properties: dict[int, int] = {}
 
     if engine is None:
         errors.append("Record database is not configured.")
     else:
+        CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
+
         with Session(engine) as session_db:
             devices = (
                 session_db.query(CameraDevice)
@@ -643,6 +716,20 @@ def list_devices():
             )
             patterns = session_db.query(CameraUrlPattern).all()
             patterns_index = {p.id: p for p in patterns}
+
+            links = session_db.query(CameraPropertyLink).all()
+            device_properties = {link.device_id: link.property_id for link in links}
+
+        user = get_current_user()
+        if user is not None and not user_has_role(user, "System Administrator"):
+            filtered: List[CameraDevice] = []
+            for d in devices:
+                prop_id = device_properties.get(d.id)
+                if not prop_id:
+                    continue
+                if user_has_property_access(user, prop_id):
+                    filtered.append(d)
+            devices = filtered
 
         manager = get_stream_manager(current_app)
         if manager is not None:
@@ -677,8 +764,13 @@ def create_device():
         "is_active": True,
         "storage_targets": "",
         "retention_days": "",
+        "admin_lock": False,
     }
     csrf_token = _ensure_csrf_token()
+
+    user = get_current_user()
+    is_admin = user_has_role(user, "System Administrator") if user else False
+    properties = _load_properties_for_user(user)
 
     raw_targets = str(current_app.config.get("STORAGE_TARGETS", "") or "")
     if not raw_targets:
@@ -704,6 +796,7 @@ def create_device():
 
         form["name"] = (request.form.get("name") or "").strip()
         form["pattern_id"] = (request.form.get("pattern_id") or "").strip()
+        form["property_id"] = (request.form.get("property_id") or "").strip()
         form["ip_address"] = (request.form.get("ip_address") or "").strip()
         form["port"] = (request.form.get("port") or "").strip()
         form["username"] = (request.form.get("username") or "").strip()
@@ -716,6 +809,10 @@ def create_device():
         form["retention_days"] = (
             request.form.get("retention_days") or ""
         ).strip()
+        if is_admin:
+            form["admin_lock"] = request.form.get("admin_lock") == "1"
+        else:
+            form["admin_lock"] = False
 
         if not form["name"]:
             errors.append("Name is required.")
@@ -731,6 +828,20 @@ def create_device():
                 pattern_id_int = None
         else:
             pattern_id_int = None
+
+        property_id_int: Optional[int]
+        if form.get("property_id"):
+            try:
+                property_id_int = int(form["property_id"])
+            except ValueError:
+                errors.append("Invalid property selection.")
+                property_id_int = None
+            else:
+                allowed_ids = {p.id for p in properties}
+                if property_id_int not in allowed_ids:
+                    errors.append("You are not allowed to assign cameras to that property.")
+        else:
+            property_id_int = None
 
         port_int: Optional[int]
         if form["port"]:
@@ -765,10 +876,12 @@ def create_device():
                     username=form["username"] or None,
                     password=form["password"] or None,
                     notes=form["notes"] or None,
+                    admin_lock=1 if form["admin_lock"] else 0,
                     is_active=1 if form["is_active"] else 0,
                 )
                 session_db.add(device)
                 session_db.commit()
+                _upsert_camera_property_link(session_db, device.id, property_id_int)
                 _upsert_storage_policy(
                     session_db,
                     device.id,
@@ -776,6 +889,12 @@ def create_device():
                     retention_days_int,
                 )
                 session_db.commit()
+                actor = get_current_user()
+                log_event(
+                    "CAMERA_CREATE",
+                    user_id=actor.id if actor else None,
+                    details=f"device_id={device.id}, ip={device.ip_address}, property_id={property_id_int}",
+                )
             return redirect(url_for("camera_admin.list_devices"))
 
     return render_template(
@@ -786,6 +905,8 @@ def create_device():
         csrf_token=csrf_token,
         is_edit=False,
         storage_targets_default=storage_targets_default,
+        is_admin=is_admin,
+        properties=properties,
     )
 
 
@@ -794,6 +915,10 @@ def edit_device(device_id: int):
     engine = get_record_engine()
     errors: List[str] = []
     csrf_token = _ensure_csrf_token()
+
+    user = get_current_user()
+    is_admin = user_has_role(user, "System Administrator") if user else False
+    properties = _load_properties_for_user(user)
 
     raw_targets = str(current_app.config.get("STORAGE_TARGETS", "") or "")
     if not raw_targets:
@@ -812,11 +937,13 @@ def edit_device(device_id: int):
             csrf_token=csrf_token,
             is_edit=True,
             storage_targets_default=storage_targets_default,
+            is_admin=is_admin,
         )
 
     with Session(engine) as session_db:
-        # Ensure the storage policy table exists before querying.
+        # Ensure the auxiliary tables exist before querying.
         CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
+        CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
         device = session_db.get(CameraDevice, device_id)
         patterns = (
             session_db.query(CameraUrlPattern)
@@ -826,6 +953,11 @@ def edit_device(device_id: int):
         policy = (
             session_db.query(CameraStoragePolicy)
             .filter(CameraStoragePolicy.device_id == device_id)
+            .first()
+        )
+        prop_link = (
+            session_db.query(CameraPropertyLink)
+            .filter(CameraPropertyLink.device_id == device_id)
             .first()
         )
 
@@ -839,6 +971,7 @@ def edit_device(device_id: int):
                 csrf_token=csrf_token,
                 is_edit=True,
                 storage_targets_default=storage_targets_default,
+                is_admin=is_admin,
             )
 
         form = {
@@ -856,6 +989,8 @@ def edit_device(device_id: int):
                 if policy and policy.retention_days is not None
                 else ""
             ),
+            "admin_lock": bool(getattr(device, "admin_lock", 0)),
+            "property_id": str(prop_link.property_id) if prop_link else "",
         }
 
         if request.method == "POST":
@@ -877,6 +1012,12 @@ def edit_device(device_id: int):
                 request.form.get("retention_days") or ""
             ).strip()
 
+            locked = bool(getattr(device, "admin_lock", 0))
+            if is_admin:
+                form["admin_lock"] = request.form.get("admin_lock") == "1"
+            else:
+                form["admin_lock"] = locked
+
             if not form["name"]:
                 errors.append("Name is required.")
             if not form["ip_address"]:
@@ -891,6 +1032,23 @@ def edit_device(device_id: int):
                     pattern_id_int = None
             else:
                 pattern_id_int = None
+
+            property_id_int: Optional[int]
+            form["property_id"] = (request.form.get("property_id") or "").strip()
+            if form["property_id"]:
+                try:
+                    property_id_int = int(form["property_id"])
+                except ValueError:
+                    errors.append("Invalid property selection.")
+                    property_id_int = None
+                else:
+                    allowed_ids = {p.id for p in properties}
+                    if property_id_int not in allowed_ids:
+                        errors.append(
+                            "You are not allowed to assign cameras to that property."
+                        )
+            else:
+                property_id_int = None
 
             port_int: Optional[int]
             if form["port"]:
@@ -915,6 +1073,11 @@ def edit_device(device_id: int):
             else:
                 retention_days_int = None
 
+            if locked and not is_admin:
+                errors.append(
+                    "This camera is locked by an administrator and cannot be modified."
+                )
+
             if not errors:
                 device.name = form["name"]
                 device.pattern_id = pattern_id_int
@@ -924,8 +1087,14 @@ def edit_device(device_id: int):
                 device.password = form["password"] or None
                 device.notes = form["notes"] or None
                 device.is_active = 1 if form["is_active"] else 0
+                device.admin_lock = 1 if form["admin_lock"] else 0
                 session_db.add(device)
                 session_db.commit()
+                _upsert_camera_property_link(
+                    session_db,
+                    device.id,
+                    property_id_int,
+                )
                 _upsert_storage_policy(
                     session_db,
                     device.id,
@@ -933,6 +1102,12 @@ def edit_device(device_id: int):
                     retention_days_int,
                 )
                 session_db.commit()
+                actor = get_current_user()
+                log_event(
+                    "CAMERA_UPDATE",
+                    user_id=actor.id if actor else None,
+                    details=f"device_id={device.id}, ip={device.ip_address}, property_id={property_id_int}",
+                )
                 return redirect(url_for("camera_admin.list_devices"))
 
     return render_template(
@@ -943,6 +1118,8 @@ def edit_device(device_id: int):
         csrf_token=csrf_token,
         is_edit=True,
         storage_targets_default=storage_targets_default,
+        is_admin=is_admin,
+        properties=properties,
     )
 
 
@@ -1032,11 +1209,24 @@ def delete_device(device_id: int):
     if not _validate_csrf_token(request.form.get("csrf_token")):
         return redirect(url_for("camera_admin.list_devices"))
 
+    user = get_current_user()
+    is_admin = user_has_role(user, "System Administrator") if user else False
+
     with Session(engine) as session_db:
         device = session_db.get(CameraDevice, device_id)
         if device is not None:
+            locked = bool(getattr(device, "admin_lock", 0))
+            if locked and not is_admin:
+                return redirect(url_for("camera_admin.list_devices"))
+            details = f"device_id={device.id}, ip={device.ip_address}"
             session_db.delete(device)
             session_db.commit()
+            actor = get_current_user()
+            log_event(
+                "CAMERA_DELETE",
+                user_id=actor.id if actor else None,
+                details=details,
+            )
 
     return redirect(url_for("camera_admin.list_devices"))
 
@@ -1104,6 +1294,12 @@ def edit_pattern(pattern_id: int):
                 pattern.is_active = 1 if form["is_active"] else 0
                 session_db.add(pattern)
                 session_db.commit()
+                actor = get_current_user()
+                log_event(
+                    "CAMERA_PATTERN_UPDATE",
+                    user_id=actor.id if actor else None,
+                    details=f"pattern_id={pattern.id}, manufacturer={pattern.manufacturer}",
+                )
                 return redirect(url_for("camera_admin.list_patterns"))
 
     return render_template(
@@ -1129,8 +1325,15 @@ def delete_pattern(pattern_id: int):
     with Session(engine) as session_db:
         pattern = session_db.get(CameraUrlPattern, pattern_id)
         if pattern is not None:
+            manufacturer = pattern.manufacturer
             session_db.delete(pattern)
             session_db.commit()
+            actor = get_current_user()
+            log_event(
+                "CAMERA_PATTERN_DELETE",
+                user_id=actor.id if actor else None,
+                details=f"pattern_id={pattern_id}, manufacturer={manufacturer}",
+            )
 
     return redirect(url_for("camera_admin.list_patterns"))
 
@@ -1160,6 +1363,7 @@ def import_csv():
                     with Session(engine) as session_db:
                         if clear_existing:
                             session_db.query(CameraUrlPattern).delete()
+                        created_count = 0
                         for row in rows:
                             manufacturer = (
                                 row.get("manufacturer") or ""
@@ -1178,7 +1382,14 @@ def import_csv():
                                 is_active=1,
                             )
                             session_db.add(pattern)
+                            created_count += 1
                         session_db.commit()
+                    actor = get_current_user()
+                    log_event(
+                        "CAMERA_PATTERN_IMPORT",
+                        user_id=actor.id if actor else None,
+                        details=f"created={created_count}, clear_existing={clear_existing}",
+                    )
                 except Exception as exc:  # noqa: BLE001
                     errors.append(f"CSV import failed: {exc}")
 

@@ -14,6 +14,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    url_for,
 )
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -27,16 +28,29 @@ except (SystemExit, ImportError, Exception) as exc:  # noqa: BLE001
     face_recognition = None  # type: ignore[assignment]
     _face_recognition_error = exc
 
+from .auth import _authenticate_user
 from .db import get_face_engine, get_record_engine, get_user_engine
+from .logging_utils import log_event
 from .models import (
     AuditEvent,
     CameraDevice,
+    CameraPropertyLink,
     CameraRecording,
     CameraUrlPattern,
     FaceEmbedding,
     FacePrivacySetting,
     RecordingData,
     User,
+    UserNotificationSettings,
+    WebAuthnCredential,
+)
+from .security import (
+    get_current_user,
+    login_user,
+    logout_user,
+    user_has_property_access,
+    user_has_role,
+    validate_global_csrf_token,
 )
 from .stream_service import get_stream_manager
 from .storage_providers import build_storage_providers
@@ -56,6 +70,39 @@ def _get_face_match_threshold() -> float:
         return float(value)
     except (TypeError, ValueError):
         return FACE_MATCH_THRESHOLD
+
+
+def _load_camera_property_map(record_engine) -> dict[int, int]:
+    if record_engine is None:
+        return {}
+    CameraPropertyLink.__table__.create(bind=record_engine, checkfirst=True)
+    with Session(record_engine) as session_db:
+        rows = session_db.query(
+            CameraPropertyLink.device_id, CameraPropertyLink.property_id
+        ).all()
+    return {int(device_id): int(property_id) for device_id, property_id in rows}
+
+
+def _user_can_access_camera(
+    user: User | None,
+    device_id: int,
+    record_engine=None,
+    property_map: dict[int, int] | None = None,
+) -> bool:
+    if user is None:
+        return False
+    if user_has_role(user, "System Administrator"):
+        return True
+
+    if property_map is None:
+        if record_engine is None:
+            record_engine = get_record_engine()
+        property_map = _load_camera_property_map(record_engine)
+
+    prop_id = property_map.get(device_id)
+    if not prop_id:
+        return False
+    return user_has_property_access(user, prop_id)
 
 
 @bp.get("/health")
@@ -87,6 +134,7 @@ def health():
 
 @bp.get("/")
 def index():
+    user = get_current_user()
     # Reuse the same DB health logic for the dashboard.
     db_status = {}
     for label, getter in (
@@ -115,8 +163,10 @@ def index():
     camera_status: dict[int, str] = {}
     camera_last_seen: dict[int, datetime] = {}
     record_engine = get_record_engine()
+    camera_property_map: dict[int, int] = {}
     if record_engine is not None:
         with Session(record_engine) as session_db:
+            CameraPropertyLink.__table__.create(bind=record_engine, checkfirst=True)
             CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
             devices = (
                 session_db.query(CameraDevice)
@@ -143,6 +193,11 @@ def index():
                 .all()
             )
 
+            links = session_db.query(CameraPropertyLink).all()
+            camera_property_map = {
+                int(link.device_id): int(link.property_id) for link in links
+            }
+
         now = datetime.now(timezone.utc)
         threshold = now - timedelta(minutes=3)
         for device_id, last_time in rows:
@@ -156,6 +211,20 @@ def index():
 
         for device in devices:
             camera_status.setdefault(device.id, "unknown")
+
+    # Apply property-level RBAC: unauthenticated users see no cameras; non-admin
+    # users only see cameras for properties they are associated with.
+    if user is None:
+        devices = []
+    elif not user_has_role(user, "System Administrator"):
+        filtered_devices: list[CameraDevice] = []
+        for d in devices:
+            prop_id = camera_property_map.get(d.id)
+            if not prop_id:
+                continue
+            if user_has_property_access(user, prop_id):
+                filtered_devices.append(d)
+        devices = filtered_devices
 
     preview_low_fps = current_app.config.get("PREVIEW_LOW_FPS", 2.0)
 
@@ -181,6 +250,170 @@ def auth_demo():
     return render_template("auth_demo.html")
 
 
+@bp.route("/login", methods=["GET", "POST"])
+def login():
+    errors: list[str] = []
+    email = ""
+    next_url = (
+        request.args.get("next")
+        or request.form.get("next")
+        or url_for("main.index")
+    )
+    if not next_url.startswith("/"):
+        next_url = url_for("main.index")
+
+    if request.method == "POST":
+        if not validate_global_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        totp_code = (request.form.get("totp_code") or "").strip()
+
+        if not errors:
+            user, error, status = _authenticate_user(email, password, totp_code)
+            if user is None:
+                errors.append(error or f"Login failed (status {status}).")
+            else:
+                login_user(user)
+                log_event("AUTH_LOGIN_SUCCESS", user_id=user.id, details="html_login")
+                return redirect(next_url)
+
+    return render_template("login.html", errors=errors, email=email, next=next_url)
+
+
+@bp.post("/logout")
+def logout():
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    user = get_current_user()
+    if user is not None:
+        log_event("AUTH_LOGOUT", user_id=user.id)
+    logout_user()
+    return redirect(url_for("main.index"))
+
+
+@bp.route("/profile", methods=["GET", "POST"])
+def profile():
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+
+    engine = get_user_engine()
+    errors: list[str] = []
+    saved = False
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "profile.html",
+            errors=errors,
+            form={},
+            notif={},
+            mfa_status={
+                "totp_enabled": False,
+                "passkey_count": 0,
+            },
+            saved=saved,
+        )
+
+    with Session(engine) as session_db:
+        db_user = session_db.get(User, user.id)
+        if db_user is None:
+            abort(404)
+
+        settings = (
+            session_db.query(UserNotificationSettings)
+            .filter(UserNotificationSettings.user_id == db_user.id)
+            .first()
+        )
+        if settings is None:
+            settings = UserNotificationSettings(user_id=db_user.id)
+            session_db.add(settings)
+            session_db.commit()
+
+        WebAuthnCredential.__table__.create(bind=engine, checkfirst=True)
+        passkey_count = (
+            session_db.query(WebAuthnCredential)
+            .filter(WebAuthnCredential.user_id == db_user.id)
+            .count()
+        )
+
+        if request.method == "POST":
+            if not validate_global_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+
+            full_name = (request.form.get("full_name") or "").strip()
+            preferred_name = (request.form.get("preferred_name") or "").strip()
+            primary_phone = (request.form.get("primary_phone") or "").strip()
+            timezone_val = (request.form.get("timezone") or "").strip()
+            mfa_pref = (request.form.get("mfa_preference") or "").strip()
+
+            if not errors:
+                db_user.full_name = full_name or None
+                db_user.preferred_name = preferred_name or None
+                db_user.primary_phone = primary_phone or None
+                db_user.timezone = timezone_val or None
+                db_user.mfa_preference = mfa_pref or None
+
+                def _flag(name: str) -> int:
+                    return 1 if request.form.get(name) == "1" else 0
+
+                settings.intrusion_alerts = _flag("intrusion_alerts")
+                settings.fire_alerts = _flag("fire_alerts")
+                settings.system_faults = _flag("system_faults")
+                settings.camera_motion_events = _flag("camera_motion_events")
+                settings.door_window_activity = _flag("door_window_activity")
+                settings.environmental_alerts = _flag("environmental_alerts")
+                settings.escalation_level = (
+                    (request.form.get("escalation_level") or "").strip() or None
+                )
+
+                session_db.add(db_user)
+                session_db.add(settings)
+                session_db.commit()
+                saved = True
+                log_event("PROFILE_UPDATE", user_id=db_user.id)
+
+        form = {
+            "full_name": db_user.full_name or "",
+            "preferred_name": db_user.preferred_name or "",
+            "primary_phone": db_user.primary_phone or "",
+            "timezone": db_user.timezone or "",
+            "mfa_preference": db_user.mfa_preference or "",
+        }
+        notif = {
+            "intrusion_alerts": bool(getattr(settings, "intrusion_alerts", 0)),
+            "fire_alerts": bool(getattr(settings, "fire_alerts", 0)),
+            "system_faults": bool(getattr(settings, "system_faults", 0)),
+            "camera_motion_events": bool(
+                getattr(settings, "camera_motion_events", 0)
+            ),
+            "door_window_activity": bool(
+                getattr(settings, "door_window_activity", 0)
+            ),
+            "environmental_alerts": bool(
+                getattr(settings, "environmental_alerts", 0)
+            ),
+            "escalation_level": getattr(settings, "escalation_level", "") or "",
+        }
+
+        mfa_status = {
+            "totp_enabled": bool(getattr(db_user, "totp_secret", None)),
+            "passkey_count": int(passkey_count or 0),
+        }
+
+    return render_template(
+        "profile.html",
+        errors=errors,
+        form=form,
+        notif=notif,
+        mfa_status=mfa_status,
+        saved=saved,
+    )
+
+
 @bp.get("/audit")
 def audit_events():
     user_engine = get_user_engine()
@@ -199,6 +432,11 @@ def audit_events():
 
 
 def _camera_preview_response(device_id: int, fps: float) -> Response:
+    user = get_current_user()
+    record_engine = get_record_engine()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        return jsonify({"error": "camera not found"}), 404
+
     manager = get_stream_manager(current_app)
     fps_value = fps
     override = request.args.get("fps")
@@ -258,6 +496,10 @@ def _camera_preview_response(device_id: int, fps: float) -> Response:
 
 @bp.get("/cameras/<int:device_id>/preview_low.mjpg")
 def camera_preview_low(device_id: int):
+    user = get_current_user()
+    record_engine = get_record_engine()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        abort(404)
     fps = current_app.config.get("PREVIEW_LOW_FPS", 2.0)
     try:
         fps_value = float(fps)
@@ -268,6 +510,10 @@ def camera_preview_low(device_id: int):
 
 @bp.get("/cameras/<int:device_id>/preview_low.jpg")
 def camera_preview_low_jpeg(device_id: int):
+    user = get_current_user()
+    record_engine = get_record_engine()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        abort(404)
     base = current_app.config.get("PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews")
     try:
         path = Path(str(base)) / f"{device_id}.jpg"
@@ -280,6 +526,10 @@ def camera_preview_low_jpeg(device_id: int):
 
 @bp.get("/cameras/<int:device_id>/preview.mjpg")
 def camera_preview(device_id: int):
+    user = get_current_user()
+    record_engine = get_record_engine()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        abort(404)
     fps = current_app.config.get("PREVIEW_HIGH_FPS", 10.0)
     try:
         fps_value = float(fps)
@@ -292,6 +542,10 @@ def camera_preview(device_id: int):
 def camera_detail(device_id: int):
     record_engine = get_record_engine()
     if record_engine is None:
+        abort(404)
+
+    user = get_current_user()
+    if not _user_can_access_camera(user, device_id, record_engine):
         abort(404)
 
     with Session(record_engine) as session_db:
@@ -338,6 +592,10 @@ def camera_session(device_id: int):
     if record_engine is None:
         abort(404)
 
+    user = get_current_user()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        abort(404)
+
     with Session(record_engine) as session_db:
         CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
         device = session_db.get(CameraDevice, device_id)
@@ -377,6 +635,9 @@ def camera_session(device_id: int):
 
 @bp.get("/streams/status")
 def streams_status():
+    user = get_current_user()
+    record_engine = get_record_engine()
+    property_map = _load_camera_property_map(record_engine)
     manager = get_stream_manager(current_app)
     if manager is None:
         return jsonify({"ok": False, "error": "stream manager not available", "streams": []})
@@ -385,6 +646,19 @@ def streams_status():
     now_ts = datetime.now(timezone.utc).timestamp()
     streams = []
     for device_id, info in raw.items():
+        try:
+            device_id_int = int(device_id)
+        except (TypeError, ValueError):
+            device_id_int = None
+
+        if user is not None and device_id_int is not None:
+            if not _user_can_access_camera(
+                user,
+                device_id_int,
+                record_engine,
+                property_map,
+            ):
+                continue
         last_ts = info.get("last_frame_ts")
         last_iso = None
         age_seconds = None

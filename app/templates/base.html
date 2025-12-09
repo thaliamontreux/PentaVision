@@ -31,6 +31,34 @@
           <a href="{{ url_for('main.storage_settings') }}">Storage</a>
           <a href="{{ url_for('main.audit_events') }}">Audit</a>
         </nav>
+        <div class="pv-user-menu">
+          {% if current_user %}
+            <span class="pv-user-label">{{ current_user.email }}</span>
+            <a
+              href="{{ url_for('main.profile') }}"
+              class="pv-link-muted"
+              style="margin-left: 0.5rem;"
+            >
+              Profile
+            </a>
+            <form
+              method="post"
+              action="{{ url_for('main.logout') }}"
+              style="display: inline; margin-left: 0.5rem;"
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ global_csrf_token }}"
+              />
+              <button type="submit" class="pv-button pv-button-small">
+                Sign out
+              </button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('main.login') }}">Sign in</a>
+          {% endif %}
+        </div>
       </div>
     </header>
 

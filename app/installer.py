@@ -20,6 +20,7 @@ from .models import (
     create_record_schema,
     create_user_schema,
 )
+from .security import seed_system_admin_role_for_email
 
 
 bp = Blueprint("installer", __name__)
@@ -496,6 +497,11 @@ def admin_step():
                     user = User(email=form["email"], password_hash=password_hash)
                     session_db.add(user)
                     session_db.commit()
+
+                    # Ensure core RBAC roles exist and grant System Administrator
+                    # to this initial admin account (and to Thalia if this email
+                    # matches her address).
+                    seed_system_admin_role_for_email(user.email)
 
                     _write_env({"INSTALL_LOCKED": "true"})
                     os.environ["INSTALL_LOCKED"] = "true"

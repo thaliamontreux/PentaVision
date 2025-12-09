@@ -62,6 +62,24 @@
         </div>
 
         <div class="pv-field-group">
+          <label for="property_id">Property</label>
+          <select id="property_id" name="property_id">
+            <option value="">(none)</option>
+            {% for p in properties %}
+              <option
+                value="{{ p.id }}"
+                {% if form.property_id == p.id|string %}selected{% endif %}
+              >
+                {{ p.name }}
+              </option>
+            {% endfor %}
+          </select>
+          <p class="pv-card-subtitle">
+            Assign this camera to a property to enforce per-property access control.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
           <label for="ip_address">IP address</label>
           <input
             id="ip_address"
@@ -139,6 +157,29 @@
             be automatically removed from storage.
           </p>
         </div>
+
+        {% if is_admin %}
+          <div class="pv-field-group">
+            <label>
+              <input
+                type="checkbox"
+                name="admin_lock"
+                value="1"
+                {% if form.admin_lock %}checked{% endif %}
+              />
+              Lock configuration (administrators only)
+            </label>
+            <p class="pv-card-subtitle">
+              When enabled, technicians can view this camera but cannot modify or
+              delete it.
+            </p>
+          </div>
+        {% elif form.admin_lock %}
+          <p class="pv-card-subtitle">
+            This camera is locked by an administrator. You can view its settings
+            but cannot change them with your current role.
+          </p>
+        {% endif %}
 
         <div class="pv-field-group">
           <label>

@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Properties · Admin · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Properties</h1>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <p style="margin-bottom: 1rem;">
+      <a href="{{ url_for('admin.property_create') }}" class="pv-button pv-button-primary">
+        New property
+      </a>
+    </p>
+
+    {% if not properties %}
+      <p>No properties have been created yet.</p>
+    {% else %}
+      <table class="pv-table">
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Name</th>
+            <th scope="col">Location</th>
+            <th scope="col">Timezone</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prop in properties %}
+            <tr>
+              <td>{{ prop.id }}</td>
+              <td>{{ prop.name }}</td>
+              <td>
+                {{ prop.city or '' }}{% if prop.state %}, {{ prop.state }}{% endif %}
+              </td>
+              <td>{{ prop.timezone or '' }}</td>
+              <td>
+                <a
+                  href="{{ url_for('admin.property_edit', property_id=prop.id) }}"
+                  class="pv-button pv-button-small"
+                >
+                  Edit
+                </a>
+                <form
+                  method="post"
+                  action="{{ url_for('admin.property_delete', property_id=prop.id) }}"
+                  style="display: inline; margin-left: 0.25rem;"
+                  onsubmit="return confirm('Delete this property? This will remove all user links.');"
+                >
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <button type="submit" class="pv-button pv-button-small">
+                    Delete
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </section>
+{% endblock %}

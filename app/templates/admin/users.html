@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Users · Admin · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Users</h1>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if not users %}
+      <p>No users found in the system.</p>
+    {% else %}
+      <table class="pv-table">
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Email</th>
+            <th scope="col">Roles</th>
+            <th scope="col">Manage roles</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            {% set roles = user_roles.get(user.id, set()) %}
+            <tr>
+              <td>{{ user.id }}</td>
+              <td>{{ user.email }}</td>
+              <td>
+                {% if roles %}
+                  {{ roles|sort|join(', ') }}
+                {% else %}
+                  <span class="pv-card-subtitle">(none)</span>
+                {% endif %}
+              </td>
+              <td>
+                {% for r in managed_roles %}
+                  <div style="margin-bottom: 0.25rem;">
+                    {% if r in roles %}
+                      <form
+                        method="post"
+                        action="{{ url_for('admin.update_user_roles', user_id=user.id) }}"
+                        style="display: inline;"
+                      >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <input type="hidden" name="role" value="{{ r }}" />
+                        <input type="hidden" name="action" value="remove" />
+                        <button type="submit" class="pv-button pv-button-small">
+                          Remove {{ r }}
+                        </button>
+                      </form>
+                    {% else %}
+                      <form
+                        method="post"
+                        action="{{ url_for('admin.update_user_roles', user_id=user.id) }}"
+                        style="display: inline;"
+                      >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <input type="hidden" name="role" value="{{ r }}" />
+                        <input type="hidden" name="action" value="add" />
+                        <button type="submit" class="pv-button pv-button-small">
+                          Make {{ r }}
+                        </button>
+                      </form>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </section>
+{% endblock %}
