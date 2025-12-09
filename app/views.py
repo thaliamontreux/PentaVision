@@ -504,10 +504,9 @@ def _camera_preview_response(
 
         # Fallback for production where streams run in a separate worker:
         # read the most recent preview frame from the shared cache directory
-        # written by the video worker. This only applies to scaled previews;
-        # full-resolution frames are not cached to disk.
-        if use_full_resolution:
-            return None
+        # written by the video worker. Full-resolution frames are not cached
+        # to disk, so when use_full_resolution is requested but no in-process
+        # stream manager exists we gracefully fall back to the scaled preview.
         try:
             path = Path(preview_base) / f"{device_id}.jpg"
             return path.read_bytes()
