@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from getpass import getpass
 from typing import Optional
@@ -300,12 +301,56 @@ def action_revoke_role(engine) -> None:
         print(f"Revoked role '{role.name}' from {user.email}.")
 
 
-def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="ANSI-style user admin CLI")
-    parser.parse_args(argv)  # currently no CLI flags; reserved for future use
+def _systemctl_unit(unit: str, operation: str) -> None:
+    cmd = ["systemctl", operation, unit]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        print("systemctl not found; this CLI requires systemd.")
+        return
+    print("$ " + " ".join(cmd))
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip())
+    print(f"(exit code {result.returncode})")
 
-    engine = _load_engine()
 
+def action_manage_services(engine) -> None:  # engine is unused
+    while True:
+        print("\nPentaVision services:")
+        print("1) Status (web and video)")
+        print("2) Start pentavision-web")
+        print("3) Stop pentavision-web")
+        print("4) Restart pentavision-web")
+        print("5) Start pentavision-video")
+        print("6) Stop pentavision-video")
+        print("7) Restart pentavision-video")
+        print("q) Back to main menu")
+        choice = input("> ").strip().lower()
+
+        if choice in {"q", "quit", "exit", ""}:
+            break
+        elif choice == "1":
+            _systemctl_unit("pentavision-web", "status")
+            _systemctl_unit("pentavision-video", "status")
+        elif choice == "2":
+            _systemctl_unit("pentavision-web", "start")
+        elif choice == "3":
+            _systemctl_unit("pentavision-web", "stop")
+        elif choice == "4":
+            _systemctl_unit("pentavision-web", "restart")
+        elif choice == "5":
+            _systemctl_unit("pentavision-video", "start")
+        elif choice == "6":
+            _systemctl_unit("pentavision-video", "stop")
+        elif choice == "7":
+            _systemctl_unit("pentavision-video", "restart")
+        else:
+            print("Unknown option. Choose 1-7 or q.")
+
+
+def _legacy_menu(engine) -> None:
     while True:
         print("\n=== PentaVision User Admin ===")
         print("1) List users")
@@ -316,6 +361,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("6) List a user's global roles")
         print("7) Grant a global role to a user")
         print("8) Revoke a global role from a user")
+        print("9) Manage services (pentavision-web / pentavision-video)")
         print("q) Quit")
         choice = input("> ").strip().lower()
 
@@ -337,10 +383,93 @@ def main(argv: Optional[list[str]] = None) -> int:
             action_grant_role(engine)
         elif choice == "8":
             action_revoke_role(engine)
+        elif choice == "9":
+            action_manage_services(engine)
         else:
-            print("Unknown option. Please choose 1-5 or q to quit.")
-
+            print("Unknown option. Please choose 1-9 or q to quit.")
     print("Goodbye.")
+
+
+def _run_action_outside_curses(action, engine, stdscr) -> None:
+    import curses
+
+    curses.def_prog_mode()
+    curses.endwin()
+    try:
+        action(engine)
+        input("Press Enter to return to the menu...")
+    finally:
+        curses.reset_prog_mode()
+        stdscr.refresh()
+
+
+def _tui_main(stdscr, engine) -> None:
+    import curses
+
+    curses.curs_set(0)
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+
+    items = [
+        ("List users", action_list_users),
+        ("Create new user", action_create_user),
+        ("Reset user password", action_reset_password),
+        ("Update user account status", action_update_status),
+        ("Delete user", action_delete_user),
+        ("List a user's global roles", action_list_user_roles),
+        ("Grant a global role to a user", action_grant_role),
+        ("Revoke a global role from a user", action_revoke_role),
+        ("Manage services (web / video)", action_manage_services),
+        ("Quit", None),
+    ]
+
+    index = 0
+    while True:
+        stdscr.erase()
+        stdscr.addstr(0, 0, "PentaVision Admin CLI")
+        stdscr.addstr(1, 0, "Use arrow keys (or j/k) to move, Enter to select, q to quit.")
+        for i, (label, _) in enumerate(items):
+            prefix = "\033[7m> " if i == index else "  "
+            suffix = "\033[0m" if i == index else ""
+            stdscr.addstr(3 + i, 0, prefix + label + suffix)
+        stdscr.refresh()
+
+        ch = stdscr.getch()
+        if ch in (ord("q"), 27):
+            break
+        if ch in (curses.KEY_UP, ord("k")):
+            index = (index - 1) % len(items)
+        elif ch in (curses.KEY_DOWN, ord("j")):
+            index = (index + 1) % len(items)
+        elif ch in (curses.KEY_ENTER, 10, 13):
+            label, action = items[index]
+            if action is None:
+                break
+            _run_action_outside_curses(action, engine, stdscr)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="ANSI-style user admin CLI")
+    parser.add_argument(
+        "--no-tui",
+        action="store_true",
+        help="use simple text menu instead of arrow-key interface",
+    )
+    args = parser.parse_args(argv)
+
+    engine = _load_engine()
+
+    use_tui = sys.stdout.isatty() and not args.no_tui
+    if use_tui:
+        try:
+            import curses
+        except Exception:
+            _legacy_menu(engine)
+        else:
+            curses.wrapper(_tui_main, engine)
+    else:
+        _legacy_menu(engine)
+
     return 0
 
 

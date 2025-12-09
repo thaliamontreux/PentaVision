@@ -16,6 +16,12 @@
       </div>
     {% endif %}
 
+    <p style="margin-bottom: 1rem;">
+      <a href="{{ url_for('admin.user_create') }}" class="pv-button pv-button-primary">
+        New user
+      </a>
+    </p>
+
     {% if not users %}
       <p>No users found in the system.</p>
     {% else %}
@@ -26,6 +32,7 @@
             <th scope="col">Email</th>
             <th scope="col">Roles</th>
             <th scope="col">Manage roles</th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -73,6 +80,32 @@
                     {% endif %}
                   </div>
                 {% endfor %}
+              </td>
+              <td>
+                <a
+                  href="{{ url_for('admin.user_edit', user_id=user.id) }}"
+                  class="pv-button pv-button-small"
+                >
+                  Edit
+                </a>
+                <a
+                  href="{{ url_for('admin.user_password', user_id=user.id) }}"
+                  class="pv-button pv-button-small"
+                  style="margin-left: 0.25rem;"
+                >
+                  Password
+                </a>
+                <form
+                  method="post"
+                  action="{{ url_for('admin.user_delete', user_id=user.id) }}"
+                  style="display: inline; margin-left: 0.25rem;"
+                  onsubmit="return confirm('Delete this user? This cannot be undone.');"
+                >
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <button type="submit" class="pv-button pv-button-small">
+                    Delete
+                  </button>
+                </form>
               </td>
             </tr>
           {% endfor %}

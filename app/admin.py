@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Set
 
+from argon2 import PasswordHasher
 from flask import (
     Blueprint,
     abort,
@@ -21,6 +22,7 @@ from .security import get_current_user, user_has_role
 
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
+_ph = PasswordHasher()
 
 
 def _ensure_csrf_token() -> str:
@@ -136,26 +138,341 @@ def update_user_roles(user_id: int):
                 .first()
             )
             if existing is None:
-                db.add(UserRole(user_id=user.id, role_id=role.id, property_id=None))
+                db.add(
+                    UserRole(
+                        user_id=user.id,
+                        role_id=role.id,
+                        property_id=None,
+                    )
+                )
                 changed = True
-        elif action == "remove":
-            deleted = db.query(UserRole).filter(
-                UserRole.user_id == user.id,
-                UserRole.role_id == role.id,
-                UserRole.property_id.is_(None),
-            ).delete(synchronize_session=False)
+        else:
+            deleted = (
+                db.query(UserRole)
+                .filter(
+                    UserRole.user_id == user.id,
+                    UserRole.role_id == role.id,
+                    UserRole.property_id.is_(None),
+                )
+                .delete(synchronize_session=False)
+            )
             if deleted:
                 changed = True
 
+        if changed:
+            db.commit()
+            actor = get_current_user()
+            log_event(
+                "ADMIN_USER_ROLE_UPDATE",
+                user_id=actor.id if actor else None,
+                details=f"target_user_id={target_user_id}, role={target_role_name}, action={action}",
+            )
+
+    return redirect(url_for("admin.users_list"))
+
+
+@bp.route("/users/new", methods=["GET", "POST"])
+def user_create():
+    engine = get_user_engine()
+    errors: List[str] = []
+    form = {
+        "email": "",
+        "full_name": "",
+        "preferred_name": "",
+        "pronouns": "",
+        "timezone": "",
+    }
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "admin/user_edit.html",
+            form=form,
+            errors=errors,
+            csrf_token=csrf_token,
+            is_edit=False,
+            user_id=None,
+        )
+
+    if request.method == "POST":
+        if not _validate_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+
+        form["email"] = (request.form.get("email") or "").strip().lower()
+        form["full_name"] = (request.form.get("full_name") or "").strip()
+        form["preferred_name"] = (request.form.get("preferred_name") or "").strip()
+        form["pronouns"] = (request.form.get("pronouns") or "").strip()
+        form["timezone"] = (request.form.get("timezone") or "").strip()
+        password = request.form.get("password") or ""
+        password_confirm = request.form.get("password_confirm") or ""
+        make_admin = request.form.get("make_admin") == "1"
+        make_tech = request.form.get("make_tech") == "1"
+
+        if not form["email"]:
+            errors.append("Email is required.")
+        if not password:
+            errors.append("Password is required.")
+        if password != password_confirm:
+            errors.append("Passwords do not match.")
+
+        if not errors:
+            with Session(engine) as db:
+                existing = (
+                    db.query(User)
+                    .filter(User.email == form["email"])
+                    .first()
+                )
+                if existing is not None:
+                    errors.append("A user with that email already exists.")
+                else:
+                    password_hash = _ph.hash(password)
+                    user = User(
+                        email=form["email"],
+                        password_hash=password_hash,
+                        full_name=form["full_name"] or None,
+                        preferred_name=form["preferred_name"] or None,
+                        pronouns=form["pronouns"] or None,
+                        timezone=form["timezone"] or None,
+                    )
+                    db.add(user)
+                    db.flush()
+
+                    if make_admin or make_tech:
+                        roles_to_apply: List[str] = []
+                        if make_admin:
+                            roles_to_apply.append("System Administrator")
+                        if make_tech:
+                            roles_to_apply.append("Technician")
+                        for name in roles_to_apply:
+                            role = db.scalar(select(Role).where(Role.name == name))
+                            if role is None:
+                                role = Role(
+                                    name=name,
+                                    scope="global",
+                                    description=None,
+                                )
+                                db.add(role)
+                                db.flush()
+                            existing_link = (
+                                db.query(UserRole)
+                                .filter(
+                                    UserRole.user_id == user.id,
+                                    UserRole.role_id == role.id,
+                                    UserRole.property_id.is_(None),
+                                )
+                                .first()
+                            )
+                            if existing_link is None:
+                                db.add(
+                                    UserRole(
+                                        user_id=user.id,
+                                        role_id=role.id,
+                                        property_id=None,
+                                    )
+                                )
+
+                    db.commit()
+
+            actor = get_current_user()
+            log_event(
+                "ADMIN_USER_CREATE",
+                user_id=actor.id if actor else None,
+                details=f"target_user_id={user.id}, email={user.email}",
+            )
+            return redirect(url_for("admin.users_list"))
+
+    return render_template(
+        "admin/user_edit.html",
+        form=form,
+        errors=errors,
+        csrf_token=csrf_token,
+        is_edit=False,
+        user_id=None,
+    )
+
+
+@bp.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
+def user_edit(user_id: int):
+    engine = get_user_engine()
+    errors: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "admin/user_edit.html",
+            form=None,
+            errors=errors,
+            csrf_token=csrf_token,
+            is_edit=True,
+            user_id=user_id,
+        )
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        if user is None:
+            errors.append("User not found.")
+            return render_template(
+                "admin/user_edit.html",
+                form=None,
+                errors=errors,
+                csrf_token=csrf_token,
+                is_edit=True,
+                user_id=user_id,
+            )
+
+        form = {
+            "email": user.email,
+            "full_name": user.full_name or "",
+            "preferred_name": user.preferred_name or "",
+            "pronouns": user.pronouns or "",
+            "timezone": user.timezone or "",
+            "account_status": user.account_status or "",
+        }
+
+        if request.method == "POST":
+            if not _validate_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+
+            form["full_name"] = (request.form.get("full_name") or "").strip()
+            form["preferred_name"] = (
+                request.form.get("preferred_name") or ""
+            ).strip()
+            form["pronouns"] = (request.form.get("pronouns") or "").strip()
+            form["timezone"] = (request.form.get("timezone") or "").strip()
+            form["account_status"] = (
+                request.form.get("account_status") or ""
+            ).strip()
+
+            if not errors:
+                user.full_name = form["full_name"] or None
+                user.preferred_name = form["preferred_name"] or None
+                user.pronouns = form["pronouns"] or None
+                user.timezone = form["timezone"] or None
+                user.account_status = form["account_status"] or None
+                db.add(user)
+                db.commit()
+                actor = get_current_user()
+                log_event(
+                    "ADMIN_USER_UPDATE",
+                    user_id=actor.id if actor else None,
+                    details=f"target_user_id={user.id}",
+                )
+                return redirect(url_for("admin.users_list"))
+
+    return render_template(
+        "admin/user_edit.html",
+        form=form,
+        errors=errors,
+        csrf_token=csrf_token,
+        is_edit=True,
+        user_id=user_id,
+    )
+
+
+@bp.route("/users/<int:user_id>/password", methods=["GET", "POST"])
+def user_password(user_id: int):
+    engine = get_user_engine()
+    errors: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "admin/user_password.html",
+            errors=errors,
+            csrf_token=csrf_token,
+            user_id=user_id,
+            email="",
+        )
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        if user is None:
+            errors.append("User not found.")
+            return render_template(
+                "admin/user_password.html",
+                errors=errors,
+                csrf_token=csrf_token,
+                user_id=user_id,
+                email="",
+            )
+
+        email = user.email
+
+        if request.method == "POST":
+            if not _validate_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+
+            password = request.form.get("password") or ""
+            password_confirm = request.form.get("password_confirm") or ""
+            if not password:
+                errors.append("Password is required.")
+            if password != password_confirm:
+                errors.append("Passwords do not match.")
+
+            if not errors:
+                user.password_hash = _ph.hash(password)
+                user.failed_logins = 0
+                user.locked_until = None
+                db.add(user)
+                db.commit()
+                actor = get_current_user()
+                log_event(
+                    "ADMIN_USER_PASSWORD_RESET",
+                    user_id=actor.id if actor else None,
+                    details=f"target_user_id={user.id}",
+                )
+                return redirect(url_for("admin.users_list"))
+
+    return render_template(
+        "admin/user_password.html",
+        errors=errors,
+        csrf_token=csrf_token,
+        user_id=user_id,
+        email=email,
+    )
+
+
+@bp.post("/users/<int:user_id>/delete")
+def user_delete(user_id: int):
+    engine = get_user_engine()
+    if engine is None:
+        return redirect(url_for("admin.users_list"))
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        return redirect(url_for("admin.users_list"))
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        if user is None:
+            return redirect(url_for("admin.users_list"))
+
+        admin_role = db.scalar(select(Role).where(Role.name == "System Administrator"))
+        if admin_role is not None:
+            admin_ids = [
+                ur.user_id
+                for ur, r in db.query(UserRole, Role)
+                .join(Role, Role.id == UserRole.role_id)
+                .filter(Role.name == "System Administrator")
+                .all()
+            ]
+            if len(admin_ids) <= 1 and user.id in admin_ids:
+                return redirect(url_for("admin.users_list"))
+
+        email = user.email
+        db.query(UserRole).filter(UserRole.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.delete(user)
         db.commit()
 
-    if changed:
         actor = get_current_user()
-        event_type = "ROLE_ASSIGN" if action == "add" else "ROLE_REVOKE"
         log_event(
-            event_type,
+            "ADMIN_USER_DELETE",
             user_id=actor.id if actor else None,
-            details=f"target_user_id={target_user_id}, role={target_role_name}",
+            details=f"target_user_id={user_id}, email={email}",
         )
 
     return redirect(url_for("admin.users_list"))
