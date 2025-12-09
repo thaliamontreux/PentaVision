@@ -89,6 +89,25 @@ body {
   color: #38bdf8;
 }
 
+.pv-subnav {
+  margin-top: 0.25rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  font-size: 0.85rem;
+}
+
+.pv-subnav a {
+  color: #cbd5f5;
+  text-decoration: none;
+}
+
+.pv-subnav a:hover {
+  color: #e5e7eb;
+  text-decoration: underline;
+}
+
 .pv-main {
   max-width: 100%;
   margin: 0 auto;
