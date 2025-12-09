@@ -97,33 +97,28 @@
         {% endif %}
       </div>
 
+      {% set status_user = db_status.get('user', 'not_configured') %}
+      {% set status_face = db_status.get('face', 'not_configured') %}
+      {% set status_record = db_status.get('record', 'not_configured') %}
       <div class="pv-status-bar">
-        <div class="pv-status-column">
-          <h2>System status</h2>
-          <ul class="pv-status-list">
-            <li>
-              <span>User DB</span>
-              {% set status = db_status.get('user', 'not_configured') %}
-              <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
-            </li>
-            <li>
-              <span>Face DB</span>
-              {% set status = db_status.get('face', 'not_configured') %}
-              <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
-            </li>
-            <li>
-              <span>Record DB</span>
-              {% set status = db_status.get('record', 'not_configured') %}
-              <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
-            </li>
-          </ul>
-          <p class="pv-card-subtitle" style="margin-top: 0.5rem;">
-            Use the <strong>Installer</strong> to adjust database configuration.
-          </p>
+        <div class="pv-status-section">
+          <span class="pv-status-label">System</span>
+          <span class="pv-status-kv">
+            <span>User</span>
+            <span class="pv-badge pv-badge-{{ status_user }}">{{ status_user }}</span>
+          </span>
+          <span class="pv-status-kv">
+            <span>Face</span>
+            <span class="pv-badge pv-badge-{{ status_face }}">{{ status_face }}</span>
+          </span>
+          <span class="pv-status-kv">
+            <span>Record</span>
+            <span class="pv-badge pv-badge-{{ status_record }}">{{ status_record }}</span>
+          </span>
         </div>
 
-        <div class="pv-status-column">
-          <h2>Cameras</h2>
+        <div class="pv-status-section">
+          <span class="pv-status-label">Cameras</span>
           {% if devices %}
             {% set stats = namespace(online=0, offline=0, unknown=0) %}
             {% for d in devices %}
@@ -136,21 +131,30 @@
                 {% set stats.unknown = stats.unknown + 1 %}
               {% endif %}
             {% endfor %}
-            <p class="pv-card-subtitle">
-              {{ devices|length }} cameras ·
-              {{ stats.online }} online ·
-              {{ stats.offline }} offline
-              {% if stats.unknown %}· {{ stats.unknown }} unknown{% endif %}
-            </p>
-            <p class="pv-card-subtitle" style="margin-top: 0.5rem;">
-              <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-link-muted">
-                Manage cameras
-              </a>
-            </p>
+            <span class="pv-status-kv">
+              <span>{{ devices|length }} total</span>
+            </span>
+            <span class="pv-status-kv">
+              <span>{{ stats.online }} online</span>
+            </span>
+            <span class="pv-status-kv">
+              <span>{{ stats.offline }} offline</span>
+            </span>
+            {% if stats.unknown %}
+              <span class="pv-status-kv">
+                <span>{{ stats.unknown }} unknown</span>
+              </span>
+            {% endif %}
+            <a
+              href="{{ url_for('camera_admin.list_devices') }}"
+              class="pv-link-muted pv-status-manage-link"
+            >
+              Manage
+            </a>
           {% else %}
-            <p class="pv-card-subtitle">
-              No cameras configured yet.
-            </p>
+            <span class="pv-status-kv">
+              <span>No cameras</span>
+            </span>
           {% endif %}
         </div>
       </div>
