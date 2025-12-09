@@ -226,6 +226,12 @@ def index():
                 filtered_devices.append(d)
         devices = filtered_devices
 
+    dashboard_display_size = "320x240"
+    if user is not None:
+        pref = getattr(user, "dashboard_display_size", None)
+        if pref in {"320x240", "720x480"}:
+            dashboard_display_size = pref
+
     preview_low_fps = current_app.config.get("PREVIEW_LOW_FPS", 2.0)
 
     return render_template(
@@ -236,6 +242,7 @@ def index():
         patterns=patterns_index,
         camera_status=camera_status,
         camera_last_seen=camera_last_seen,
+        dashboard_display_size=dashboard_display_size,
         preview_low_fps=preview_low_fps,
     )
 
@@ -454,7 +461,11 @@ def audit_events():
     return render_template("audit.html", events=events)
 
 
-def _camera_preview_response(device_id: int, fps: float) -> Response:
+def _camera_preview_response(
+    device_id: int,
+    fps: float,
+    use_full_resolution: bool = False,
+) -> Response:
     user = get_current_user()
     record_engine = get_record_engine()
     if not _user_can_access_camera(user, device_id, record_engine):
@@ -484,11 +495,19 @@ def _camera_preview_response(device_id: int, fps: float) -> Response:
     def _load_frame() -> bytes | None:
         # Preferred path: use in-process CameraStreamManager (dev/local).
         if manager is not None:
-            return manager.get_frame(device_id)
+            if use_full_resolution and hasattr(manager, "get_full_frame"):
+                frame = manager.get_full_frame(device_id)
+            else:
+                frame = manager.get_frame(device_id)
+            if frame is not None:
+                return frame
 
         # Fallback for production where streams run in a separate worker:
         # read the most recent preview frame from the shared cache directory
-        # written by the video worker.
+        # written by the video worker. This only applies to scaled previews;
+        # full-resolution frames are not cached to disk.
+        if use_full_resolution:
+            return None
         try:
             path = Path(preview_base) / f"{device_id}.jpg"
             return path.read_bytes()
@@ -559,6 +578,20 @@ def camera_preview(device_id: int):
     except (TypeError, ValueError):
         fps_value = 10.0
     return _camera_preview_response(device_id, fps=fps_value)
+
+
+@bp.get("/cameras/<int:device_id>/session_stream.mjpg")
+def camera_session_stream(device_id: int):
+    user = get_current_user()
+    record_engine = get_record_engine()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        abort(404)
+    fps = current_app.config.get("PREVIEW_HIGH_FPS", 10.0)
+    try:
+        fps_value = float(fps)
+    except (TypeError, ValueError):
+        fps_value = 10.0
+    return _camera_preview_response(device_id, fps=fps_value, use_full_resolution=True)
 
 
 @bp.get("/cameras/<int:device_id>")
@@ -647,12 +680,27 @@ def camera_session(device_id: int):
             else:
                 status = "offline"
 
+    session_display_size = "1280x720"
+    if user is not None:
+        pref = getattr(user, "session_display_size", None)
+        if pref in {
+            "320x240",
+            "720x240",
+            "720x480",
+            "800x600",
+            "1024x768",
+            "1280x720",
+            "1920x1080",
+        }:
+            session_display_size = pref
+
     return render_template(
         "cameras/session.html",
         device=device,
         pattern=pattern,
         status=status,
         last_seen=last_seen,
+        session_display_size=session_display_size,
     )
 
 
@@ -733,6 +781,58 @@ def _decode_image_from_request(data):
     except Exception:  # noqa: BLE001
         return None, "invalid image data"
     return image_bytes, None
+
+
+@bp.post("/api/user/display-size")
+def set_user_display_size():
+    user = get_current_user()
+    if user is None:
+        return jsonify({"error": "not authenticated"}), 401
+
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    payload = request.get_json(silent=True) or {}
+    scope = (payload.get("scope") or "").strip().lower()
+    size = (payload.get("size") or "").strip().lower()
+
+    session_sizes = {
+        "320x240",
+        "720x240",
+        "720x480",
+        "800x600",
+        "1024x768",
+        "1280x720",
+        "1920x1080",
+    }
+    dashboard_sizes = {
+        "320x240",
+        "720x480",
+    }
+
+    if scope == "session":
+        if size not in session_sizes:
+            return jsonify({"error": "invalid size"}), 400
+        field = "session_display_size"
+    elif scope == "dashboard":
+        if size not in dashboard_sizes:
+            return jsonify({"error": "invalid size"}), 400
+        field = "dashboard_display_size"
+    else:
+        return jsonify({"error": "invalid scope"}), 400
+
+    with Session(engine) as session_db:
+        db_user = session_db.get(User, user.id)
+        if db_user is None:
+            return jsonify({"error": "user not found"}), 404
+        setattr(db_user, field, size)
+        session_db.add(db_user)
+        session_db.commit()
+
+    setattr(user, field, size)
+
+    return jsonify({"ok": True, "scope": scope, "size": size})
 
 
 @bp.post("/api/face/enroll")

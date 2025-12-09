@@ -67,6 +67,12 @@ class User(UserBase):
     )
     timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     mfa_preference: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    session_display_size: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
+    dashboard_display_size: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
     account_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     created_by_admin_id: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True, index=True

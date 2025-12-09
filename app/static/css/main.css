@@ -328,6 +328,64 @@ body {
   object-fit: cover;
 }
 
+.pv-camera-preview-large .pv-camera-live,
+.pv-camera-live-large {
+  max-height: none;
+  height: auto;
+}
+
+/* Session view explicit display sizes (approximate the requested resolutions). */
+.pv-session-size-320x240 {
+  width: 320px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.pv-session-size-720x240 {
+  width: 720px;
+  max-width: 100%;
+  aspect-ratio: 3 / 1;
+}
+
+.pv-session-size-720x480 {
+  width: 720px;
+  max-width: 100%;
+  aspect-ratio: 3 / 2;
+}
+
+.pv-session-size-800x600 {
+  width: 800px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.pv-session-size-1024x768 {
+  width: 1024px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.pv-session-size-1280x720 {
+  width: 1280px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.pv-session-size-1920x1080 {
+  width: 1920px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+/* Dashboard preview aspect ratios; grid width controls actual pixel size. */
+.pv-dashboard-size-320x240 .pv-camera-live {
+  aspect-ratio: 4 / 3;
+}
+
+.pv-dashboard-size-720x480 .pv-camera-live {
+  aspect-ratio: 3 / 2;
+}
+
 .pv-camera-footer {
   display: flex;
   justify-content: space-between;
@@ -578,6 +636,11 @@ body {
 
   .pv-camera-live {
     max-height: 140px;
+  }
+
+  .pv-camera-preview-large .pv-camera-live,
+  .pv-camera-live-large {
+    max-height: none;
   }
 
   .pv-table {

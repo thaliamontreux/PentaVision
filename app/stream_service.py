@@ -54,6 +54,8 @@ class CameraStream(threading.Thread):
         self._lock = threading.Lock()
         self._last_frame: Optional[bytes] = None
         self._last_frame_time: Optional[float] = None
+        self._last_full_frame: Optional[bytes] = None
+        self._last_full_frame_time: Optional[float] = None
         self._last_error: Optional[dict] = None
         self._last_error_time: Optional[float] = None
         self._running = True
@@ -93,6 +95,20 @@ class CameraStream(threading.Thread):
     def get_last_frame_time(self) -> Optional[float]:
         with self._lock:
             return self._last_frame_time
+
+    def get_full_frame(self) -> Optional[bytes]:
+        """Return the most recent full-resolution JPEG frame, if available.
+
+        Falls back to the scaled preview frame if a full-resolution frame has
+        not been captured yet.
+        """
+
+        with self._lock:
+            return self._last_full_frame or self._last_frame
+
+    def get_last_full_frame_time(self) -> Optional[float]:
+        with self._lock:
+            return self._last_full_frame_time
 
     def get_last_error_time(self) -> Optional[float]:
         with self._lock:
@@ -295,6 +311,15 @@ class CameraStream(threading.Thread):
                         if not success:
                             self._set_error("decode", "Failed to read frame from RTSP stream")
                             break
+                        # First, encode a full-resolution JPEG for high-quality
+                        # consumers (e.g. the dedicated session view).
+                        full_jpg_bytes: Optional[bytes] = None
+                        try:
+                            ok_full, buffer_full = cv2.imencode(".jpg", frame)
+                        except Exception:
+                            ok_full = False
+                        if ok_full:
+                            full_jpg_bytes = buffer_full.tobytes()
                         max_width = int(self.app.config.get("PREVIEW_MAX_WIDTH", 0) or 0)
                         max_height = int(self.app.config.get("PREVIEW_MAX_HEIGHT", 0) or 0)
                         if (max_width > 0 or max_height > 0) and frame is not None:
@@ -323,9 +348,13 @@ class CameraStream(threading.Thread):
                             self._set_error("encode", "Failed to encode frame as JPEG")
                             continue
                         jpg_bytes = buffer.tobytes()
+                        now_ts = time.time()
                         with self._lock:
+                            if full_jpg_bytes is not None:
+                                self._last_full_frame = full_jpg_bytes
+                                self._last_full_frame_time = now_ts
                             self._last_frame = jpg_bytes
-                            self._last_frame_time = time.time()
+                            self._last_frame_time = now_ts
                         # Also persist the latest preview frame to disk so that
                         # web workers running in separate processes (without a
                         # local CameraStreamManager) can serve previews.
@@ -373,6 +402,23 @@ class CameraStreamManager:
             stream = self._streams.get(device_id)
         if stream is None:
             return None
+        return stream.get_frame()
+
+    def get_full_frame(self, device_id: int) -> Optional[bytes]:
+        """Return a full-resolution frame for the given device, if available.
+
+        Falls back to the scaled preview frame to avoid breaking callers when
+        full-resolution data has not yet been captured.
+        """
+
+        with self._lock:
+            stream = self._streams.get(device_id)
+        if stream is None:
+            return None
+        if hasattr(stream, "get_full_frame"):
+            full = stream.get_full_frame()
+            if full is not None:
+                return full
         return stream.get_frame()
 
     def get_status(self) -> Dict[int, dict]:

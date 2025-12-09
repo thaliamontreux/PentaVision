@@ -16,11 +16,31 @@
           {% endif %}
         </p>
       </div>
-      <div class="pv-layout-switcher">
-        <span>Layout:</span>
-        <button type="button" class="pv-layout-button is-active" data-layout="4">4 × 4</button>
-        <button type="button" class="pv-layout-button" data-layout="8">8 × 8</button>
-        <button type="button" class="pv-layout-button" data-layout="16">16 × 16</button>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+        <div class="pv-layout-switcher">
+          <span>Layout:</span>
+          <button type="button" class="pv-layout-button is-active" data-layout="4">4 × 4</button>
+          <button type="button" class="pv-layout-button" data-layout="8">8 × 8</button>
+          <button type="button" class="pv-layout-button" data-layout="16">16 × 16</button>
+        </div>
+        <div class="pv-layout-switcher">
+          <span>Preview size:</span>
+          {% set dash_size = dashboard_display_size or '320x240' %}
+          <button
+            type="button"
+            class="pv-layout-button pv-dashboard-size-button{% if dash_size == '320x240' %} is-active{% endif %}"
+            data-size="320x240"
+          >
+            320×240
+          </button>
+          <button
+            type="button"
+            class="pv-layout-button pv-dashboard-size-button{% if dash_size == '720x480' %} is-active{% endif %}"
+            data-size="720x480"
+          >
+            720×480
+          </button>
+        </div>
       </div>
     </div>
 
@@ -35,7 +55,7 @@
                   <div class="pv-camera-title">{{ d.name }}</div>
                 </div>
                 <div
-                  class="pv-camera-preview"
+                  class="pv-camera-preview pv-dashboard-size-{{ dash_size }}"
                   data-device-id="{{ d.id }}"
                   style="position: relative;"
                 >
@@ -156,7 +176,8 @@
   <script>
     (function () {
       var grid = document.getElementById('pv-camera-grid');
-      var layoutButtons = document.querySelectorAll('.pv-layout-button');
+      var layoutButtons = document.querySelectorAll('.pv-layout-button[data-layout]');
+      var sizeButtons = document.querySelectorAll('.pv-dashboard-size-button');
 
       function applyLayout(cols) {
         if (!grid) return;
@@ -176,6 +197,36 @@
         });
         var initial = layoutButtons[0].getAttribute('data-layout') || '4';
         applyLayout(initial);
+      }
+
+      function applyDashboardSize(size) {
+        var containers = document.querySelectorAll('.pv-camera-preview[data-device-id]');
+        var allClasses = ['pv-dashboard-size-320x240', 'pv-dashboard-size-720x480'];
+        containers.forEach(function (el) {
+          allClasses.forEach(function (cls) { el.classList.remove(cls); });
+          el.classList.add('pv-dashboard-size-' + size);
+        });
+      }
+
+      if (sizeButtons.length) {
+        sizeButtons.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var size = btn.getAttribute('data-size');
+            if (!size) return;
+            sizeButtons.forEach(function (b) { b.classList.remove('is-active'); });
+            btn.classList.add('is-active');
+            applyDashboardSize(size);
+
+            try {
+              fetch('/api/user/display-size', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ scope: 'dashboard', size: size }),
+              }).catch(function () {});
+            } catch (e) {}
+          });
+        });
       }
 
       var POLL_INTERVAL_MS = 10000;

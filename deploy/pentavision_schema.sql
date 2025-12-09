@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS users (
   primary_country VARCHAR(64) NULL,
   timezone VARCHAR(64) NULL,
   mfa_preference VARCHAR(32) NULL,
+  session_display_size VARCHAR(32) NULL,
+  dashboard_display_size VARCHAR(32) NULL,
   account_status VARCHAR(32) NULL,
   created_by_admin_id INT NULL,
   modified_at DATETIME(6) NULL,
@@ -46,6 +48,10 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY ux_users_email (email),
   KEY ix_users_created_by_admin_id (created_by_admin_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS session_display_size VARCHAR(32) NULL AFTER mfa_preference,
+  ADD COLUMN IF NOT EXISTS dashboard_display_size VARCHAR(32) NULL AFTER session_display_size;
 
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
   id INT AUTO_INCREMENT PRIMARY KEY,

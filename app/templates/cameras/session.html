@@ -12,13 +12,29 @@
     <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr);">
       <div class="pv-card">
         <h2>Live session</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.85rem;">
+          <span style="color: #9ca3af;">Adjust how large the live video appears in your browser.</span>
+          <label>
+            <span style="margin-right: 0.35rem;">Display size:</span>
+            {% set sess_size = session_display_size or '1280x720' %}
+            <select id="session-size-select" style="background: rgba(15,23,42,0.9); color: #e5e7eb; border-radius: 999px; border: 1px solid #1f2937; padding: 0.15rem 0.5rem; font-size: 0.8rem;">
+              <option value="320x240"{% if sess_size == '320x240' %} selected{% endif %}>320×240</option>
+              <option value="720x240"{% if sess_size == '720x240' %} selected{% endif %}>720×240</option>
+              <option value="720x480"{% if sess_size == '720x480' %} selected{% endif %}>720×480</option>
+              <option value="800x600"{% if sess_size == '800x600' %} selected{% endif %}>800×600</option>
+              <option value="1024x768"{% if sess_size == '1024x768' %} selected{% endif %}>1024×768</option>
+              <option value="1280x720"{% if sess_size == '1280x720' %} selected{% endif %}>1280×720</option>
+              <option value="1920x1080"{% if sess_size == '1920x1080' %} selected{% endif %}>1920×1080</option>
+            </select>
+          </label>
+        </div>
         <div
-          class="pv-camera-preview pv-camera-preview-large"
+          class="pv-camera-preview pv-camera-preview-large pv-session-size-{{ sess_size }}"
           data-session-device-id="{{ device.id }}"
           style="position: relative;"
         >
           <img
-            src="{{ url_for('main.camera_preview', device_id=device.id) }}"
+            src="{{ url_for('main.camera_session_stream', device_id=device.id) }}"
             alt="Live session for {{ device.name }}"
             class="pv-camera-live pv-camera-live-large"
           />
@@ -35,6 +51,14 @@
             id="session-face-recognize-btn"
           >
             Recognize faces on current frame
+          </button>
+          <button
+            type="button"
+            class="pv-link-muted"
+            id="session-fullscreen-btn"
+            style="margin-left: 0.75rem;"
+          >
+            Fullscreen
           </button>
           <a
             href="{{ url_for('main.recordings') }}?device_id={{ device.id }}"
@@ -111,6 +135,8 @@
     (function () {
       var deviceId = '{{ device.id }}';
       var recognizeBtn = document.getElementById('session-face-recognize-btn');
+      var fullscreenBtn = document.getElementById('session-fullscreen-btn');
+      var sizeSelect = document.getElementById('session-size-select');
       var outputEl = document.getElementById('session-face-output');
 
       function setOutput(value) {
@@ -195,6 +221,60 @@
         window.setTimeout(function () {
           clearFaceOverlay();
         }, 2500);
+      }
+
+      function toggleFullscreen() {
+        var container = document.querySelector('[data-session-device-id]');
+        if (!container) {
+          return;
+        }
+        if (!document.fullscreenElement) {
+          if (container.requestFullscreen) {
+            container.requestFullscreen();
+          }
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
+        }
+      }
+
+      if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', function () {
+          toggleFullscreen();
+        });
+      }
+
+      function applySessionSize(size) {
+        var container = document.querySelector('[data-session-device-id]');
+        if (!container) return;
+        var allClasses = [
+          'pv-session-size-320x240',
+          'pv-session-size-720x240',
+          'pv-session-size-720x480',
+          'pv-session-size-800x600',
+          'pv-session-size-1024x768',
+          'pv-session-size-1280x720',
+          'pv-session-size-1920x1080'
+        ];
+        allClasses.forEach(function (cls) { container.classList.remove(cls); });
+        container.classList.add('pv-session-size-' + size);
+      }
+
+      if (sizeSelect) {
+        sizeSelect.addEventListener('change', function () {
+          var size = String(sizeSelect.value || '').toLowerCase();
+          if (!size) return;
+          applySessionSize(size);
+          try {
+            fetch('/api/user/display-size', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ scope: 'session', size: size }),
+            }).catch(function () {});
+          } catch (e) {}
+        });
       }
 
       if (recognizeBtn) {
