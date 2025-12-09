@@ -1,0 +1,22 @@
+<nav class="pv-subnav" aria-label="Admin navigation">
+  {# Global admin overview and management for System Administrators only #}
+  {% if is_system_admin %}
+    <a href="{{ url_for('admin.index') }}">Overview</a>
+    <a href="{{ url_for('admin.users_list') }}">Users</a>
+    <a href="{{ url_for('admin.properties_list') }}">Properties</a>
+  {% endif %}
+
+  {# Camera administration for System Administrators and Technicians #}
+  {% if is_system_admin or is_technician %}
+    <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
+    <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URL templates</a>
+  {% endif %}
+
+  {# Advanced system configuration for System Administrators only #}
+  {% if is_system_admin %}
+    <a href="{{ url_for('main.recordings') }}">Recordings</a>
+    <a href="{{ url_for('main.storage_settings') }}">Storage</a>
+    <a href="{{ url_for('main.audit_events') }}">Audit log</a>
+    <a href="{{ url_for('installer.install') }}">Installer & databases</a>
+  {% endif %}
+</nav>

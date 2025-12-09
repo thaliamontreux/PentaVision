@@ -432,6 +432,13 @@ def profile():
 
 @bp.get("/audit")
 def audit_events():
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+    if not user_has_role(user, "System Administrator"):
+        abort(403)
+
     user_engine = get_user_engine()
     events = []
     if user_engine is not None:
@@ -1100,6 +1107,13 @@ def camera_face_recognize(device_id: int):
 
 @bp.get("/storage")
 def storage_settings():
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+    if not user_has_role(user, "System Administrator"):
+        abort(403)
+
     providers_raw = build_storage_providers(current_app)
     providers = []
     for p in providers_raw:
@@ -1196,6 +1210,11 @@ def storage_settings():
 
 @bp.get("/recordings")
 def recordings():
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+
     record_engine = get_record_engine()
     if record_engine is None:
         return render_template(
@@ -1248,6 +1267,11 @@ def recordings():
 def recording_detail(recording_id: int):
     """Playback view for a single recording, suitable for face overlays."""
 
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+
     record_engine = get_record_engine()
     if record_engine is None:
         return render_template(
@@ -1279,6 +1303,11 @@ def recording_detail(recording_id: int):
 
 @bp.get("/recordings/<int:recording_id>/download")
 def download_camera_recording(recording_id: int):
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+
     record_engine = get_record_engine()
     if record_engine is None:
         abort(404)

@@ -51,6 +51,11 @@ def _require_system_admin():
         abort(403)
 
 
+@bp.get("/")
+def index():
+    return render_template("admin/index.html")
+
+
 @bp.get("/users")
 def users_list():
     engine = get_user_engine()

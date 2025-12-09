@@ -5,6 +5,9 @@
 {% block content %}
   <section class="pv-section">
     <h1>Recordings</h1>
+    {% if is_system_admin or is_technician %}
+      {% include 'admin/_nav.html' %}
+    {% endif %}
     <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
       Browse captured segments across cameras and storage providers.
     </p>

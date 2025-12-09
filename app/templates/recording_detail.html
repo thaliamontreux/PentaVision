@@ -5,6 +5,9 @@
 {% block content %}
   <section class="pv-section">
     <h1>Recording playback</h1>
+    {% if is_system_admin or is_technician %}
+      {% include 'admin/_nav.html' %}
+    {% endif %}
 
     {% if not recording %}
       <p style="font-size: 0.9rem; color: #9ca3af;">

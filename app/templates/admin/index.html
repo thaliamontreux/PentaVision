@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Administration</h1>
+
+    {% include 'admin/_nav.html' %}
+
+    <div class="pv-grid" style="margin-top: 1.5rem; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+      <a href="{{ url_for('admin.users_list') }}" class="pv-card">
+        <h2 class="pv-card-title">Users</h2>
+        <p class="pv-card-subtitle">Create, edit, and deactivate user accounts. Manage global roles such as System Administrator and Technician.</p>
+      </a>
+
+      <a href="{{ url_for('admin.properties_list') }}" class="pv-card">
+        <h2 class="pv-card-title">Properties</h2>
+        <p class="pv-card-subtitle">Manage properties and link users to sites for future per-property access control.</p>
+      </a>
+
+      <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-card">
+        <h2 class="pv-card-title">Cameras</h2>
+        <p class="pv-card-subtitle">Configure cameras, templates, storage policies, and per-property camera assignments.</p>
+      </a>
+
+      <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-card">
+        <h2 class="pv-card-title">Camera URL templates</h2>
+        <p class="pv-card-subtitle">Maintain URL templates for common camera vendors and models.</p>
+      </a>
+
+      <a href="{{ url_for('main.recordings') }}" class="pv-card">
+        <h2 class="pv-card-title">Recordings</h2>
+        <p class="pv-card-subtitle">Review recorded footage and verify that retention and storage targets are working as expected.</p>
+      </a>
+
+      <a href="{{ url_for('main.storage_settings') }}" class="pv-card">
+        <h2 class="pv-card-title">Storage</h2>
+        <p class="pv-card-subtitle">Inspect configured storage targets (local filesystem, S3, database, and more).</p>
+      </a>
+
+      <a href="{{ url_for('main.audit_events') }}" class="pv-card">
+        <h2 class="pv-card-title">Audit log</h2>
+        <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
+      </a>
+
+      <a href="{{ url_for('installer.install') }}" class="pv-card">
+        <h2 class="pv-card-title">Installer & databases</h2>
+        <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
+      </a>
+    </div>
+  </section>
+{% endblock %}

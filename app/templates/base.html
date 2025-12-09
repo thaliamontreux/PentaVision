@@ -37,7 +37,7 @@
 
             {# Admin and advanced configuration links for System Administrators only #}
             {% if is_system_admin %}
-              <a href="{{ url_for('admin.users_list') }}">Admin</a>
+              <a href="{{ url_for('admin.index') }}">Admin</a>
               <a href="{{ url_for('main.storage_settings') }}">Storage</a>
               <a href="{{ url_for('main.audit_events') }}">Audit</a>
               <a href="{{ url_for('installer.install') }}">Installer</a>
