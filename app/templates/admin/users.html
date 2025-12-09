@@ -37,7 +37,7 @@
         </thead>
         <tbody>
           {% for user in users %}
-            {% set roles = user_roles.get(user.id, set()) %}
+            {% set roles = user_roles.get(user.id) or [] %}
             <tr>
               <td>{{ user.id }}</td>
               <td>{{ user.email }}</td>
