@@ -70,6 +70,8 @@ class CameraStream(threading.Thread):
         self._enable_ffmpeg_diag = raw_diag.strip().lower() not in {"0", "false", "no", ""}
         raw_use_gst = str(app.config.get("USE_GSTREAMER_CAPTURE", "0") or "0")
         self._use_gstreamer = raw_use_gst.strip().lower() in {"1", "true", "yes", "on"}
+        raw_fullres = str(app.config.get("SESSION_ENABLE_FULLRES_STREAM", "0") or "0")
+        self._enable_fullres = raw_fullres.strip().lower() in {"1", "true", "yes", "on"}
         try:
             latency_ms = int(app.config.get("GST_RTSP_LATENCY_MS", 200) or 200)
         except (TypeError, ValueError):
@@ -311,15 +313,18 @@ class CameraStream(threading.Thread):
                         if not success:
                             self._set_error("decode", "Failed to read frame from RTSP stream")
                             break
-                        # First, encode a full-resolution JPEG for high-quality
-                        # consumers (e.g. the dedicated session view).
+                        # Optionally encode a full-resolution JPEG for high-quality
+                        # consumers (e.g. the dedicated session view). This can be
+                        # CPU intensive, so it is disabled by default and controlled
+                        # via SESSION_ENABLE_FULLRES_STREAM.
                         full_jpg_bytes: Optional[bytes] = None
-                        try:
-                            ok_full, buffer_full = cv2.imencode(".jpg", frame)
-                        except Exception:
-                            ok_full = False
-                        if ok_full:
-                            full_jpg_bytes = buffer_full.tobytes()
+                        if getattr(self, "_enable_fullres", False):
+                            try:
+                                ok_full, buffer_full = cv2.imencode(".jpg", frame)
+                            except Exception:
+                                ok_full = False
+                            if ok_full:
+                                full_jpg_bytes = buffer_full.tobytes()
                         max_width = int(self.app.config.get("PREVIEW_MAX_WIDTH", 0) or 0)
                         max_height = int(self.app.config.get("PREVIEW_MAX_HEIGHT", 0) or 0)
                         if (max_width > 0 or max_height > 0) and frame is not None:
