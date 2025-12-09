@@ -33,23 +33,6 @@
               <div class="pv-camera-tile" role="group" aria-label="Camera {{ d.name }}">
                 <div class="pv-camera-header">
                   <div class="pv-camera-title">{{ d.name }}</div>
-                  <span class="pv-chip pv-chip-small">
-                    {% if pat %}
-                      {{ pat.protocol or 'RTSP' }}
-                    {% else %}
-                      Unknown
-                    {% endif %}
-                  </span>
-                </div>
-                <div class="pv-camera-meta">
-                  <div>
-                    {% if pat %}
-                      <span class="pv-camera-model">{{ pat.manufacturer }} {{ pat.model_or_note or '' }}</span>
-                    {% else %}
-                      <span class="pv-camera-model">No template selected</span>
-                    {% endif %}
-                  </div>
-                  <div class="pv-camera-model">{{ d.ip_address }}{% if d.port %}:{{ d.port }}{% endif %}</div>
                 </div>
                 <div
                   class="pv-camera-preview"
@@ -71,29 +54,14 @@
                 <div class="pv-camera-footer">
                   <div class="pv-camera-status-block">
                     {% set status = camera_status.get(d.id, 'unknown') if camera_status else 'unknown' %}
-                    {% set last_seen = camera_last_seen.get(d.id) if camera_last_seen else None %}
                     <span class="pv-status-chip pv-status-{{ status }}">
                       {% if status == 'online' %}
-                        Online · recording
+                        Online
                       {% elif status == 'offline' %}
                         Offline
                       {% else %}
                         Status unknown
                       {% endif %}
-                    </span>
-                    {% if last_seen %}
-                      <span class="pv-camera-lastseen">
-                        Last segment {{ last_seen.strftime('%H:%M:%S') }}
-                      </span>
-                    {% endif %}
-                    <span
-                      class="pv-status-chip pv-status-unknown pv-camera-streamhealth"
-                      data-stream-health
-                      data-device-id="{{ d.id }}"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      Stream: checking…
                     </span>
                   </div>
                   <div class="pv-camera-actions">
