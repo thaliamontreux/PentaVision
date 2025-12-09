@@ -142,6 +142,10 @@ body {
   gap: 1rem;
 }
 
+.pv-admin-grid {
+  margin-top: 1.5rem;
+}
+
 .pv-dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr);

@@ -71,13 +71,6 @@
                     >
                       Start session
                     </a>
-                    <button
-                      type="button"
-                      class="pv-link-muted"
-                      data-face-recognize="{{ d.id }}"
-                    >
-                      Recognize faces
-                    </button>
                     <a
                       href="{{ url_for('camera_admin.edit_device', device_id=d.id) }}"
                       class="pv-link-muted"
@@ -188,6 +181,7 @@
       var POLL_INTERVAL_MS = 10000;
       var statusEls = document.querySelectorAll('[data-stream-health]');
       var previewImgs = document.querySelectorAll('.pv-camera-preview .pv-camera-live');
+      var FACE_RECOGNITION_INTERVAL_MS = 10000; // how often to try automatic face recognition per camera
       var previewFps = {{ preview_low_fps|default(2.0)|tojson }};
       var previewIntervalMs = 0;
       if (typeof previewFps === 'number' && previewFps > 0) {
@@ -273,8 +267,6 @@
         window.setInterval(refreshPreviews, previewIntervalMs);
       }
 
-      var faceButtons = document.querySelectorAll('[data-face-recognize]');
-
       function clearFaceOverlay(deviceId) {
         var canvas = document.querySelector(
           '.pv-camera-preview[data-device-id="' + deviceId + '"] .pv-camera-face-overlay'
@@ -353,46 +345,56 @@
         }, 2500);
       }
 
-      if (faceButtons.length) {
-        faceButtons.forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            var deviceId = btn.getAttribute('data-face-recognize');
-            if (!deviceId) {
-              return;
-            }
-            var originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Recognizing…';
-            clearFaceOverlay(deviceId);
+      function runFaceRecognition(deviceId) {
+        if (!deviceId) {
+          return;
+        }
+        clearFaceOverlay(deviceId);
 
-            fetch('/api/cameras/' + deviceId + '/face-recognize', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'same-origin',
-              body: '{}',
-            })
-              .then(function (resp) { return resp.json(); })
-              .then(function (data) {
-                if (data && Array.isArray(data.faces) && data.faces.length) {
-                  drawFaceOverlay(
-                    deviceId,
-                    data.faces,
-                    data.image_width || 0,
-                    data.image_height || 0,
-                  );
-                } else {
-                  clearFaceOverlay(deviceId);
-                }
-                btn.disabled = false;
-                btn.textContent = originalText;
-              })
-              .catch(function () {
-                clearFaceOverlay(deviceId);
-                btn.disabled = false;
-                btn.textContent = originalText;
-              });
+        fetch('/api/cameras/' + deviceId + '/face-recognize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: '{}',
+        })
+          .then(function (resp) { return resp.json(); })
+          .then(function (data) {
+            if (data && Array.isArray(data.faces) && data.faces.length) {
+              drawFaceOverlay(
+                deviceId,
+                data.faces,
+                data.image_width || 0,
+                data.image_height || 0,
+              );
+            } else {
+              clearFaceOverlay(deviceId);
+            }
+          })
+          .catch(function () {
+            clearFaceOverlay(deviceId);
           });
+      }
+
+      function runAutoFaceRecognition() {
+        if (!FACE_RECOGNITION_INTERVAL_MS) {
+          return;
+        }
+        var containers = document.querySelectorAll('.pv-camera-preview[data-device-id]');
+        if (!containers.length) {
+          return;
+        }
+        containers.forEach(function (container) {
+          var deviceId = container.getAttribute('data-device-id');
+          if (!deviceId) {
+            return;
+          }
+          runFaceRecognition(deviceId);
         });
+      }
+
+      if (FACE_RECOGNITION_INTERVAL_MS > 0) {
+        runAutoFaceRecognition();
+        window.setInterval(runAutoFaceRecognition, FACE_RECOGNITION_INTERVAL_MS);
       }
     })();
   </script>
