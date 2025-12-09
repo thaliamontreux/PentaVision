@@ -3,57 +3,31 @@
 {% block title %}Dashboard · PentaVision{% endblock %}
 
 {% block content %}
-  <section class="pv-section">
-    <h1>System overview</h1>
-    <p style="margin-bottom: 1rem;">
-      Overall status:
-      {% if overall_status == 'ok' %}
-        <span class="pv-chip pv-chip-ok">All systems nominal</span>
-      {% else %}
-        <span class="pv-chip pv-chip-warn">Degraded &mdash; check database connectivity</span>
-      {% endif %}
-    </p>
-
-    <div class="pv-dashboard-grid">
-      <div class="pv-card">
-        <h2>Databases</h2>
-        <ul class="pv-status-list">
-          <li>
-            <span>User DB</span>
-            {% set status = db_status.get('user', 'not_configured') %}
-            <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
-          </li>
-          <li>
-            <span>Face DB</span>
-            {% set status = db_status.get('face', 'not_configured') %}
-            <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
-          </li>
-          <li>
-            <span>Record DB</span>
-            {% set status = db_status.get('record', 'not_configured') %}
-            <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
-          </li>
-        </ul>
-        <p style="font-size: 0.85rem; color: #9ca3af; margin-top: 0.75rem;">
-          Use the <strong>Installer</strong> to adjust database configuration.
+  <section class="pv-section pv-dashboard">
+    <div class="pv-dashboard-header">
+      <div>
+        <h1>Dashboard</h1>
+        <p class="pv-card-subtitle">
+          Overall status:
+          {% if overall_status == 'ok' %}
+            <span class="pv-chip pv-chip-ok">All systems nominal</span>
+          {% else %}
+            <span class="pv-chip pv-chip-warn">Degraded &mdash; check database connectivity</span>
+          {% endif %}
         </p>
       </div>
+      <div class="pv-layout-switcher">
+        <span>Layout:</span>
+        <button type="button" class="pv-layout-button is-active" data-layout="4">4 × 4</button>
+        <button type="button" class="pv-layout-button" data-layout="8">8 × 8</button>
+        <button type="button" class="pv-layout-button" data-layout="16">16 × 16</button>
+      </div>
+    </div>
 
-      <div class="pv-card pv-card-wide">
-        <div class="pv-card-header">
-          <div>
-            <h2>Cameras</h2>
-            <p class="pv-card-subtitle">
-              Configured cameras using the templates in Camera URLs.
-            </p>
-          </div>
-          <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-link-muted">
-            Manage cameras
-          </a>
-        </div>
-
+    <div class="pv-dashboard-shell">
+      <div class="pv-camera-wall">
         {% if devices %}
-          <div class="pv-camera-grid">
+          <div class="pv-camera-grid pv-layout-4" id="pv-camera-grid">
             {% for d in devices %}
               {% set pat = patterns.get(d.pattern_id) if patterns else None %}
               <div class="pv-camera-tile" role="group" aria-label="Camera {{ d.name }}">
@@ -154,10 +128,91 @@
           </p>
         {% endif %}
       </div>
+
+      <div class="pv-status-bar">
+        <div class="pv-status-column">
+          <h2>System status</h2>
+          <ul class="pv-status-list">
+            <li>
+              <span>User DB</span>
+              {% set status = db_status.get('user', 'not_configured') %}
+              <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
+            </li>
+            <li>
+              <span>Face DB</span>
+              {% set status = db_status.get('face', 'not_configured') %}
+              <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
+            </li>
+            <li>
+              <span>Record DB</span>
+              {% set status = db_status.get('record', 'not_configured') %}
+              <span class="pv-badge pv-badge-{{ status }}">{{ status }}</span>
+            </li>
+          </ul>
+          <p class="pv-card-subtitle" style="margin-top: 0.5rem;">
+            Use the <strong>Installer</strong> to adjust database configuration.
+          </p>
+        </div>
+
+        <div class="pv-status-column">
+          <h2>Cameras</h2>
+          {% if devices %}
+            {% set stats = namespace(online=0, offline=0, unknown=0) %}
+            {% for d in devices %}
+              {% set s = camera_status.get(d.id, 'unknown') if camera_status else 'unknown' %}
+              {% if s == 'online' %}
+                {% set stats.online = stats.online + 1 %}
+              {% elif s == 'offline' %}
+                {% set stats.offline = stats.offline + 1 %}
+              {% else %}
+                {% set stats.unknown = stats.unknown + 1 %}
+              {% endif %}
+            {% endfor %}
+            <p class="pv-card-subtitle">
+              {{ devices|length }} cameras ·
+              {{ stats.online }} online ·
+              {{ stats.offline }} offline
+              {% if stats.unknown %}· {{ stats.unknown }} unknown{% endif %}
+            </p>
+            <p class="pv-card-subtitle" style="margin-top: 0.5rem;">
+              <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-link-muted">
+                Manage cameras
+              </a>
+            </p>
+          {% else %}
+            <p class="pv-card-subtitle">
+              No cameras configured yet.
+            </p>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </section>
   <script>
     (function () {
+      var grid = document.getElementById('pv-camera-grid');
+      var layoutButtons = document.querySelectorAll('.pv-layout-button');
+
+      function applyLayout(cols) {
+        if (!grid) return;
+        grid.classList.remove('pv-layout-4', 'pv-layout-8', 'pv-layout-16');
+        grid.classList.add('pv-layout-' + cols);
+      }
+
+      if (grid && layoutButtons.length) {
+        layoutButtons.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var cols = btn.getAttribute('data-layout');
+            if (!cols) return;
+            layoutButtons.forEach(function (b) { b.classList.remove('is-active'); });
+            btn.classList.add('is-active');
+            applyLayout(cols);
+          });
+        });
+        var initial = layoutButtons[0].getAttribute('data-layout') || '4';
+        applyLayout(initial);
+      }
+
       var POLL_INTERVAL_MS = 10000;
       var statusEls = document.querySelectorAll('[data-stream-health]');
       var previewImgs = document.querySelectorAll('.pv-camera-preview .pv-camera-live');

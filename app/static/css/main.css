@@ -126,8 +126,19 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.pv-section.pv-admin {
+  background: linear-gradient(135deg, #111827, #020617);
+  padding: 1.75rem 1.75rem 1.5rem;
+}
+
+.pv-section.pv-dashboard {
+  display: flex;
+  flex-direction: column;
+}
+
 .pv-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
 }
 
@@ -255,6 +266,18 @@ body {
   gap: 0.75rem;
 }
 
+.pv-camera-grid.pv-layout-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pv-camera-grid.pv-layout-8 {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.pv-camera-grid.pv-layout-16 {
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+}
+
 .pv-camera-tile {
   border-radius: 0.75rem;
   padding: 0.7rem 0.8rem;
@@ -338,6 +361,66 @@ body {
 .pv-camera-lastseen {
   font-size: 0.7rem;
   color: #9ca3af;
+}
+
+.pv-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.pv-layout-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.pv-layout-button {
+  border-radius: 999px;
+  border: 1px solid #1f2937;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5e7eb;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.pv-layout-button.is-active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.pv-dashboard-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  /* Constrain overall height so camera wall can scroll above a compact status bar */
+  max-height: calc(100vh - 220px);
+}
+
+.pv-camera-wall {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.pv-status-bar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #111827;
+  max-height: 200px;
+}
+
+.pv-status-column {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .pv-form {
