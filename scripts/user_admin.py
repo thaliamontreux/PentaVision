@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import load_config
-from app.models import User
+from app.models import Role, User, UserRole
 
 
 def _load_engine():
@@ -173,6 +173,133 @@ def action_delete_user(engine) -> None:
         print(f"Deleted user {user.email}.")
 
 
+def action_list_user_roles(engine) -> None:
+    with Session(engine) as session:
+        user = _select_user(session)
+        if user is None:
+            return
+
+        rows = (
+            session.query(Role.name)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .filter(UserRole.user_id == user.id, UserRole.property_id.is_(None))
+            .order_by(Role.name)
+            .all()
+        )
+        if not rows:
+            print(f"User {user.email} has no global roles.")
+            return
+        print(f"\nGlobal roles for {user.email}:")
+        for (name,) in rows:
+            print(f" - {name}")
+
+
+def action_grant_role(engine) -> None:
+    with Session(engine) as session:
+        user = _select_user(session)
+        if user is None:
+            return
+
+        role_name = input(
+            "Role name to grant (e.g. 'System Administrator', 'Technician'): "
+        ).strip()
+        if not role_name:
+            print("Role name is required.")
+            return
+
+        role = session.query(Role).filter(Role.name == role_name).first()
+        if role is None:
+            ans = input(
+                f"Role '{role_name}' does not exist. Create it? [y/N]: "
+            ).strip().lower()
+            if ans not in {"y", "yes"}:
+                print("Cancelled.")
+                return
+            role = Role(name=role_name, scope="global", description=None)
+            session.add(role)
+            session.flush()
+
+        existing = (
+            session.query(UserRole)
+            .filter(
+                UserRole.user_id == user.id,
+                UserRole.role_id == role.id,
+                UserRole.property_id.is_(None),
+            )
+            .first()
+        )
+        if existing is not None:
+            print(f"User {user.email} already has role '{role.name}'.")
+            return
+
+        session.add(UserRole(user_id=user.id, role_id=role.id, property_id=None))
+        try:
+            session.commit()
+        except SQLAlchemyError as exc:  # noqa: BLE001
+            session.rollback()
+            print(f"Failed to grant role: {exc}")
+            return
+
+        print(f"Granted role '{role.name}' to {user.email}.")
+
+
+def action_revoke_role(engine) -> None:
+    with Session(engine) as session:
+        user = _select_user(session)
+        if user is None:
+            return
+
+        role_name = input(
+            "Role name to revoke (e.g. 'System Administrator', 'Technician'): "
+        ).strip()
+        if not role_name:
+            print("Role name is required.")
+            return
+
+        role = session.query(Role).filter(Role.name == role_name).first()
+        if role is None:
+            print(f"Role '{role_name}' does not exist.")
+            return
+
+        # Prevent removing the last System Administrator, mirroring web admin safety.
+        if role.name == "System Administrator":
+            admin_rows = (
+                session.query(UserRole, Role)
+                .join(Role, Role.id == UserRole.role_id)
+                .filter(Role.name == "System Administrator")
+                .all()
+            )
+            current_admin_ids = [ur.user_id for ur, _ in admin_rows]
+            if len(current_admin_ids) <= 1 and user.id in current_admin_ids:
+                print(
+                    "Refusing to revoke 'System Administrator': this is the only admin."
+                )
+                return
+
+        deleted = (
+            session.query(UserRole)
+            .filter(
+                UserRole.user_id == user.id,
+                UserRole.role_id == role.id,
+                UserRole.property_id.is_(None),
+            )
+            .delete(synchronize_session=False)
+        )
+        if not deleted:
+            print(f"User {user.email} does not currently have role '{role.name}'.")
+            session.rollback()
+            return
+
+        try:
+            session.commit()
+        except SQLAlchemyError as exc:  # noqa: BLE001
+            session.rollback()
+            print(f"Failed to revoke role: {exc}")
+            return
+
+        print(f"Revoked role '{role.name}' from {user.email}.")
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="ANSI-style user admin CLI")
     parser.parse_args(argv)  # currently no CLI flags; reserved for future use
@@ -186,6 +313,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("3) Reset user password")
         print("4) Update user account status")
         print("5) Delete user")
+        print("6) List a user's global roles")
+        print("7) Grant a global role to a user")
+        print("8) Revoke a global role from a user")
         print("q) Quit")
         choice = input("> ").strip().lower()
 
@@ -201,6 +331,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             action_update_status(engine)
         elif choice == "5":
             action_delete_user(engine)
+        elif choice == "6":
+            action_list_user_roles(engine)
+        elif choice == "7":
+            action_grant_role(engine)
+        elif choice == "8":
+            action_revoke_role(engine)
         else:
             print("Unknown option. Please choose 1-5 or q to quit.")
 

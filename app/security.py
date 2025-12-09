@@ -31,6 +31,11 @@ def get_current_user() -> Optional[User]:
         if uid is not None:
             with Session(engine) as db:
                 user_obj = db.get(User, uid)
+                if user_obj is not None:
+                    # Detach the instance from the session so later attribute access
+                    # (e.g. in templates) does not try to refresh against a closed
+                    # session, which would raise DetachedInstanceError.
+                    db.expunge(user_obj)
 
     g.current_user = user_obj
     return user_obj
