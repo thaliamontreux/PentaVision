@@ -9,8 +9,8 @@
       Live view with quick actions and face recognition overlays.
     </p>
 
-    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr);">
-      <div class="pv-card">
+    <div class="pv-dashboard-grid pv-session-grid">
+      <div class="pv-card pv-session-left">
         <h2>Live session</h2>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.85rem;">
           <span style="color: #9ca3af;">Adjust how large the live video appears in your browser.</span>
@@ -74,61 +74,96 @@
         </p>
       </div>
 
-      <div class="pv-card">
-        <h2>Camera summary</h2>
-        <ul class="pv-status-list">
-          <li>
-            <span>Name</span>
-            <span>{{ device.name }}</span>
-          </li>
-          <li>
-            <span>Address</span>
-            <span>{{ device.ip_address }}{% if device.port %}:{{ device.port }}{% endif %}</span>
-          </li>
-          <li>
-            <span>Template</span>
-            {% if pattern %}
-              <span>{{ pattern.manufacturer }} {{ pattern.model_or_note or '' }}</span>
+      {% if is_system_admin or is_technician %}
+        <div class="pv-session-faces-bar">
+          <div style="font-size: 0.75rem; font-weight: 500; margin-bottom: 0.25rem;">Faces</div>
+          <div id="session-faces-list" class="pv-session-faces-list">
+            <p class="pv-card-subtitle" style="font-size: 0.75rem;">
+              Run recognition to capture faces that need names.
+            </p>
+          </div>
+          <canvas
+            id="session-faces-scratch"
+            width="1"
+            height="1"
+            style="display: none;"
+          ></canvas>
+          <pre
+            id="session-face-output"
+            style="display: none;"
+            aria-live="polite"
+          ></pre>
+        </div>
+      {% else %}
+        <div></div>
+      {% endif %}
+    </div>
+
+    <div class="pv-status-bar" style="margin-top: 0.9rem;">
+      <div class="pv-status-section">
+        <span class="pv-status-label">Camera</span>
+        <span class="pv-status-kv">
+          <span>{{ device.name }}</span>
+        </span>
+        {% set sess_status = status or 'unknown' %}
+        <span class="pv-status-kv">
+          <span class="pv-status-chip pv-status-{{ sess_status }}">
+            {% if sess_status == 'online' %}
+              Online
+            {% elif sess_status == 'offline' %}
+              Offline
             {% else %}
-              <span>None selected</span>
+              Status unknown
             {% endif %}
-          </li>
-          <li>
-            <span>Status</span>
-            {% set status = status or 'unknown' %}
-            <span class="pv-status-chip pv-status-{{ status }}">
-              {% if status == 'online' %}
-                Online · recording
-              {% elif status == 'offline' %}
-                Offline
-              {% else %}
-                Status unknown
-              {% endif %}
-            </span>
-          </li>
-          {% if last_seen %}
-          <li>
-            <span>Last segment</span>
+          </span>
+        </span>
+      </div>
+
+      <div class="pv-status-section">
+        <span class="pv-status-label">Last segment</span>
+        {% if last_seen %}
+          <span class="pv-status-kv">
             <span>{{ last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</span>
-          </li>
-          {% endif %}
-        </ul>
-        <p style="margin-top: 1rem; font-size: 0.85rem;">
-          <a href="{{ url_for('camera_admin.edit_device', device_id=device.id) }}" class="pv-link-muted">
-            Configure camera
-          </a>
-        </p>
+          </span>
+        {% else %}
+          <span class="pv-status-kv">
+            <span>Unknown</span>
+          </span>
+        {% endif %}
+        <a
+          href="{{ url_for('camera_admin.edit_device', device_id=device.id) }}"
+          class="pv-link-muted pv-status-manage-link"
+        >
+          Configure
+        </a>
       </div>
     </div>
 
-    <div class="pv-card" style="margin-top: 1.25rem;">
-      <h2>Face recognition results</h2>
-      <pre
-        id="session-face-output"
-        style="min-height: 4rem; font-size: 0.8rem; white-space: pre-wrap;"
-        aria-live="polite"
-      ></pre>
-    </div>
+    {% if is_system_admin or is_technician %}
+      <div id="session-assign-modal" class="pv-modal">
+        <div class="pv-modal-dialog">
+          <h2 style="margin-top: 0; font-size: 1rem; margin-bottom: 0.5rem;">Assign name to face</h2>
+          <img
+            id="session-assign-face-img"
+            src=""
+            alt="Face to assign"
+            style="display: block; width: 120px; height: 120px; object-fit: cover; border-radius: 0.75rem; margin: 0.5rem auto 0.75rem;"
+          />
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 0.35rem;">
+            User email
+            <input
+              id="session-assign-email"
+              type="email"
+              style="width: 100%; padding: 0.4rem 0.5rem; border-radius: 0.375rem; border: 1px solid #1f2937; background: rgba(15,23,42,0.9); color: #e5e7eb;"
+            />
+          </label>
+          <div style="margin-top: 0.75rem; display: flex; justify-content: flex-end; gap: 0.5rem; font-size: 0.85rem;">
+            <button type="button" id="session-assign-cancel" class="pv-link-muted">Cancel</button>
+            <button type="button" id="session-assign-save" class="pv-button">Assign</button>
+          </div>
+        </div>
+      </div>
+    {% endif %}
   </section>
 
   <script>
@@ -138,6 +173,15 @@
       var fullscreenBtn = document.getElementById('session-fullscreen-btn');
       var sizeSelect = document.getElementById('session-size-select');
       var outputEl = document.getElementById('session-face-output');
+      var facesListEl = document.getElementById('session-faces-list');
+      var scratchCanvas = document.getElementById('session-faces-scratch');
+      var assignModal = document.getElementById('session-assign-modal');
+      var assignFaceImg = document.getElementById('session-assign-face-img');
+      var assignEmailInput = document.getElementById('session-assign-email');
+      var assignCancelBtn = document.getElementById('session-assign-cancel');
+      var assignSaveBtn = document.getElementById('session-assign-save');
+      var pendingFaces = [];
+      var currentAssignFaceId = null;
 
       function setOutput(value) {
         try {
@@ -277,6 +321,199 @@
         });
       }
 
+      function renderFaces() {
+        if (!facesListEl) return;
+        facesListEl.innerHTML = '';
+        if (!pendingFaces.length) {
+          var empty = document.createElement('p');
+          empty.className = 'pv-card-subtitle';
+          empty.style.fontSize = '0.75rem';
+          empty.textContent = 'No unnamed faces yet.';
+          facesListEl.appendChild(empty);
+          return;
+        }
+
+        pendingFaces.forEach(function (face) {
+          var tile = document.createElement('div');
+          tile.className = 'pv-session-face-tile';
+
+          var img = document.createElement('img');
+          img.className = 'pv-session-face-img';
+          img.src = face.image;
+          img.alt = 'Captured face';
+          tile.appendChild(img);
+
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'pv-link-muted pv-session-face-assign';
+          btn.textContent = 'Assign';
+          btn.addEventListener('click', function () {
+            openAssignModal(face.id);
+          });
+          tile.appendChild(btn);
+
+          facesListEl.appendChild(tile);
+        });
+      }
+
+      function openAssignModal(faceId) {
+        if (!assignModal || !assignFaceImg || !assignEmailInput) return;
+        var face = pendingFaces.find(function (f) { return f.id === faceId; });
+        if (!face) return;
+        currentAssignFaceId = faceId;
+        assignFaceImg.src = face.image;
+        assignEmailInput.value = '';
+        assignModal.classList.add('is-visible');
+        assignEmailInput.focus();
+      }
+
+      function closeAssignModal() {
+        if (!assignModal) return;
+        assignModal.classList.remove('is-visible');
+        currentAssignFaceId = null;
+      }
+
+      function saveAssignedFace() {
+        if (!currentAssignFaceId) {
+          closeAssignModal();
+          return;
+        }
+        var face = pendingFaces.find(function (f) { return f.id === currentAssignFaceId; });
+        if (!face) {
+          closeAssignModal();
+          return;
+        }
+        var email = (assignEmailInput && assignEmailInput.value || '').trim().toLowerCase();
+        if (!email) {
+          return;
+        }
+
+        try {
+          fetch('/api/face/enroll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ email: email, image: face.image }),
+          })
+            .then(function (resp) { return resp.json(); })
+            .then(function () {
+              pendingFaces = pendingFaces.filter(function (f) { return f.id !== face.id; });
+              renderFaces();
+              closeAssignModal();
+            })
+            .catch(function () {
+              closeAssignModal();
+            });
+        } catch (e) {
+          closeAssignModal();
+        }
+      }
+
+      if (assignCancelBtn) {
+        assignCancelBtn.addEventListener('click', function () {
+          closeAssignModal();
+        });
+      }
+
+      if (assignSaveBtn) {
+        assignSaveBtn.addEventListener('click', function () {
+          saveAssignedFace();
+        });
+      }
+
+      if (assignEmailInput) {
+        assignEmailInput.addEventListener('keydown', function (evt) {
+          if (evt.key === 'Enter') {
+            evt.preventDefault();
+            saveAssignedFace();
+          }
+        });
+      }
+
+      function loadPreviewImageForFaces(callback) {
+        if (!scratchCanvas || typeof Image === 'undefined') {
+          callback(new Error('unavailable'), null);
+          return;
+        }
+        var url = '{{ url_for('main.camera_preview_low_jpeg', device_id=device.id) }}?ts=' + Date.now();
+        var img = new Image();
+        img.onload = function () { callback(null, img); };
+        img.onerror = function () { callback(new Error('failed'), null); };
+        img.src = url;
+      }
+
+      function addUnknownFacesFromResult(data) {
+        if (!facesListEl || !scratchCanvas) return;
+        if (!data || !Array.isArray(data.faces) || !data.faces.length) return;
+
+        var faces = data.faces;
+        var imageWidth = data.image_width || 0;
+        var imageHeight = data.image_height || 0;
+        if (!imageWidth || !imageHeight) return;
+
+        loadPreviewImageForFaces(function (err, img) {
+          if (err || !img) return;
+          var ctx = scratchCanvas.getContext('2d');
+          if (!ctx) return;
+          scratchCanvas.width = imageWidth;
+          scratchCanvas.height = imageHeight;
+          ctx.clearRect(0, 0, imageWidth, imageHeight);
+          ctx.drawImage(img, 0, 0, imageWidth, imageHeight);
+
+          faces.forEach(function (face) {
+            if (face.user_id != null || (face.email && String(face.email).length)) {
+              return;
+            }
+            var left = face.left;
+            var top = face.top;
+            var right = face.right;
+            var bottom = face.bottom;
+            var w = right - left;
+            var h = bottom - top;
+            if (!w || !h || w < 4 || h < 4) {
+              return;
+            }
+            var faceCanvas = document.createElement('canvas');
+            faceCanvas.width = w;
+            faceCanvas.height = h;
+            var fctx = faceCanvas.getContext('2d');
+            if (!fctx) {
+              return;
+            }
+            fctx.drawImage(
+              scratchCanvas,
+              left,
+              top,
+              w,
+              h,
+              0,
+              0,
+              w,
+              h
+            );
+            var dataUrl;
+            try {
+              dataUrl = faceCanvas.toDataURL('image/jpeg');
+            } catch (e) {
+              dataUrl = null;
+            }
+            if (!dataUrl) {
+              return;
+            }
+            var exists = pendingFaces.some(function (f) { return f.image === dataUrl; });
+            if (exists) {
+              return;
+            }
+            pendingFaces.push({
+              id: 'face-' + Date.now() + '-' + pendingFaces.length,
+              image: dataUrl,
+            });
+          });
+
+          renderFaces();
+        });
+      }
+
       if (recognizeBtn) {
         recognizeBtn.addEventListener('click', function () {
           var originalText = recognizeBtn.textContent;
@@ -299,6 +536,7 @@
                   data.image_width || 0,
                   data.image_height || 0
                 );
+                addUnknownFacesFromResult(data);
               } else {
                 clearFaceOverlay();
               }

@@ -386,6 +386,77 @@ body {
   aspect-ratio: 3 / 2;
 }
 
+/* Live session layout: scrollable left pane and narrow right faces bar */
+.pv-session-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  gap: 1rem;
+  margin-top: 1rem;
+  align-items: stretch;
+}
+
+.pv-session-left {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}
+
+.pv-session-faces-bar {
+  width: 100px;
+  max-width: 100px;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+}
+
+.pv-session-faces-list {
+  margin-top: 0.25rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 260px);
+}
+
+.pv-session-face-tile {
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+
+.pv-session-face-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  display: block;
+  margin: 0 auto 0.15rem;
+}
+
+.pv-session-face-assign {
+  display: inline-block;
+  font-size: 0.7rem;
+  margin-top: 0.05rem;
+}
+
+.pv-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.pv-modal.is-visible {
+  display: flex;
+}
+
+.pv-modal-dialog {
+  background: rgba(15, 23, 42, 0.98);
+  border-radius: 0.75rem;
+  border: 1px solid #1f2937;
+  padding: 1rem 1.25rem;
+  max-width: 360px;
+  width: 90%;
+}
+
 .pv-camera-footer {
   display: flex;
   justify-content: space-between;
