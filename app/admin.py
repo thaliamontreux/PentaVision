@@ -572,6 +572,8 @@ def property_create():
             errors.append("Name is required.")
 
         if not errors:
+            created_property_id = None
+            created_property_name = None
             with Session(engine) as db:
                 prop = Property(
                     name=form["name"],
@@ -584,12 +586,15 @@ def property_create():
                     timezone=form["timezone"] or None,
                 )
                 db.add(prop)
+                db.flush()
+                created_property_id = prop.id
+                created_property_name = prop.name
                 db.commit()
             actor = get_current_user()
             log_event(
                 "PROPERTY_CREATE",
                 user_id=actor.id if actor else None,
-                details=f"property_id={prop.id}, name={prop.name}",
+                details=f"property_id={created_property_id}, name={created_property_name}",
             )
             return redirect(url_for("admin.properties_list"))
 
