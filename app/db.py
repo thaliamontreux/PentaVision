@@ -21,7 +21,17 @@ def _get_engine(name: str, config_key: str) -> Optional[Engine]:
 
     engine = _engines.get(name)
     if engine is None or str(engine.url) != str(url):
-        engine = create_engine(url, future=True)
+        # Use a modest connection pool per process so that, when multiplied by
+        # Gunicorn workers, we do not exhaust the database's max_connections.
+        # pool_pre_ping keeps connections healthy across MySQL timeouts.
+        engine = create_engine(
+            url,
+            future=True,
+            pool_size=3,
+            max_overflow=2,
+            pool_recycle=3600,
+            pool_pre_ping=True,
+        )
         _engines[name] = engine
     return engine
 

@@ -346,14 +346,27 @@ def profile():
 
             full_name = (request.form.get("full_name") or "").strip()
             preferred_name = (request.form.get("preferred_name") or "").strip()
-            primary_phone = (request.form.get("primary_phone") or "").strip()
-            timezone_val = (request.form.get("timezone") or "").strip()
+            pronouns = (request.form.get("pronouns") or "").strip()
+            country_code = (request.form.get("primary_phone_country") or "").strip()
+            national_phone = (request.form.get("primary_phone_national") or "").strip()
+            timezone_val = (
+                request.form.get("timezone")
+                or request.form.get("timezone_fallback")
+                or ""
+            ).strip()
             mfa_pref = (request.form.get("mfa_preference") or "").strip()
 
             if not errors:
                 db_user.full_name = full_name or None
                 db_user.preferred_name = preferred_name or None
-                db_user.primary_phone = primary_phone or None
+                db_user.pronouns = pronouns or None
+
+                if country_code and national_phone:
+                    phone_compact = national_phone.replace(" ", "").replace("-", "")
+                    db_user.primary_phone = f"+{country_code}{phone_compact}"
+                else:
+                    raw_phone = (request.form.get("primary_phone") or "").strip()
+                    db_user.primary_phone = raw_phone or None
                 db_user.timezone = timezone_val or None
                 db_user.mfa_preference = mfa_pref or None
 
@@ -376,10 +389,13 @@ def profile():
                 saved = True
                 log_event("PROFILE_UPDATE", user_id=db_user.id)
 
+        display_phone = db_user.primary_phone or ""
+
         form = {
             "full_name": db_user.full_name or "",
             "preferred_name": db_user.preferred_name or "",
-            "primary_phone": db_user.primary_phone or "",
+            "pronouns": db_user.pronouns or "",
+            "primary_phone": display_phone,
             "timezone": db_user.timezone or "",
             "mfa_preference": db_user.mfa_preference or "",
         }

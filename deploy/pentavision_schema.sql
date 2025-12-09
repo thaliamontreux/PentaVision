@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(255) NULL,
   preferred_name VARCHAR(255) NULL,
+  pronouns VARCHAR(64) NULL,
   date_of_birth DATE NULL,
   primary_phone VARCHAR(32) NULL,
   secondary_phone VARCHAR(32) NULL,

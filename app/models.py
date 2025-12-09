@@ -36,6 +36,7 @@ class User(UserBase):
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     preferred_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    pronouns: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     primary_phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     secondary_phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)

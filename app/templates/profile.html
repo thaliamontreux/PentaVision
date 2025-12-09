@@ -48,24 +48,81 @@
         </div>
 
         <div class="pv-field-group">
-          <label for="primary_phone">Primary phone</label>
+          <label for="pronouns">Pronouns</label>
+          <select id="pronouns" name="pronouns">
+            <option value="" {% if not form.pronouns %}selected{% endif %}>Prefer not to say</option>
+            <option value="she/her" {% if form.pronouns == 'she/her' %}selected{% endif %}>She / her</option>
+            <option value="he/him" {% if form.pronouns == 'he/him' %}selected{% endif %}>He / him</option>
+            <option value="they/them" {% if form.pronouns == 'they/them' %}selected{% endif %}>They / them</option>
+            <option value="custom" {% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}selected{% endif %}>Custom…</option>
+          </select>
           <input
-            id="primary_phone"
-            name="primary_phone"
-            type="tel"
-            value="{{ form.primary_phone }}"
+            id="pronouns_custom"
+            name="pronouns_custom"
+            type="text"
+            placeholder="Enter your pronouns"
+            value="{% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}{{ form.pronouns }}{% endif %}"
+            style="margin-top: 0.5rem; display: {% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}block{% else %}none{% endif %};"
           />
         </div>
 
         <div class="pv-field-group">
-          <label for="timezone">Time zone</label>
+          <label for="primary_phone_national">Primary phone</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <select id="primary_phone_country" name="primary_phone_country" style="max-width: 7rem;">
+              <option value="">Code</option>
+              <option value="1">+1 (US/Canada)</option>
+              <option value="44">+44 (UK)</option>
+              <option value="61">+61 (Australia)</option>
+              <option value="64">+64 (New Zealand)</option>
+              <option value="33">+33 (France)</option>
+              <option value="49">+49 (Germany)</option>
+              <option value="81">+81 (Japan)</option>
+              <option value="91">+91 (India)</option>
+              <option value="34">+34 (Spain)</option>
+              <option value="39">+39 (Italy)</option>
+              <option value="46">+46 (Sweden)</option>
+              <option value="47">+47 (Norway)</option>
+              <option value="48">+48 (Poland)</option>
+              <option value="55">+55 (Brazil)</option>
+              <option value="52">+52 (Mexico)</option>
+            </select>
+            <input
+              id="primary_phone_national"
+              name="primary_phone_national"
+              type="tel"
+              placeholder="Local number"
+            />
+          </div>
           <input
-            id="timezone"
-            name="timezone"
+            id="primary_phone"
+            name="primary_phone"
+            type="hidden"
+            value="{{ form.primary_phone }}"
+          />
+          <p class="pv-card-subtitle">
+            Your phone will be stored in an international format (e.g. +1…)
+            so alerts can reach you reliably.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="timezone">Time zone</label>
+          <select id="timezone" name="timezone">
+            <option value="">Select time zone…</option>
+          </select>
+          <input
+            id="timezone_fallback"
+            name="timezone_fallback"
             type="text"
             placeholder="e.g. America/Chicago"
             value="{{ form.timezone }}"
+            style="margin-top: 0.5rem; display: none;"
           />
+          <p class="pv-card-subtitle">
+            Choose your IANA time zone (like America/Chicago). If the list
+            doesnt work in your browser, you can type it manually.
+          </p>
         </div>
 
         <div class="pv-field-group">
@@ -269,6 +326,119 @@
   </section>
   <script>
     (function () {
+      // --- Pronouns: toggle custom field and sync value ---
+      var pronounsSelect = document.getElementById('pronouns');
+      var pronounsCustom = document.getElementById('pronouns_custom');
+      if (pronounsSelect && pronounsCustom) {
+        pronounsSelect.addEventListener('change', function () {
+          var v = pronounsSelect.value || '';
+          if (v === 'custom') {
+            pronounsCustom.style.display = 'block';
+            pronounsCustom.focus();
+          } else {
+            pronounsCustom.style.display = 'none';
+            pronounsCustom.value = '';
+          }
+        });
+        // On submit, if custom is selected, copy custom text into pronouns value.
+        var form = pronounsSelect.form;
+        if (form) {
+          form.addEventListener('submit', function () {
+            if (pronounsSelect.value === 'custom' && pronounsCustom.value.trim()) {
+              pronounsSelect.value = pronounsCustom.value.trim();
+            }
+          });
+        }
+      }
+
+      // --- Phone: split/join country code + national number ---
+      var hiddenPhone = document.getElementById('primary_phone');
+      var phoneCountry = document.getElementById('primary_phone_country');
+      var phoneNational = document.getElementById('primary_phone_national');
+      if (hiddenPhone && phoneCountry && phoneNational) {
+        var stored = String(hiddenPhone.value || '');
+        if (stored.startsWith('+')) {
+          stored = stored.slice(1);
+        }
+        // Rough parse: take leading digits as country code up to 3 digits.
+        var cc = '';
+        var rest = stored;
+        var i;
+        for (i = 1; i <= 3 && i <= stored.length; i++) {
+          var prefix = stored.slice(0, i);
+          if (/^\d+$/.test(prefix)) {
+            cc = prefix;
+            rest = stored.slice(i);
+          }
+        }
+        if (cc) {
+          phoneCountry.value = cc;
+          phoneNational.value = rest;
+        } else {
+          phoneNational.value = stored;
+        }
+
+        var syncPhone = function () {
+          var c = (phoneCountry.value || '').replace(/\D/g, '');
+          var n = (phoneNational.value || '').replace(/[^0-9x+]/gi, '');
+          if (c && n) {
+            hiddenPhone.value = '+' + c + n;
+          } else {
+            hiddenPhone.value = n || '';
+          }
+        };
+        phoneCountry.addEventListener('change', syncPhone);
+        phoneNational.addEventListener('input', syncPhone);
+      }
+
+      // --- Time zone: populate select with browser-known zones, fallback to textbox ---
+      var tzSelect = document.getElementById('timezone');
+      var tzFallback = document.getElementById('timezone_fallback');
+      if (tzSelect && tzFallback) {
+        var initialTz = tzFallback.value || '';
+        var zones = [];
+        if (typeof Intl !== 'undefined' && Intl.supportedValuesOf) {
+          try {
+            zones = Intl.supportedValuesOf('timeZone');
+          } catch (e) {
+            zones = [];
+          }
+        }
+        if (zones && zones.length) {
+          zones.forEach(function (z) {
+            var opt = document.createElement('option');
+            opt.value = z;
+            opt.textContent = z;
+            if (initialTz && initialTz === z) {
+              opt.selected = true;
+            }
+            tzSelect.appendChild(opt);
+          });
+          if (!initialTz && Intl.DateTimeFormat) {
+            try {
+              var guess = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              if (guess) {
+                tzSelect.value = guess;
+              }
+            } catch (e) {}
+          }
+          tzFallback.style.display = 'none';
+        } else {
+          // Fallback: hide select and rely on manual textbox.
+          tzSelect.style.display = 'none';
+          tzFallback.style.display = 'block';
+        }
+
+        var form2 = tzSelect.form || tzFallback.form;
+        if (form2) {
+          form2.addEventListener('submit', function () {
+            if (tzSelect.style.display !== 'none' && tzSelect.value) {
+              tzFallback.value = tzSelect.value;
+            }
+          });
+        }
+      }
+
       function setOutput(el, value) {
         if (!el) return;
         if (typeof value === 'string') {
