@@ -112,7 +112,7 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
     if engine is None:
         return None, "user database not configured", 500
 
-    with Session(engine) as session_db:
+    with Session(engine, expire_on_commit=False) as session_db:
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
