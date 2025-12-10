@@ -732,6 +732,20 @@ def create_pattern():
         "rtsp_url_pattern": "",
         "use_auth": True,
         "is_active": True,
+        "device_type": "",
+        "oui_regex": "",
+        "video_encoding": "",
+        "default_port": "",
+        "streams_raw": "",
+        "channels_raw": "",
+        "stream_names_raw": "",
+        "channel_names_raw": "",
+        "low_res_stream": "",
+        "high_res_stream": "",
+        "default_username": "",
+        "default_password": "",
+        "digest_auth_supported": False,
+        "manual_url": "",
     }
     csrf_token = _ensure_csrf_token()
 
@@ -756,11 +770,37 @@ def create_pattern():
         form["rtsp_url_pattern"] = (request.form.get("rtsp_url_pattern") or "").strip()
         form["use_auth"] = request.form.get("use_auth") == "1"
         form["is_active"] = request.form.get("is_active") == "1"
+        form["device_type"] = (request.form.get("device_type") or "").strip()
+        form["oui_regex"] = (request.form.get("oui_regex") or "").strip()
+        form["video_encoding"] = (request.form.get("video_encoding") or "").strip()
+        form["default_port"] = (request.form.get("default_port") or "").strip()
+        form["streams_raw"] = (request.form.get("streams_raw") or "").strip()
+        form["channels_raw"] = (request.form.get("channels_raw") or "").strip()
+        form["stream_names_raw"] = (request.form.get("stream_names_raw") or "").strip()
+        form["channel_names_raw"] = (request.form.get("channel_names_raw") or "").strip()
+        form["low_res_stream"] = (request.form.get("low_res_stream") or "").strip()
+        form["high_res_stream"] = (request.form.get("high_res_stream") or "").strip()
+        form["default_username"] = (request.form.get("default_username") or "").strip()
+        form["default_password"] = (request.form.get("default_password") or "").strip()
+        form["digest_auth_supported"] = (
+            request.form.get("digest_auth_supported") == "1"
+        )
+        form["manual_url"] = (request.form.get("manual_url") or "").strip()
 
         if not form["manufacturer"]:
             errors.append("Manufacturer is required.")
         if not form["rtsp_url_pattern"]:
             errors.append("RTSP URL pattern is required.")
+
+        default_port_int: Optional[int]
+        if form["default_port"]:
+            try:
+                default_port_int = int(form["default_port"])
+            except ValueError:
+                errors.append("Default port must be a number.")
+                default_port_int = None
+        else:
+            default_port_int = None
 
         if not errors:
             with Session(engine) as session_db:
@@ -771,6 +811,21 @@ def create_pattern():
                     rtsp_url_pattern=form["rtsp_url_pattern"],
                     use_auth=1 if form["use_auth"] else 0,
                     is_active=1 if form["is_active"] else 0,
+                    device_type=form["device_type"] or None,
+                    oui_regex=form["oui_regex"] or None,
+                    video_encoding=form["video_encoding"] or None,
+                    default_port=default_port_int,
+                    streams_raw=form["streams_raw"] or None,
+                    channels_raw=form["channels_raw"] or None,
+                    stream_names_raw=form["stream_names_raw"] or None,
+                    channel_names_raw=form["channel_names_raw"] or None,
+                    low_res_stream=form["low_res_stream"] or None,
+                    high_res_stream=form["high_res_stream"] or None,
+                    default_username=form["default_username"] or None,
+                    default_password=form["default_password"] or None,
+                    digest_auth_supported=1 if form["digest_auth_supported"] else 0,
+                    manual_url=form["manual_url"] or None,
+                    source="manual",
                 )
                 session_db.add(pattern)
                 session_db.commit()
@@ -1480,6 +1535,25 @@ def edit_pattern(pattern_id: int):
             "rtsp_url_pattern": pattern.rtsp_url_pattern,
             "use_auth": bool(getattr(pattern, "use_auth", 1)),
             "is_active": bool(getattr(pattern, "is_active", 1)),
+            "device_type": pattern.device_type or "",
+            "oui_regex": pattern.oui_regex or "",
+            "video_encoding": pattern.video_encoding or "",
+            "default_port": (
+                str(pattern.default_port) if pattern.default_port is not None else ""
+            ),
+            "streams_raw": pattern.streams_raw or "",
+            "channels_raw": pattern.channels_raw or "",
+            "stream_names_raw": pattern.stream_names_raw or "",
+            "channel_names_raw": pattern.channel_names_raw or "",
+            "low_res_stream": pattern.low_res_stream or "",
+            "high_res_stream": pattern.high_res_stream or "",
+            "default_username": pattern.default_username or "",
+            "default_password": pattern.default_password or "",
+            "digest_auth_supported": bool(
+                getattr(pattern, "digest_auth_supported", 0)
+            ),
+            "manual_url": pattern.manual_url or "",
+            "source": pattern.source or "",
         }
 
         if request.method == "POST":
@@ -1496,11 +1570,53 @@ def edit_pattern(pattern_id: int):
             ).strip()
             form["use_auth"] = request.form.get("use_auth") == "1"
             form["is_active"] = request.form.get("is_active") == "1"
+            form["device_type"] = (request.form.get("device_type") or "").strip()
+            form["oui_regex"] = (request.form.get("oui_regex") or "").strip()
+            form["video_encoding"] = (
+                request.form.get("video_encoding") or ""
+            ).strip()
+            form["default_port"] = (
+                request.form.get("default_port") or ""
+            ).strip()
+            form["streams_raw"] = (request.form.get("streams_raw") or "").strip()
+            form["channels_raw"] = (request.form.get("channels_raw") or "").strip()
+            form["stream_names_raw"] = (
+                request.form.get("stream_names_raw") or ""
+            ).strip()
+            form["channel_names_raw"] = (
+                request.form.get("channel_names_raw") or ""
+            ).strip()
+            form["low_res_stream"] = (
+                request.form.get("low_res_stream") or ""
+            ).strip()
+            form["high_res_stream"] = (
+                request.form.get("high_res_stream") or ""
+            ).strip()
+            form["default_username"] = (
+                request.form.get("default_username") or ""
+            ).strip()
+            form["default_password"] = (
+                request.form.get("default_password") or ""
+            ).strip()
+            form["digest_auth_supported"] = (
+                request.form.get("digest_auth_supported") == "1"
+            )
+            form["manual_url"] = (request.form.get("manual_url") or "").strip()
 
             if not form["manufacturer"]:
                 errors.append("Manufacturer is required.")
             if not form["rtsp_url_pattern"]:
                 errors.append("RTSP URL pattern is required.")
+
+            default_port_int: Optional[int]
+            if form["default_port"]:
+                try:
+                    default_port_int = int(form["default_port"])
+                except ValueError:
+                    errors.append("Default port must be a number.")
+                    default_port_int = None
+            else:
+                default_port_int = None
 
             if not errors:
                 pattern.manufacturer = form["manufacturer"]
@@ -1509,6 +1625,22 @@ def edit_pattern(pattern_id: int):
                 pattern.rtsp_url_pattern = form["rtsp_url_pattern"]
                 pattern.use_auth = 1 if form["use_auth"] else 0
                 pattern.is_active = 1 if form["is_active"] else 0
+                pattern.device_type = form["device_type"] or None
+                pattern.oui_regex = form["oui_regex"] or None
+                pattern.video_encoding = form["video_encoding"] or None
+                pattern.default_port = default_port_int
+                pattern.streams_raw = form["streams_raw"] or None
+                pattern.channels_raw = form["channels_raw"] or None
+                pattern.stream_names_raw = form["stream_names_raw"] or None
+                pattern.channel_names_raw = form["channel_names_raw"] or None
+                pattern.low_res_stream = form["low_res_stream"] or None
+                pattern.high_res_stream = form["high_res_stream"] or None
+                pattern.default_username = form["default_username"] or None
+                pattern.default_password = form["default_password"] or None
+                pattern.digest_auth_supported = (
+                    1 if form["digest_auth_supported"] else 0
+                )
+                pattern.manual_url = form["manual_url"] or None
                 session_db.add(pattern)
                 session_db.commit()
                 actor = get_current_user()

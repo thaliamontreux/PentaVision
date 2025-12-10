@@ -50,6 +50,16 @@
         </div>
 
         <div class="pv-field-group">
+          <label for="device_type">Device type</label>
+          <input
+            id="device_type"
+            name="device_type"
+            type="text"
+            value="{{ form.device_type }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
           <label for="protocol">Protocol</label>
           <select id="protocol" name="protocol">
             {% set proto = (form.protocol or 'RTSP') %}
@@ -63,6 +73,27 @@
             <option value="HTTP_MJPEG" {% if proto == 'HTTP_MJPEG' %}selected{% endif %}>MJPEG over HTTP</option>
             <option value="UDP" {% if proto == 'UDP' %}selected{% endif %}>RTP/UDP</option>
           </select>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="default_port">Default port</label>
+          <input
+            id="default_port"
+            name="default_port"
+            type="text"
+            inputmode="numeric"
+            value="{{ form.default_port }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="video_encoding">Video encoding</label>
+          <input
+            id="video_encoding"
+            name="video_encoding"
+            type="text"
+            value="{{ form.video_encoding }}"
+          />
         </div>
 
         <div class="pv-field-group">
@@ -83,6 +114,83 @@
         </div>
 
         <div class="pv-field-group">
+          <label for="oui_regex">OUI / MAC regex</label>
+          <input
+            id="oui_regex"
+            name="oui_regex"
+            type="text"
+            value="{{ form.oui_regex }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="streams_raw">Streams (indices)</label>
+          <input
+            id="streams_raw"
+            name="streams_raw"
+            type="text"
+            value="{{ form.streams_raw }}"
+          />
+          <p class="pv-card-subtitle">
+            Comma-separated list of stream indices supported by this model.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="stream_names_raw">Stream names</label>
+          <input
+            id="stream_names_raw"
+            name="stream_names_raw"
+            type="text"
+            value="{{ form.stream_names_raw }}"
+          />
+          <p class="pv-card-subtitle">
+            Optional comma-separated list of friendly names aligned with the
+            stream indices above.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="low_res_stream">Low-res stream index</label>
+          <input
+            id="low_res_stream"
+            name="low_res_stream"
+            type="text"
+            value="{{ form.low_res_stream }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="high_res_stream">High-res stream index</label>
+          <input
+            id="high_res_stream"
+            name="high_res_stream"
+            type="text"
+            value="{{ form.high_res_stream }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="channels_raw">Channels (indices)</label>
+          <input
+            id="channels_raw"
+            name="channels_raw"
+            type="text"
+            value="{{ form.channels_raw }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="channel_names_raw">Channel names</label>
+          <input
+            id="channel_names_raw"
+            name="channel_names_raw"
+            type="text"
+            value="{{ form.channel_names_raw }}"
+          />
+        </div>
+
+        <div class="pv-field-group">
           <label>
             <input
               type="checkbox"
@@ -96,6 +204,39 @@
             When enabled and the camera has a username/password configured, they
             will be embedded into the RTSP URL as <code>username:password@</code>.
           </p>
+          <label style="margin-top: 0.25rem; display: block;">
+            <input
+              type="checkbox"
+              name="digest_auth_supported"
+              value="1"
+              {% if form.digest_auth_supported %}checked{% endif %}
+            />
+            Supports HTTP digest authentication
+          </label>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="default_username">Default credentials</label>
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1 1 10rem;">
+              <input
+                id="default_username"
+                name="default_username"
+                type="text"
+                placeholder="Username"
+                value="{{ form.default_username }}"
+              />
+            </div>
+            <div style="flex: 1 1 10rem;">
+              <input
+                id="default_password"
+                name="default_password"
+                type="text"
+                placeholder="Password"
+                value="{{ form.default_password }}"
+              />
+            </div>
+          </div>
         </div>
 
         <div class="pv-field-group">
@@ -108,6 +249,16 @@
             />
             Active template
           </label>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="manual_url">Manual URL / notes</label>
+          <input
+            id="manual_url"
+            name="manual_url"
+            type="text"
+            value="{{ form.manual_url }}"
+          />
         </div>
 
         <button type="submit" class="pv-button-primary">
