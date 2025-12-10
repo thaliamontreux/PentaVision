@@ -56,6 +56,8 @@
               <option
                 value="{{ p.id }}"
                 data-pattern="{{ p.rtsp_url_pattern|e }}"
+                data-low-res-stream="{{ p.low_res_stream or '' }}"
+                data-high-res-stream="{{ p.high_res_stream or '' }}"
                 {% if form.pattern_id == p.id|string %}selected{% endif %}
               >
                 {{ p.manufacturer }} {{ p.model_or_note or '' }} ({{ p.protocol or 'RTSP' }})
@@ -72,6 +74,43 @@
           <label>Template parameters</label>
           <div id="pattern-params-fields"></div>
         </div>
+
+        {% if is_admin %}
+          <div
+            class="pv-field-group"
+            id="stream-quality-group"
+            style="display: none;"
+          >
+            <label>Stream quality</label>
+            <div>
+              <label id="stream-quality-low-label" style="margin-right: 1rem;">
+                <input
+                  type="radio"
+                  id="stream-quality-low"
+                  name="stream_quality"
+                  value="low"
+                />
+                Low resolution
+              </label>
+              <label id="stream-quality-high-label">
+                <input
+                  type="radio"
+                  id="stream-quality-high"
+                  name="stream_quality"
+                  value="high"
+                />
+                High resolution
+              </label>
+            </div>
+          </div>
+        {% endif %}
+
+        <input
+          type="hidden"
+          id="pattern-param-stream-hidden"
+          name="pattern_param_stream"
+          value=""
+        />
 
         <div class="pv-field-group">
           <label for="property_id">Property</label>
@@ -309,6 +348,7 @@
 
       var clientBox = document.getElementById('camera-client-errors');
       var clientList = document.getElementById('camera-client-errors-list');
+      var requiredParamNames = [];
 
       function showClientErrors(errors) {
         if (!clientBox || !clientList) {
@@ -359,6 +399,12 @@
       var patternSelect = form.pattern_id;
       var patternParamsGroup = document.getElementById('pattern-params-group');
       var patternParamsFields = document.getElementById('pattern-params-fields');
+      var streamQualityGroup = document.getElementById('stream-quality-group');
+      var streamLow = document.getElementById('stream-quality-low');
+      var streamHigh = document.getElementById('stream-quality-high');
+      var streamLowLabel = document.getElementById('stream-quality-low-label');
+      var streamHighLabel = document.getElementById('stream-quality-high-label');
+      var streamHidden = document.getElementById('pattern-param-stream-hidden');
 
       var rawPatternParams = {{ pattern_params_json|default('')|tojson|safe }};
       var initialPatternParams = {};
@@ -381,17 +427,20 @@
         if (!patternText) {
           return names;
         }
-        var re = /<([^<>]+)>/g;
-        var match;
         var seen = {};
-        var skip = { IP: true, PORT: true, USERNAME: true, PASSWORD: true };
-        while ((match = re.exec(patternText)) !== null) {
-          var name = match[1];
-          if (!name) {
+        var skipBuiltins = { IP: true, PORT: true, USERNAME: true, PASSWORD: true };
+        var skipNames = { stream: true, channel: true };
+
+        var reAngle = /<([^<>]+)>/g;
+        var match;
+        while ((match = reAngle.exec(patternText)) !== null) {
+          var raw = match[1];
+          if (!raw) {
             continue;
           }
-          var upper = String(name).toUpperCase();
-          if (skip[upper]) {
+          var name = String(raw);
+          var upper = name.toUpperCase();
+          if (skipBuiltins[upper] || skipNames[name]) {
             continue;
           }
           if (seen[name]) {
@@ -399,6 +448,24 @@
           }
           seen[name] = true;
           names.push(name);
+        }
+
+        var reMustache = /\{\{\s*([^{}]+?)\s*\}\}/g;
+        while ((match = reMustache.exec(patternText)) !== null) {
+          var raw2 = match[1];
+          if (!raw2) {
+            continue;
+          }
+          var name2 = String(raw2).trim();
+          var upper2 = name2.toUpperCase();
+          if (skipBuiltins[upper2] || skipNames[name2]) {
+            continue;
+          }
+          if (seen[name2]) {
+            continue;
+          }
+          seen[name2] = true;
+          names.push(name2);
         }
         return names;
       }
@@ -415,6 +482,7 @@
         }
         var patternText = selected.getAttribute('data-pattern') || '';
         var names = detectTemplateParams(patternText);
+        requiredParamNames = names.slice();
         patternParamsFields.innerHTML = '';
         if (!names.length) {
           patternParamsGroup.style.display = 'none';
@@ -432,6 +500,7 @@
           input.type = 'text';
           input.id = fieldId;
           input.name = 'pattern_param_' + name;
+          input.required = true;
           var existing =
             initialPatternParams &&
             Object.prototype.hasOwnProperty.call(initialPatternParams, name)
@@ -444,6 +513,66 @@
           wrapper.appendChild(input);
           patternParamsFields.appendChild(wrapper);
         });
+      }
+
+      function configureStreamControlsForPattern() {
+        if (!patternSelect) {
+          return;
+        }
+        var selected = patternSelect.options[patternSelect.selectedIndex];
+        var lowVal = '';
+        var highVal = '';
+        if (selected) {
+          lowVal = selected.getAttribute('data-low-res-stream') || '';
+          highVal = selected.getAttribute('data-high-res-stream') || '';
+        }
+        var hasLow = !!lowVal;
+        var hasHigh = !!highVal;
+
+        var currentStream =
+          initialPatternParams &&
+          Object.prototype.hasOwnProperty.call(initialPatternParams, 'stream')
+            ? String(initialPatternParams.stream)
+            : '';
+
+        var chosen = '';
+        if (currentStream && (currentStream === lowVal || currentStream === highVal)) {
+          chosen = currentStream;
+        } else if (hasHigh) {
+          chosen = highVal;
+        } else if (hasLow) {
+          chosen = lowVal;
+        }
+
+        if (streamHidden) {
+          streamHidden.value = chosen || '';
+        }
+
+        if (!streamQualityGroup || (!hasLow && !hasHigh)) {
+          if (streamQualityGroup) {
+            streamQualityGroup.style.display = 'none';
+          }
+          return;
+        }
+
+        streamQualityGroup.style.display = 'block';
+
+        function setRadioState(radio, label, hasVal, val, isSelected) {
+          if (!radio || !label) {
+            return;
+          }
+          radio.disabled = !hasVal;
+          radio.checked = false;
+          radio.setAttribute('data-stream-value', hasVal ? val : '');
+          label.style.opacity = hasVal ? '1' : '0.5';
+          label.style.cursor = hasVal ? 'pointer' : 'default';
+          if (hasVal && isSelected) {
+            radio.checked = true;
+          }
+        }
+
+        setRadioState(streamLow, streamLowLabel, hasLow, lowVal, chosen === lowVal);
+        setRadioState(streamHigh, streamHighLabel, hasHigh, highVal, chosen === highVal);
       }
 
       function syncAuthState() {
@@ -467,8 +596,33 @@
         patternSelect.addEventListener('change', function () {
           initialPatternParams = {};
           renderPatternParams();
+          configureStreamControlsForPattern();
         });
         renderPatternParams();
+        configureStreamControlsForPattern();
+      }
+
+      if (streamLow) {
+        streamLow.addEventListener('change', function () {
+          if (!streamLow.checked) {
+            return;
+          }
+          var v = streamLow.getAttribute('data-stream-value') || '';
+          if (streamHidden) {
+            streamHidden.value = v;
+          }
+        });
+      }
+      if (streamHigh) {
+        streamHigh.addEventListener('change', function () {
+          if (!streamHigh.checked) {
+            return;
+          }
+          var v = streamHigh.getAttribute('data-stream-value') || '';
+          if (streamHidden) {
+            streamHidden.value = v;
+          }
+        });
       }
       if (!btn || !statusEl) {
         return;
