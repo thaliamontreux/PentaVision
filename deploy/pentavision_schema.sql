@@ -193,6 +193,7 @@ CREATE TABLE IF NOT EXISTS camera_devices (
   placement VARCHAR(16) NULL,
   location VARCHAR(64) NULL,
   facing_direction VARCHAR(8) NULL,
+  pattern_params VARCHAR(1024) NULL,
   created_at DATETIME(6) NULL,
   KEY ix_camera_devices_pattern_id (pattern_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -202,7 +203,8 @@ ALTER TABLE camera_devices
   ADD COLUMN IF NOT EXISTS admin_lock TINYINT(1) NULL DEFAULT 0 AFTER notes,
   ADD COLUMN IF NOT EXISTS placement VARCHAR(16) NULL AFTER is_active,
   ADD COLUMN IF NOT EXISTS location VARCHAR(64) NULL AFTER placement,
-  ADD COLUMN IF NOT EXISTS facing_direction VARCHAR(8) NULL AFTER location;
+  ADD COLUMN IF NOT EXISTS facing_direction VARCHAR(8) NULL AFTER location,
+  ADD COLUMN IF NOT EXISTS pattern_params VARCHAR(1024) NULL AFTER facing_direction;
 
 CREATE TABLE IF NOT EXISTS recordings (
   id INT AUTO_INCREMENT PRIMARY KEY,

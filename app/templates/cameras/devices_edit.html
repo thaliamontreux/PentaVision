@@ -55,12 +55,22 @@
             {% for p in patterns %}
               <option
                 value="{{ p.id }}"
+                data-pattern="{{ p.rtsp_url_pattern|e }}"
                 {% if form.pattern_id == p.id|string %}selected{% endif %}
               >
                 {{ p.manufacturer }} {{ p.model_or_note or '' }} ({{ p.protocol or 'RTSP' }})
               </option>
             {% endfor %}
           </select>
+        </div>
+
+        <div
+          class="pv-field-group"
+          id="pattern-params-group"
+          style="display: none;"
+        >
+          <label>Template parameters</label>
+          <div id="pattern-params-fields"></div>
         </div>
 
         <div class="pv-field-group">
@@ -346,6 +356,95 @@
       var useAuth = document.getElementById('use_auth');
       var usernameInput = form.username;
       var passwordInput = form.password;
+      var patternSelect = form.pattern_id;
+      var patternParamsGroup = document.getElementById('pattern-params-group');
+      var patternParamsFields = document.getElementById('pattern-params-fields');
+
+      var rawPatternParams = {{ pattern_params_json|default('')|tojson|safe }};
+      var initialPatternParams = {};
+      try {
+        if (rawPatternParams) {
+          if (typeof rawPatternParams === 'string') {
+            if (rawPatternParams.trim()) {
+              initialPatternParams = JSON.parse(rawPatternParams);
+            }
+          } else if (typeof rawPatternParams === 'object') {
+            initialPatternParams = rawPatternParams || {};
+          }
+        }
+      } catch (e) {
+        initialPatternParams = {};
+      }
+
+      function detectTemplateParams(patternText) {
+        var names = [];
+        if (!patternText) {
+          return names;
+        }
+        var re = /<([^<>]+)>/g;
+        var match;
+        var seen = {};
+        var skip = { IP: true, PORT: true, USERNAME: true, PASSWORD: true };
+        while ((match = re.exec(patternText)) !== null) {
+          var name = match[1];
+          if (!name) {
+            continue;
+          }
+          var upper = String(name).toUpperCase();
+          if (skip[upper]) {
+            continue;
+          }
+          if (seen[name]) {
+            continue;
+          }
+          seen[name] = true;
+          names.push(name);
+        }
+        return names;
+      }
+
+      function renderPatternParams() {
+        if (!patternSelect || !patternParamsGroup || !patternParamsFields) {
+          return;
+        }
+        var selected = patternSelect.options[patternSelect.selectedIndex];
+        if (!selected) {
+          patternParamsFields.innerHTML = '';
+          patternParamsGroup.style.display = 'none';
+          return;
+        }
+        var patternText = selected.getAttribute('data-pattern') || '';
+        var names = detectTemplateParams(patternText);
+        patternParamsFields.innerHTML = '';
+        if (!names.length) {
+          patternParamsGroup.style.display = 'none';
+          return;
+        }
+        patternParamsGroup.style.display = 'block';
+        names.forEach(function (name) {
+          var fieldId = 'pattern-param-' + name;
+          var wrapper = document.createElement('div');
+          wrapper.className = 'pv-field-group';
+          var label = document.createElement('label');
+          label.setAttribute('for', fieldId);
+          label.textContent = name + ' value';
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.id = fieldId;
+          input.name = 'pattern_param_' + name;
+          var existing =
+            initialPatternParams &&
+            Object.prototype.hasOwnProperty.call(initialPatternParams, name)
+              ? initialPatternParams[name]
+              : '';
+          if (existing !== undefined && existing !== null) {
+            input.value = String(existing);
+          }
+          wrapper.appendChild(label);
+          wrapper.appendChild(input);
+          patternParamsFields.appendChild(wrapper);
+        });
+      }
 
       function syncAuthState() {
         if (!useAuth) {
@@ -363,6 +462,13 @@
       if (useAuth) {
         useAuth.addEventListener('change', syncAuthState);
         syncAuthState();
+      }
+      if (patternSelect) {
+        patternSelect.addEventListener('change', function () {
+          initialPatternParams = {};
+          renderPatternParams();
+        });
+        renderPatternParams();
       }
       if (!btn || !statusEl) {
         return;
@@ -391,6 +497,13 @@
         payload.append('port', (form.port && form.port.value) || '');
         payload.append('username', (form.username && form.username.value) || '');
         payload.append('password', (form.password && form.password.value) || '');
+        var paramInputs = form.querySelectorAll('[name^="pattern_param_"]');
+        paramInputs.forEach(function (input) {
+          if (!input.name) {
+            return;
+          }
+          payload.append(input.name, input.value || '');
+        });
 
         fetch('{{ url_for("camera_admin.test_device_connection") }}', {
           method: 'POST',

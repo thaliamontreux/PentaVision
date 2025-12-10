@@ -282,6 +282,7 @@ class CameraDevice(RecordBase):
     placement: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     facing_direction: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    pattern_params: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

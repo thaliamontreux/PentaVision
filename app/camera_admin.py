@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import ipaddress
+import json
 import socket
 import threading
 import time
@@ -930,6 +931,17 @@ def create_device():
                 if not form["use_auth"]:
                     username_value = None
                     password_value = None
+
+                pattern_params: dict[str, str] = {}
+                for key, value in request.form.items():
+                    if not key.startswith("pattern_param_"):
+                        continue
+                    param_name = key[len("pattern_param_") :]
+                    value = (value or "").strip()
+                    if not value:
+                        continue
+                    pattern_params[param_name] = value
+
                 device = CameraDevice(
                     name=form["name"],
                     pattern_id=pattern_id_int,
@@ -943,6 +955,7 @@ def create_device():
                     placement=form["placement"] or None,
                     location=form["location"] or None,
                     facing_direction=form["facing_direction"] or None,
+                    pattern_params=json.dumps(pattern_params) if pattern_params else None,
                 )
                 session_db.add(device)
                 session_db.commit()
@@ -975,6 +988,7 @@ def create_device():
         placement_options=PLACEMENT_OPTIONS,
         location_options=LOCATION_OPTIONS,
         direction_options=DIRECTION_OPTIONS,
+        pattern_params_json="",
     )
 
 
@@ -1073,6 +1087,7 @@ def edit_device(device_id: int):
             "facing_direction": device.facing_direction or "",
             "use_auth": bool(device.username or device.password),
         }
+        pattern_params_json = device.pattern_params or ""
 
         if request.method == "POST":
             if not _validate_csrf_token(request.form.get("csrf_token")):
@@ -1169,6 +1184,16 @@ def edit_device(device_id: int):
                 if not form["use_auth"]:
                     username_value = None
                     password_value = None
+
+                pattern_params: dict[str, str] = {}
+                for key, value in request.form.items():
+                    if not key.startswith("pattern_param_"):
+                        continue
+                    param_name = key[len("pattern_param_") :]
+                    value = (value or "").strip()
+                    if not value:
+                        continue
+                    pattern_params[param_name] = value
                 device.name = form["name"]
                 device.pattern_id = pattern_id_int
                 device.ip_address = form["ip_address"]
@@ -1179,6 +1204,9 @@ def edit_device(device_id: int):
                 device.placement = form["placement"] or None
                 device.location = form["location"] or None
                 device.facing_direction = form["facing_direction"] or None
+                device.pattern_params = (
+                    json.dumps(pattern_params) if pattern_params else None
+                )
                 device.is_active = 1 if form["is_active"] else 0
                 device.admin_lock = 1 if form["admin_lock"] else 0
                 session_db.add(device)
@@ -1216,6 +1244,7 @@ def edit_device(device_id: int):
         placement_options=PLACEMENT_OPTIONS,
         location_options=LOCATION_OPTIONS,
         direction_options=DIRECTION_OPTIONS,
+        pattern_params_json=pattern_params_json,
     )
 
 
@@ -1275,6 +1304,16 @@ def test_device_connection():
     temp.port = port_int
     temp.username = username or None
     temp.password = password or None
+    pattern_params: dict[str, str] = {}
+    for key, value in request.form.items():
+        if not key.startswith("pattern_param_"):
+            continue
+        param_name = key[len("pattern_param_") :]
+        value = (value or "").strip()
+        if not value:
+            continue
+        pattern_params[param_name] = value
+    temp.pattern_params = json.dumps(pattern_params) if pattern_params else None
 
     url = build_camera_url(temp, pattern)
     if not url:

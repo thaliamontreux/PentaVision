@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 from urllib.parse import quote, urlparse, urlunparse
+import json
 
 from .models import CameraDevice, CameraUrlPattern
 
@@ -53,6 +54,22 @@ def build_camera_url(
         "<STREAM#>": stream,
     }
 
+    params_raw = getattr(device, "pattern_params", None)
+    extra_params = {}
+    if params_raw:
+        try:
+            extra_params = json.loads(params_raw)
+            if not isinstance(extra_params, dict):
+                extra_params = {}
+        except Exception:  # noqa: BLE001
+            extra_params = {}
+
+    for key, val in extra_params.items():
+        if not val:
+            continue
+        token = f"<{key}>"
+        replacements[token] = str(val)
+
     has_cred_tokens = "<USERNAME>" in url or "<PASSWORD>" in url
     if has_cred_tokens:
         if not username or not password:
@@ -62,6 +79,11 @@ def build_camera_url(
 
     for token, value in replacements.items():
         url = url.replace(token, value)
+
+    if pattern_use_auth and username:
+        url = url.replace("'username'", f"'{quote(str(username), safe='')}'")
+    if pattern_use_auth and password:
+        url = url.replace("'password'", f"'{quote(str(password), safe='')}'")
 
     lower = url.lower()
     if "://" not in lower:
