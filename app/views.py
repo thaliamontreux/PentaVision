@@ -49,6 +49,7 @@ from .security import (
     get_current_user,
     login_user,
     logout_user,
+    require_login,
     user_has_property_access,
     user_has_role,
     validate_global_csrf_token,
@@ -134,6 +135,7 @@ def health():
 
 
 @bp.get("/")
+@require_login
 def index():
     user = get_current_user()
     # Reuse the same DB health logic for the dashboard.
@@ -249,11 +251,13 @@ def index():
 
 
 @bp.get("/faces-demo")
+@require_login
 def faces_demo():
     return render_template("faces_demo.html")
 
 
 @bp.get("/auth-demo")
+@require_login
 def auth_demo():
     return render_template("auth_demo.html")
 
