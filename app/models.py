@@ -351,6 +351,7 @@ class CameraUrlPattern(RecordBase):
     model_or_note: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     protocol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     rtsp_url_pattern: Mapped[str] = mapped_column(String(512))
+    use_auth: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

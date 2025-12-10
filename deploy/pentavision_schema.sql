@@ -240,6 +240,10 @@ CREATE TABLE IF NOT EXISTS camera_url_patterns (
   KEY ix_camera_patterns_manufacturer (manufacturer)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- On MySQL 8+ this is safe and idempotent; on older versions, remove IF NOT EXISTS
+ALTER TABLE camera_url_patterns
+  ADD COLUMN IF NOT EXISTS use_auth INT NULL DEFAULT 1 AFTER rtsp_url_pattern;
+
 CREATE TABLE IF NOT EXISTS camera_storage_policies (
   id INT AUTO_INCREMENT PRIMARY KEY,
   device_id INT NOT NULL,

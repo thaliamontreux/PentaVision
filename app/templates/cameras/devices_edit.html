@@ -176,6 +176,23 @@
         </div>
 
         <div class="pv-field-group">
+          <label>
+            <input
+              type="checkbox"
+              id="use_auth"
+              name="use_auth"
+              value="1"
+              {% if form.use_auth %}checked{% endif %}
+            />
+            Use authentication (include username and password in URL)
+          </label>
+          <p class="pv-card-subtitle">
+            When disabled, the connection URL will not include username or
+            password, even if values are entered.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
           <label for="notes">Notes</label>
           <textarea
             id="notes"
@@ -326,6 +343,27 @@
 
       var btn = document.getElementById('test-connection-btn');
       var statusEl = document.getElementById('test-connection-status');
+      var useAuth = document.getElementById('use_auth');
+      var usernameInput = form.username;
+      var passwordInput = form.password;
+
+      function syncAuthState() {
+        if (!useAuth) {
+          return;
+        }
+        var enabled = useAuth.checked;
+        if (usernameInput) {
+          usernameInput.disabled = !enabled;
+        }
+        if (passwordInput) {
+          passwordInput.disabled = !enabled;
+        }
+      }
+
+      if (useAuth) {
+        useAuth.addEventListener('change', syncAuthState);
+        syncAuthState();
+      }
       if (!btn || !statusEl) {
         return;
       }

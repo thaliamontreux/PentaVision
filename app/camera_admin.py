@@ -214,6 +214,12 @@ def _build_url_for_pattern(
     }
     for token, value in replacements.items():
         url = url.replace(token, value)
+    lower = url.lower()
+    if "://" not in lower:
+        path = url or "/"
+        if not path.startswith("/"):
+            path = "/" + path
+        return f"rtsp://{ip}:{port}{path}"
     return url
 
 
@@ -674,6 +680,7 @@ def create_pattern():
         "model_or_note": "",
         "protocol": "RTSP",
         "rtsp_url_pattern": "",
+        "use_auth": True,
         "is_active": True,
     }
     csrf_token = _ensure_csrf_token()
@@ -697,6 +704,7 @@ def create_pattern():
             (request.form.get("protocol") or "RTSP").strip().upper()
         )
         form["rtsp_url_pattern"] = (request.form.get("rtsp_url_pattern") or "").strip()
+        form["use_auth"] = request.form.get("use_auth") == "1"
         form["is_active"] = request.form.get("is_active") == "1"
 
         if not form["manufacturer"]:
@@ -711,6 +719,7 @@ def create_pattern():
                     model_or_note=form["model_or_note"] or None,
                     protocol=form["protocol"],
                     rtsp_url_pattern=form["rtsp_url_pattern"],
+                    use_auth=1 if form["use_auth"] else 0,
                     is_active=1 if form["is_active"] else 0,
                 )
                 session_db.add(pattern)
@@ -805,6 +814,7 @@ def create_device():
         "location": "",
         "facing_direction": "",
         "property_id": "",
+        "use_auth": True,
     }
     csrf_token = _ensure_csrf_token()
 
@@ -848,6 +858,7 @@ def create_device():
         form["placement"] = (request.form.get("placement") or "").strip()
         form["location"] = (request.form.get("location") or "").strip()
         form["facing_direction"] = (request.form.get("facing_direction") or "").strip()
+        form["use_auth"] = request.form.get("use_auth") == "1"
         form["is_active"] = request.form.get("is_active") == "1"
         form["storage_targets"] = (
             request.form.get("storage_targets") or ""
@@ -914,13 +925,18 @@ def create_device():
 
         if not errors:
             with Session(engine) as session_db:
+                username_value = form["username"] or None
+                password_value = form["password"] or None
+                if not form["use_auth"]:
+                    username_value = None
+                    password_value = None
                 device = CameraDevice(
                     name=form["name"],
                     pattern_id=pattern_id_int,
                     ip_address=form["ip_address"],
                     port=port_int,
-                    username=form["username"] or None,
-                    password=form["password"] or None,
+                    username=username_value,
+                    password=password_value,
                     notes=form["notes"] or None,
                     admin_lock=1 if form["admin_lock"] else 0,
                     is_active=1 if form["is_active"] else 0,
@@ -1055,6 +1071,7 @@ def edit_device(device_id: int):
             "placement": device.placement or "",
             "location": device.location or "",
             "facing_direction": device.facing_direction or "",
+            "use_auth": bool(device.username or device.password),
         }
 
         if request.method == "POST":
@@ -1071,6 +1088,7 @@ def edit_device(device_id: int):
             form["placement"] = (request.form.get("placement") or "").strip()
             form["location"] = (request.form.get("location") or "").strip()
             form["facing_direction"] = (request.form.get("facing_direction") or "").strip()
+            form["use_auth"] = request.form.get("use_auth") == "1"
             form["is_active"] = request.form.get("is_active") == "1"
             form["storage_targets"] = (
                 request.form.get("storage_targets") or ""
@@ -1146,12 +1164,17 @@ def edit_device(device_id: int):
                 )
 
             if not errors:
+                username_value = form["username"] or None
+                password_value = form["password"] or None
+                if not form["use_auth"]:
+                    username_value = None
+                    password_value = None
                 device.name = form["name"]
                 device.pattern_id = pattern_id_int
                 device.ip_address = form["ip_address"]
                 device.port = port_int
-                device.username = form["username"] or None
-                device.password = form["password"] or None
+                device.username = username_value
+                device.password = password_value
                 device.notes = form["notes"] or None
                 device.placement = form["placement"] or None
                 device.location = form["location"] or None
@@ -1337,6 +1360,7 @@ def edit_pattern(pattern_id: int):
             "model_or_note": pattern.model_or_note or "",
             "protocol": (pattern.protocol or "RTSP"),
             "rtsp_url_pattern": pattern.rtsp_url_pattern,
+            "use_auth": bool(getattr(pattern, "use_auth", 1)),
             "is_active": bool(getattr(pattern, "is_active", 1)),
         }
 
@@ -1352,6 +1376,7 @@ def edit_pattern(pattern_id: int):
             form["rtsp_url_pattern"] = (
                 request.form.get("rtsp_url_pattern") or ""
             ).strip()
+            form["use_auth"] = request.form.get("use_auth") == "1"
             form["is_active"] = request.form.get("is_active") == "1"
 
             if not form["manufacturer"]:
@@ -1364,6 +1389,7 @@ def edit_pattern(pattern_id: int):
                 pattern.model_or_note = form["model_or_note"] or None
                 pattern.protocol = form["protocol"]
                 pattern.rtsp_url_pattern = form["rtsp_url_pattern"]
+                pattern.use_auth = 1 if form["use_auth"] else 0
                 pattern.is_active = 1 if form["is_active"] else 0
                 session_db.add(pattern)
                 session_db.commit()
@@ -1452,6 +1478,7 @@ def import_csv():
                                 model_or_note=(row.get("model_or_note") or "").strip() or None,
                                 protocol=protocol,
                                 rtsp_url_pattern=rtsp_pattern,
+                                use_auth=1,
                                 is_active=1,
                             )
                             session_db.add(pattern)

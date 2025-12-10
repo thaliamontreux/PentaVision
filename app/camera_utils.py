@@ -43,6 +43,8 @@ def build_camera_url(
     stream = "0"
 
     url = str(base_url)
+    pattern_use_auth_raw = getattr(pattern, "use_auth", None) if pattern is not None else None
+    pattern_use_auth = True if pattern_use_auth_raw is None else bool(pattern_use_auth_raw)
     replacements = {
         "<IP>": ip_value,
         "<PORT>": str(port_value),
@@ -61,10 +63,30 @@ def build_camera_url(
     for token, value in replacements.items():
         url = url.replace(token, value)
 
+    lower = url.lower()
+    if "://" not in lower:
+        path = url or "/"
+        if not path.startswith("/"):
+            path = "/" + path
+
+        netloc = ip_value
+        if port_value:
+            netloc = f"{netloc}:{port_value}"
+
+        if username and not has_cred_tokens and pattern_use_auth:
+            user_part = quote(str(username), safe="")
+            if password:
+                pass_part = quote(str(password), safe="")
+                netloc = f"{user_part}:{pass_part}@{netloc}"
+            else:
+                netloc = f"{user_part}@{netloc}"
+
+        return f"rtsp://{netloc}{path}"
+
     # If the pattern did not use credential placeholders but the device has
     # credentials, inject them into the URL's userinfo section, preserving
     # any existing host/port/path/query.
-    if username and not has_cred_tokens:
+    if username and not has_cred_tokens and pattern_use_auth:
         parsed = urlparse(url)
         # Do not overwrite explicit userinfo embedded in the pattern.
         if not parsed.username and not parsed.password and parsed.netloc:

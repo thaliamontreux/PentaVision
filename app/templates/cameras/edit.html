@@ -74,6 +74,28 @@
             required
             value="{{ form.rtsp_url_pattern }}"
           />
+          <p class="pv-card-subtitle">
+            For RTSP, enter only the path (for example, <code>/cam1/mpeg4</code> or
+            <code>/Streaming/Channels/&lt;CHANNEL&gt;01</code>). The system will prepend
+            <code>rtsp://&lt;IP&gt;:&lt;PORT&gt;</code> and optionally add
+            <code>username:password@</code> from the camera settings.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label>
+            <input
+              type="checkbox"
+              name="use_auth"
+              value="1"
+              {% if form.use_auth %}checked{% endif %}
+            />
+            Use authentication for this pattern
+          </label>
+          <p class="pv-card-subtitle">
+            When enabled and the camera has a username/password configured, they
+            will be embedded into the RTSP URL as <code>username:password@</code>.
+          </p>
         </div>
 
         <div class="pv-field-group">
