@@ -94,14 +94,21 @@
           hasSessionStorage = false;
         }
 
-        var isLoginPage = !!document.getElementById('pv-login-box');
+        var loginBox = document.getElementById('pv-login-box');
+        var isLoginPage = !!loginBox;
         if (isLoginPage) {
           if (hasSessionStorage) {
             try {
               window.sessionStorage.setItem('pvSplashSeen', '1');
             } catch (e) {}
           }
-          // Keep splash (with login box) visible on the login page.
+          // On the login page, show only the logo first, then reveal the login box
+          // under it after 5 seconds.
+          setTimeout(function () {
+            if (loginBox) {
+              loginBox.classList.remove('pv-login-box-hidden');
+            }
+          }, 5000);
           return;
         }
 
