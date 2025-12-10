@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import ipaddress
 import json
+import re
 import socket
 import threading
 import time
@@ -72,6 +73,54 @@ def _validate_csrf_token(token: Optional[str]) -> bool:
     if not token:
         return False
     return token == session.get("camera_admin_csrf")
+
+
+def _normalize_mac_for_oui(mac: str) -> str:
+    value = (mac or "").strip().upper()
+    if not value:
+        return ""
+    # Remove common separators and non-hex characters.
+    cleaned = "".join(ch for ch in value if ch in "0123456789ABCDEF")
+    if len(cleaned) < 6:
+        return ""
+    pairs = [cleaned[i : i + 2] for i in range(0, len(cleaned), 2)]
+    return ":".join(pairs)
+
+
+def _suggest_pattern_id_for_mac(session_db: Session, mac_address: str) -> Optional[int]:
+    norm = _normalize_mac_for_oui(mac_address)
+    if not norm:
+        return None
+
+    patterns = (
+        session_db.query(CameraUrlPattern)
+        .filter(CameraUrlPattern.oui_regex.isnot(None))
+        .all()
+    )
+    matches: list[CameraUrlPattern] = []
+    for p in patterns:
+        pattern = (p.oui_regex or "").strip()
+        if not pattern:
+            continue
+        try:
+            if re.search(pattern, norm, flags=re.IGNORECASE):
+                matches.append(p)
+        except re.error:
+            continue
+
+    if not matches:
+        return None
+
+    # Prefer camera-type patterns when possible.
+    camera_matches = [
+        p
+        for p in matches
+        if (getattr(p, "device_type", None) or "").strip().lower() == "camera"
+    ]
+    if camera_matches:
+        return camera_matches[0].id
+
+    return matches[0].id
 
 
 def _parse_ports(default_ports: List[int], extra_ports: str) -> List[int]:
@@ -803,6 +852,7 @@ def create_device():
         "name": "",
         "pattern_id": "",
         "ip_address": "",
+        "mac_address": "",
         "port": "554",
         "username": "",
         "password": "",
@@ -852,6 +902,7 @@ def create_device():
         form["pattern_id"] = (request.form.get("pattern_id") or "").strip()
         form["property_id"] = (request.form.get("property_id") or "").strip()
         form["ip_address"] = (request.form.get("ip_address") or "").strip()
+        form["mac_address"] = (request.form.get("mac_address") or "").strip()
         form["port"] = (request.form.get("port") or "").strip()
         form["username"] = (request.form.get("username") or "").strip()
         form["password"] = (request.form.get("password") or "").strip()
@@ -946,6 +997,7 @@ def create_device():
                     name=form["name"],
                     pattern_id=pattern_id_int,
                     ip_address=form["ip_address"],
+                    mac_address=form["mac_address"] or None,
                     port=port_int,
                     username=username_value,
                     password=password_value,
@@ -1069,6 +1121,7 @@ def edit_device(device_id: int):
             "name": device.name,
             "pattern_id": str(device.pattern_id or ""),
             "ip_address": device.ip_address,
+            "mac_address": device.mac_address or "",
             "port": str(device.port) if device.port is not None else "",
             "username": device.username or "",
             "password": device.password or "",
@@ -1096,6 +1149,7 @@ def edit_device(device_id: int):
             form["name"] = (request.form.get("name") or "").strip()
             form["pattern_id"] = (request.form.get("pattern_id") or "").strip()
             form["ip_address"] = (request.form.get("ip_address") or "").strip()
+            form["mac_address"] = (request.form.get("mac_address") or "").strip()
             form["port"] = (request.form.get("port") or "").strip()
             form["username"] = (request.form.get("username") or "").strip()
             form["password"] = (request.form.get("password") or "").strip()
@@ -1197,6 +1251,7 @@ def edit_device(device_id: int):
                 device.name = form["name"]
                 device.pattern_id = pattern_id_int
                 device.ip_address = form["ip_address"]
+                device.mac_address = form["mac_address"] or None
                 device.port = port_int
                 device.username = username_value
                 device.password = password_value
@@ -1321,6 +1376,7 @@ def test_device_connection():
             {
                 "ok": False,
                 "error": "Unable to construct a camera URL from these settings.",
+                "url": None,
             }
         )
 
@@ -1329,10 +1385,33 @@ def test_device_connection():
             {
                 "ok": False,
                 "error": "Connection test failed. Check IP, port, credentials, and template.",
+                "url": url,
             }
         )
 
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "url": url})
+
+
+@bp.post("/devices/suggest-pattern-for-mac")
+def suggest_pattern_for_mac():
+    engine = get_record_engine()
+    if engine is None:
+        return jsonify({"ok": False, "error": "Record database is not configured."})
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        return jsonify({"ok": False, "error": "Invalid or missing CSRF token."})
+
+    mac_address = (request.form.get("mac_address") or "").strip()
+    if not mac_address:
+        return jsonify({"ok": False, "error": "MAC address is required."})
+
+    with Session(engine) as session_db:
+        pattern_id = _suggest_pattern_id_for_mac(session_db, mac_address)
+
+    if pattern_id is None:
+        return jsonify({"ok": False})
+
+    return jsonify({"ok": True, "pattern_id": pattern_id})
 
 
 @bp.post("/devices/<int:device_id>/delete")

@@ -56,6 +56,10 @@
               <option
                 value="{{ p.id }}"
                 data-pattern="{{ p.rtsp_url_pattern|e }}"
+                data-streams="{{ p.streams_raw or '' }}"
+                data-stream-names="{{ p.stream_names_raw or '' }}"
+                data-channels="{{ p.channels_raw or '' }}"
+                data-channel-names="{{ p.channel_names_raw or '' }}"
                 data-low-res-stream="{{ p.low_res_stream or '' }}"
                 data-high-res-stream="{{ p.high_res_stream or '' }}"
                 {% if form.pattern_id == p.id|string %}selected{% endif %}
@@ -73,6 +77,24 @@
         >
           <label>Template parameters</label>
           <div id="pattern-params-fields"></div>
+        </div>
+
+        <div
+          class="pv-field-group"
+          id="stream-select-group"
+          style="display: none;"
+        >
+          <label for="stream-select">Stream</label>
+          <select id="stream-select"></select>
+        </div>
+
+        <div
+          class="pv-field-group"
+          id="channel-select-group"
+          style="display: none;"
+        >
+          <label for="channel-select">Channel</label>
+          <select id="channel-select"></select>
         </div>
 
         {% if is_admin %}
@@ -109,6 +131,13 @@
           type="hidden"
           id="pattern-param-stream-hidden"
           name="pattern_param_stream"
+          value=""
+        />
+
+        <input
+          type="hidden"
+          id="pattern-param-channel-hidden"
+          name="pattern_param_channel"
           value=""
         />
 
@@ -192,6 +221,19 @@
             required
             value="{{ form.ip_address }}"
           />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="mac_address">MAC address (optional)</label>
+          <input
+            id="mac_address"
+            name="mac_address"
+            type="text"
+            value="{{ form.mac_address }}"
+          />
+          <p class="pv-card-subtitle">
+            Used to auto-suggest a URL template based on the camera's OUI prefix.
+          </p>
         </div>
 
         <div class="pv-field-group">
@@ -399,12 +441,18 @@
       var patternSelect = form.pattern_id;
       var patternParamsGroup = document.getElementById('pattern-params-group');
       var patternParamsFields = document.getElementById('pattern-params-fields');
+      var streamSelectGroup = document.getElementById('stream-select-group');
+      var streamSelect = document.getElementById('stream-select');
+      var channelSelectGroup = document.getElementById('channel-select-group');
+      var channelSelect = document.getElementById('channel-select');
       var streamQualityGroup = document.getElementById('stream-quality-group');
       var streamLow = document.getElementById('stream-quality-low');
       var streamHigh = document.getElementById('stream-quality-high');
       var streamLowLabel = document.getElementById('stream-quality-low-label');
       var streamHighLabel = document.getElementById('stream-quality-high-label');
       var streamHidden = document.getElementById('pattern-param-stream-hidden');
+      var channelHidden = document.getElementById('pattern-param-channel-hidden');
+      var macInput = document.getElementById('mac_address');
 
       var rawPatternParams = {{ pattern_params_json|default('')|tojson|safe }};
       var initialPatternParams = {};
@@ -420,6 +468,20 @@
         }
       } catch (e) {
         initialPatternParams = {};
+      }
+
+      function parseList(raw) {
+        if (!raw) {
+          return [];
+        }
+        return raw
+          .split(';')
+          .map(function (item) {
+            return item.trim();
+          })
+          .filter(function (item) {
+            return !!item;
+          });
       }
 
       function detectTemplateParams(patternText) {
@@ -529,19 +591,23 @@
         var hasLow = !!lowVal;
         var hasHigh = !!highVal;
 
-        var currentStream =
+        var currentStream = '';
+        if (streamHidden && streamHidden.value) {
+          currentStream = streamHidden.value;
+        } else if (
           initialPatternParams &&
           Object.prototype.hasOwnProperty.call(initialPatternParams, 'stream')
-            ? String(initialPatternParams.stream)
-            : '';
+        ) {
+          currentStream = String(initialPatternParams.stream);
+        }
 
-        var chosen = '';
-        if (currentStream && (currentStream === lowVal || currentStream === highVal)) {
-          chosen = currentStream;
-        } else if (hasHigh) {
-          chosen = highVal;
-        } else if (hasLow) {
-          chosen = lowVal;
+        var chosen = currentStream || '';
+        if (!chosen) {
+          if (hasHigh) {
+            chosen = highVal;
+          } else if (hasLow) {
+            chosen = lowVal;
+          }
         }
 
         if (streamHidden) {
@@ -575,6 +641,133 @@
         setRadioState(streamHigh, streamHighLabel, hasHigh, highVal, chosen === highVal);
       }
 
+      function configureStreamAndChannelForPattern() {
+        if (!patternSelect) {
+          return;
+        }
+        var selected = patternSelect.options[patternSelect.selectedIndex];
+        if (!selected) {
+          if (streamSelectGroup) {
+            streamSelectGroup.style.display = 'none';
+          }
+          if (channelSelectGroup) {
+            channelSelectGroup.style.display = 'none';
+          }
+          if (streamHidden) {
+            streamHidden.value = '';
+          }
+          if (channelHidden) {
+            channelHidden.value = '';
+          }
+          configureStreamControlsForPattern();
+          return;
+        }
+
+        var streamsRaw = selected.getAttribute('data-streams') || '';
+        var streamNamesRaw = selected.getAttribute('data-stream-names') || '';
+        var channelsRaw = selected.getAttribute('data-channels') || '';
+        var channelNamesRaw = selected.getAttribute('data-channel-names') || '';
+        var lowVal = selected.getAttribute('data-low-res-stream') || '';
+        var highVal = selected.getAttribute('data-high-res-stream') || '';
+
+        var streamValues = parseList(streamsRaw);
+        var streamLabels = parseList(streamNamesRaw);
+        var channelValues = parseList(channelsRaw);
+        var channelLabels = parseList(channelNamesRaw);
+
+        var chosenStream = '';
+        if (
+          initialPatternParams &&
+          Object.prototype.hasOwnProperty.call(initialPatternParams, 'stream') &&
+          initialPatternParams.stream
+        ) {
+          chosenStream = String(initialPatternParams.stream);
+        } else if (streamHidden && streamHidden.value) {
+          chosenStream = streamHidden.value;
+        }
+        if (!chosenStream) {
+          if (highVal) {
+            chosenStream = highVal;
+          } else if (lowVal) {
+            chosenStream = lowVal;
+          } else if (streamValues.length) {
+            chosenStream = streamValues[0];
+          }
+        }
+
+        var chosenChannel = '';
+        if (
+          initialPatternParams &&
+          Object.prototype.hasOwnProperty.call(initialPatternParams, 'channel') &&
+          initialPatternParams.channel
+        ) {
+          chosenChannel = String(initialPatternParams.channel);
+        } else if (channelHidden && channelHidden.value) {
+          chosenChannel = channelHidden.value;
+        } else if (channelValues.length) {
+          chosenChannel = channelValues[0];
+        }
+
+        if (streamSelect) {
+          streamSelect.innerHTML = '';
+        }
+        if (streamValues.length && streamSelect && streamSelectGroup) {
+          var foundStream = false;
+          streamValues.forEach(function (val, idx) {
+            var opt = document.createElement('option');
+            opt.value = val;
+            var label = streamLabels[idx] || val;
+            opt.textContent = label;
+            if (val === chosenStream) {
+              opt.selected = true;
+              foundStream = true;
+            }
+            streamSelect.appendChild(opt);
+          });
+          if (!foundStream && streamValues.length) {
+            chosenStream = streamValues[0];
+            streamSelect.value = chosenStream;
+          }
+          streamSelectGroup.style.display = 'block';
+        } else if (streamSelectGroup) {
+          streamSelectGroup.style.display = 'none';
+        }
+
+        if (channelSelect) {
+          channelSelect.innerHTML = '';
+        }
+        if (channelValues.length && channelSelect && channelSelectGroup) {
+          var foundChannel = false;
+          channelValues.forEach(function (val, idx) {
+            var optC = document.createElement('option');
+            optC.value = val;
+            var labelC = channelLabels[idx] || val;
+            optC.textContent = labelC;
+            if (val === chosenChannel) {
+              optC.selected = true;
+              foundChannel = true;
+            }
+            channelSelect.appendChild(optC);
+          });
+          if (!foundChannel && channelValues.length) {
+            chosenChannel = channelValues[0];
+            channelSelect.value = chosenChannel;
+          }
+          channelSelectGroup.style.display = 'block';
+        } else if (channelSelectGroup) {
+          channelSelectGroup.style.display = 'none';
+        }
+
+        if (streamHidden) {
+          streamHidden.value = chosenStream || '';
+        }
+        if (channelHidden) {
+          channelHidden.value = chosenChannel || '';
+        }
+
+        configureStreamControlsForPattern();
+      }
+
       function syncAuthState() {
         if (!useAuth) {
           return;
@@ -596,10 +789,10 @@
         patternSelect.addEventListener('change', function () {
           initialPatternParams = {};
           renderPatternParams();
-          configureStreamControlsForPattern();
+          configureStreamAndChannelForPattern();
         });
         renderPatternParams();
-        configureStreamControlsForPattern();
+        configureStreamAndChannelForPattern();
       }
 
       if (streamLow) {
@@ -611,6 +804,7 @@
           if (streamHidden) {
             streamHidden.value = v;
           }
+          configureStreamControlsForPattern();
         });
       }
       if (streamHigh) {
@@ -622,7 +816,69 @@
           if (streamHidden) {
             streamHidden.value = v;
           }
+          configureStreamControlsForPattern();
         });
+      }
+
+      if (streamSelect) {
+        streamSelect.addEventListener('change', function () {
+          var v = streamSelect.value || '';
+          if (streamHidden) {
+            streamHidden.value = v;
+          }
+          configureStreamControlsForPattern();
+        });
+      }
+
+      if (channelSelect) {
+        channelSelect.addEventListener('change', function () {
+          var v = channelSelect.value || '';
+          if (channelHidden) {
+            channelHidden.value = v;
+          }
+        });
+      }
+
+      function suggestPatternFromMac() {
+        if (!macInput || !patternSelect) {
+          return;
+        }
+        var mac = macInput.value ? macInput.value.trim() : '';
+        if (!mac) {
+          return;
+        }
+        if (patternSelect.value) {
+          return;
+        }
+        var payload = new URLSearchParams();
+        payload.append('csrf_token', (form.csrf_token && form.csrf_token.value) || '');
+        payload.append('mac_address', mac);
+        fetch('{{ url_for("camera_admin.suggest_pattern_for_mac") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: payload.toString(),
+        })
+          .then(function (resp) {
+            return resp.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok || !data.pattern_id) {
+              return;
+            }
+            patternSelect.value = String(data.pattern_id);
+            initialPatternParams = {};
+            renderPatternParams();
+            configureStreamAndChannelForPattern();
+          })
+          .catch(function () {
+            /* ignore suggestion errors */
+          });
+      }
+
+      if (macInput) {
+        macInput.addEventListener('blur', suggestPatternFromMac);
       }
       if (!btn || !statusEl) {
         return;
@@ -671,9 +927,17 @@
           })
           .then(function (data) {
             if (data && data.ok) {
-              setStatus('Connection successful.', 'ok');
+              var msg = 'Connection successful.';
+              if (data.url) {
+                msg += ' URL: ' + data.url;
+              }
+              setStatus(msg, 'ok');
             } else {
-              setStatus((data && data.error) || 'Connection failed.', 'error');
+              var err = (data && data.error) || 'Connection failed.';
+              if (data && data.url) {
+                err += ' URL: ' + data.url;
+              }
+              setStatus(err, 'error');
             }
           })
           .catch(function () {

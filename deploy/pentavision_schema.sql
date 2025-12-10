@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS camera_devices (
   name VARCHAR(255) NOT NULL,
   pattern_id INT NULL,
   ip_address VARCHAR(255) NOT NULL,
+  mac_address VARCHAR(32) NULL,
   port INT NULL,
   username VARCHAR(255) NULL,
   password VARCHAR(255) NULL,
@@ -201,6 +202,7 @@ CREATE TABLE IF NOT EXISTS camera_devices (
 -- On MySQL 8+ this is safe and idempotent; on older versions, remove IF NOT EXISTS
 ALTER TABLE camera_devices
   ADD COLUMN IF NOT EXISTS admin_lock TINYINT(1) NULL DEFAULT 0 AFTER notes,
+  ADD COLUMN IF NOT EXISTS mac_address VARCHAR(32) NULL AFTER ip_address,
   ADD COLUMN IF NOT EXISTS placement VARCHAR(16) NULL AFTER is_active,
   ADD COLUMN IF NOT EXISTS location VARCHAR(64) NULL AFTER placement,
   ADD COLUMN IF NOT EXISTS facing_direction VARCHAR(8) NULL AFTER location,

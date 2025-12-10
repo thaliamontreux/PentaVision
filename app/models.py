@@ -273,6 +273,7 @@ class CameraDevice(RecordBase):
     name: Mapped[str] = mapped_column(String(255))
     pattern_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
     ip_address: Mapped[str] = mapped_column(String(255))
+    mac_address: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
