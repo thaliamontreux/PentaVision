@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import sys
 from typing import Dict, Any
 from urllib.parse import urlparse
 
+from dotenv import load_dotenv
 from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.orm import Session
-
-from app.config import load_config
 
 
 def _parse_args() -> argparse.Namespace:
@@ -44,8 +44,10 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _load_record_engine():
-    config = load_config()
-    url = config.get("RECORD_DB_URL") or ""
+    # Load environment variables (mirrors app.config.load_config behaviour
+    # for RECORD_DB_URL without importing the app package).
+    load_dotenv()
+    url = os.getenv("RECORD_DB_URL", "")
     if not url:
         print("RECORD_DB_URL is not configured.", file=sys.stderr)
         raise SystemExit(1)
