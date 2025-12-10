@@ -2,12 +2,10 @@
 
 {% block title %}Sign in · PentaVision{% endblock %}
 
-{% block content %}
-  <section class="pv-section">
-    <h1>Sign in</h1>
-
+{% block splash_extra %}
+  <div id="pv-login-box" class="pv-login-box">
     {% if errors %}
-      <div class="pv-alert pv-alert-error" role="alert">
+      <div class="pv-alert pv-alert-error" role="alert" style="margin-bottom: 0.75rem;">
         <ul>
           {% for error in errors %}
             <li>{{ error }}</li>
@@ -16,7 +14,9 @@
       </div>
     {% endif %}
 
-    <form method="post" class="pv-form" style="max-width: 320px;">
+    <h2 class="pv-login-title">Sign in</h2>
+
+    <form method="post" class="pv-login-form">
       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
       <input type="hidden" name="next" value="{{ next }}" />
 
@@ -53,9 +53,14 @@
         />
       </div>
 
-      <button type="submit" class="pv-button pv-button-primary">
+      <button type="submit" class="pv-login-button">
         Sign in
       </button>
     </form>
-  </section>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {# Main content is intentionally minimal on the login page because the
+     primary interaction happens in the splash overlay login box. #}
 {% endblock %}

@@ -15,6 +15,7 @@
           alt="PentaVision"
           class="pv-splash-logo"
         />
+        {% block splash_extra %}{% endblock %}
       </div>
     </div>
 
@@ -91,6 +92,17 @@
           hasSessionStorage = typeof window.sessionStorage !== 'undefined';
         } catch (e) {
           hasSessionStorage = false;
+        }
+
+        var isLoginPage = !!document.getElementById('pv-login-box');
+        if (isLoginPage) {
+          if (hasSessionStorage) {
+            try {
+              window.sessionStorage.setItem('pvSplashSeen', '1');
+            } catch (e) {}
+          }
+          // Keep splash (with login box) visible on the login page.
+          return;
         }
 
         function hideSoon() {
