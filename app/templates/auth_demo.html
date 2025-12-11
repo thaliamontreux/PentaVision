@@ -277,6 +277,9 @@
               return;
             }
             return navigator.credentials.create(options).then(function (cred) {
+              if (!cred) {
+                throw new Error('No credential was returned. The request may have been cancelled.');
+              }
               var rawIdB64 = base64UrlFromBuffer(cred.rawId);
               var att = {
                 // Ensure id and rawId are identical base64url strings so the
@@ -324,6 +327,9 @@
             }
             decodeAssertionOptions(options);
             return navigator.credentials.get(options).then(function (assertion) {
+              if (!assertion) {
+                throw new Error('No assertion was returned. The request may have been cancelled.');
+              }
               var res = {
                 id: assertion.id,
                 rawId: base64UrlFromBuffer(assertion.rawId),
