@@ -25,7 +25,7 @@
     {% endif %}
 
     {% if form is not none %}
-      <form method="post" class="pv-form" style="max-width: 520px;">
+      <form method="post" class="pv-form pv-form-admin-user">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
         <div class="pv-field-group">
@@ -101,7 +101,7 @@
             </p>
           </div>
         {% else %}
-          <div class="pv-field-group">
+          <div class="pv-field-group pv-form-full-row">
             <label for="property_ids">Households this user can view</label>
             <select
               id="property_ids"
@@ -143,7 +143,7 @@
             />
           </div>
 
-          <fieldset class="pv-field-group">
+          <fieldset class="pv-field-group pv-form-full-row">
             <legend>Initial roles</legend>
             <label class="pv-checkbox-label">
               <input
@@ -172,16 +172,18 @@
           </fieldset>
         {% endif %}
 
-        <button type="submit" class="pv-button pv-button-primary">
-          {% if is_edit %}
-            Save changes
-          {% else %}
-            Create user
-          {% endif %}
-        </button>
-        <a href="{{ url_for('admin.users_list') }}" class="pv-button" style="margin-left: 0.5rem;">
-          Cancel
-        </a>
+        <div class="pv-form-actions">
+          <button type="submit" class="pv-button pv-button-primary">
+            {% if is_edit %}
+              Save changes
+            {% else %}
+              Create user
+            {% endif %}
+          </button>
+          <a href="{{ url_for('admin.users_list') }}" class="pv-button">
+            Cancel
+          </a>
+        </div>
       </form>
     {% else %}
       <p>Nothing to edit.</p>

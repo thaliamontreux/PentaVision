@@ -694,6 +694,27 @@ body {
   gap: 1rem;
 }
 
+/* Admin forms: use more horizontal space with a responsive two-column layout. */
+.pv-form-admin-user {
+  max-width: 1100px;
+  margin-top: 1.75rem;
+  margin-left: auto;
+  margin-right: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1.75rem;
+  row-gap: 1.1rem;
+  align-items: flex-start;
+}
+
+.pv-form-admin-user .pv-field-group {
+  min-width: 0;
+}
+
+/* Fields that should span full width, like multi-selects and role groups. */
+.pv-form-full-row {
+  grid-column: 1 / -1;
+}
+
 .pv-field-group label {
   display: block;
   margin-bottom: 0.25rem;
@@ -712,6 +733,101 @@ body {
 .pv-field-group input:focus {
   outline: 2px solid #38bdf8;
   outline-offset: 1px;
+}
+
+/* Match select styling to inputs for a more cohesive look. */
+.pv-field-group select,
+.pv-field-group textarea {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.375rem;
+  border: 1px solid #1f2937;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5e7eb;
+}
+
+.pv-field-group select:focus,
+.pv-field-group textarea:focus {
+  outline: 2px solid #38bdf8;
+  outline-offset: 1px;
+}
+
+/* Roles checkboxes in a neat vertical stack. */
+.pv-form-admin-user fieldset {
+  border: 1px solid #1f2937;
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.9rem 0.85rem;
+}
+
+.pv-form-admin-user fieldset legend {
+  padding: 0 0.25rem;
+  font-size: 0.9rem;
+  color: #e5e7eb;
+}
+
+.pv-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  margin-top: 0.35rem;
+}
+
+.pv-checkbox-label input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pv-form-actions {
+  grid-column: 1 / -1;
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Shared button styles used across the app. */
+.pv-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #1f2937;
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pv-button:hover {
+  border-color: #1d4ed8;
+  background: rgba(30, 64, 175, 0.95);
+}
+
+.pv-button-small {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.pv-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #38bdf8;
+  background: transparent;
+  color: #e0f2fe;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pv-button-secondary:hover {
+  background: rgba(56, 189, 248, 0.15);
 }
 
 .pv-button-primary {
@@ -769,6 +885,10 @@ body {
 }
 
 @media (max-width: 768px) {
+  .pv-form-admin-user {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .pv-main {
     padding: 1.25rem 0.75rem 2.5rem;
   }
