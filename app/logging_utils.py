@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from flask import Request, has_request_context, request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .db import get_user_engine
@@ -41,4 +42,97 @@ def log_event(event_type: str, user_id: Optional[int] = None, details: str = "")
             session.commit()
     except Exception:  # noqa: BLE001
         # Do not raise from logging path.
+        return
+
+
+def ip_is_locked() -> bool:
+    """Return True if the current request IP is locked out due to failures.
+
+    This checks for a prior AUTH_IP_LOCKED audit event for the client IP.
+    Failures to read from the DB are treated as not locked to avoid
+    accidentally blocking legitimate users when the audit DB is unavailable.
+    """
+
+    engine = get_user_engine()
+    if engine is None:
+        return False
+
+    ip = _client_ip()
+    if not ip:
+        return False
+
+    try:
+        with Session(engine) as session:
+            exists = (
+                session.query(AuditEvent.id)
+                .filter(
+                    AuditEvent.ip == ip,
+                    AuditEvent.event_type == "AUTH_IP_LOCKED",
+                )
+                .first()
+            )
+            return exists is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def update_ip_lockout_after_failure(threshold: int = 3) -> None:
+    """After a failed login attempt, update lockout state for the client IP.
+
+    When the number of recorded failure events for an IP reaches the
+    configured threshold, an AUTH_IP_LOCKED event is written. Subsequent
+    calls to ip_is_locked() will then treat that IP as blocked.
+    """
+
+    engine = get_user_engine()
+    if engine is None:
+        return
+
+    ip = _client_ip()
+    if not ip:
+        return
+
+    try:
+        with Session(engine) as session:
+            # If already locked, nothing to do.
+            locked = (
+                session.query(AuditEvent.id)
+                .filter(
+                    AuditEvent.ip == ip,
+                    AuditEvent.event_type == "AUTH_IP_LOCKED",
+                )
+                .first()
+            )
+            if locked is not None:
+                return
+
+            failure_events = (
+                "AUTH_LOGIN_FAILURE",
+                "AUTH_LOGIN_2FA_FAILURE",
+                "AUTH_TOTP_VERIFY_FAILURE",
+                "AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE",
+            )
+
+            failure_count = (
+                session.query(func.count(AuditEvent.id))
+                .filter(
+                    AuditEvent.ip == ip,
+                    AuditEvent.event_type.in_(failure_events),
+                )
+                .scalar()
+            )
+
+            if failure_count is None or failure_count < threshold:
+                return
+
+            lock_event = AuditEvent(
+                user_id=None,
+                event_type="AUTH_IP_LOCKED",
+                ip=ip,
+                details=f"ip lockout after {int(failure_count)} failures",
+            )
+            session.add(lock_event)
+            session.commit()
+    except Exception:  # noqa: BLE001
+        # Never raise from IP lockout bookkeeping.
         return

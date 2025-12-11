@@ -20,7 +20,7 @@ from fido2.webauthn import (
 )
 
 from .db import get_user_engine
-from .logging_utils import log_event
+from .logging_utils import ip_is_locked, log_event, update_ip_lockout_after_failure
 from .models import User, WebAuthnCredential
 from .security import seed_system_admin_role_for_email, login_user
 
@@ -206,6 +206,9 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
     user is None and error_message/status_code describe the problem.
     """
 
+    if ip_is_locked():
+        return None, "too many failed login attempts from this IP. try again later.", 403
+
     if not email or not password:
         return None, "email and password are required", 400
 
@@ -217,6 +220,7 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
+            update_ip_lockout_after_failure()
             return None, "invalid credentials", 401
 
         now = datetime.now(timezone.utc)
@@ -242,11 +246,13 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
             session_db.add(user)
             session_db.commit()
             log_event("AUTH_LOGIN_FAILURE", user_id=user.id, details="bad password")
+            update_ip_lockout_after_failure()
             return None, "invalid credentials", 401
 
         if user.totp_secret:
             if not _verify_totp(user, totp_code.strip()):
                 log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user.id)
+                update_ip_lockout_after_failure()
                 return None, "invalid 2FA code", 401
 
         if _ph.check_needs_rehash(user.password_hash):
@@ -273,6 +279,9 @@ def _authenticate_primary_factor(email: str, password: str):
     - On failure, ``user`` is None and the other values describe the problem.
     """
 
+    if ip_is_locked():
+        return None, "too many failed login attempts from this IP. try again later.", 403, False
+
     if not email or not password:
         return None, "email and password are required", 400, False
 
@@ -284,6 +293,7 @@ def _authenticate_primary_factor(email: str, password: str):
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
+            update_ip_lockout_after_failure()
             return None, "invalid credentials", 401, False
 
         now = datetime.now(timezone.utc)
@@ -309,6 +319,7 @@ def _authenticate_primary_factor(email: str, password: str):
             session_db.add(user)
             session_db.commit()
             log_event("AUTH_LOGIN_FAILURE", user_id=user.id, details="bad password")
+            update_ip_lockout_after_failure()
             return None, "invalid credentials", 401, False
 
         if _ph.check_needs_rehash(user.password_hash):
@@ -367,6 +378,16 @@ def login():
     password = data.get("password") or ""
     totp_code = (data.get("totp_code") or "").strip()
 
+    if ip_is_locked():
+        return (
+            jsonify(
+                {
+                    "error": "too many failed login attempts from this IP. try again later.",
+                }
+            ),
+            403,
+        )
+
     if not email or not password:
         return jsonify({"error": "email and password are required"}), 400
 
@@ -403,12 +424,14 @@ def totp_setup():
         user = session.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_TOTP_SETUP_FAILURE", details=f"unknown email={email}")
+            update_ip_lockout_after_failure()
             return jsonify({"error": "invalid credentials"}), 401
 
         try:
             _ph.verify(user.password_hash, password)
         except VerifyMismatchError:
             log_event("AUTH_TOTP_SETUP_FAILURE", user_id=user.id, details="bad password")
+            update_ip_lockout_after_failure()
             return jsonify({"error": "invalid credentials"}), 401
 
         existing_raw = getattr(user, "totp_secret", None) or ""
@@ -441,6 +464,16 @@ def totp_verify():
     password = data.get("password") or ""
     code = (data.get("code") or "").strip()
 
+    if ip_is_locked():
+        return (
+            jsonify(
+                {
+                    "error": "too many failed login attempts from this IP. try again later.",
+                }
+            ),
+            403,
+        )
+
     if not email or not password or not code:
         return (jsonify({"error": "email, password, and code are required"}), 400)
 
@@ -452,12 +485,14 @@ def totp_verify():
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_TOTP_VERIFY_FAILURE", details=f"unknown email={email}")
+            update_ip_lockout_after_failure()
             return jsonify({"error": "invalid credentials"}), 401
 
         try:
             _ph.verify(user.password_hash, password)
         except VerifyMismatchError:
             log_event("AUTH_TOTP_VERIFY_FAILURE", user_id=user.id, details="bad password")
+            update_ip_lockout_after_failure()
             return jsonify({"error": "invalid credentials"}), 401
 
         raw_secret = getattr(user, "totp_secret", None) or ""
@@ -476,6 +511,7 @@ def totp_verify():
                     user_id=user.id,
                     details="bad_totp_code",
                 )
+                update_ip_lockout_after_failure()
                 return jsonify({"error": "invalid 2FA code"}), 401
         except Exception:  # noqa: BLE001
             log_event(
@@ -507,12 +543,14 @@ def passkey_register_begin():
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_WEBAUTHN_REGISTER_BEGIN_FAILURE", details=f"unknown email={email}")
+            update_ip_lockout_after_failure()
             return jsonify({"error": "invalid credentials"}), 401
 
         try:
             _ph.verify(user.password_hash, password)
         except VerifyMismatchError:
             log_event("AUTH_WEBAUTHN_REGISTER_BEGIN_FAILURE", user_id=user.id, details="bad password")
+            update_ip_lockout_after_failure()
             return jsonify({"error": "invalid credentials"}), 401
 
         creds = (
@@ -651,6 +689,16 @@ def passkey_login_begin():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
 
+    if ip_is_locked():
+        return (
+            jsonify(
+                {
+                    "error": "too many failed login attempts from this IP. try again later.",
+                }
+            ),
+            403,
+        )
+
     if not email:
         return jsonify({"error": "email is required"}), 400
 
@@ -662,6 +710,7 @@ def passkey_login_begin():
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_WEBAUTHN_LOGIN_BEGIN_FAILURE", details=f"unknown email={email}")
+            update_ip_lockout_after_failure()
             return jsonify({"error": "invalid credentials"}), 401
 
         creds = (
@@ -690,6 +739,16 @@ def passkey_login_complete():
 
     state = _decode_webauthn_state(session.get("webauthn_login_state"))
     user_id = session.get("webauthn_login_user_id")
+    if ip_is_locked():
+        return (
+            jsonify(
+                {
+                    "error": "too many failed login attempts from this IP. try again later.",
+                }
+            ),
+            403,
+        )
+
     if not state or not user_id:
         return jsonify({"error": "no pending authentication"}), 400
 
