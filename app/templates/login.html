@@ -3,10 +3,7 @@
 {% block title %}Sign in · PentaVision{% endblock %}
 
 {% block splash_extra %}
-  <div
-    id="pv-login-box"
-    class="pv-login-box pv-login-box-hidden{% if totp_pending %} pv-login-box-totp-suppressed{% endif %}"
-  >
+  <div id="pv-login-box" class="pv-login-box pv-login-box-hidden">
     {% if errors %}
       <div class="pv-alert pv-alert-error" role="alert" style="margin-bottom: 0.75rem;">
         <ul>
@@ -17,87 +14,95 @@
       </div>
     {% endif %}
 
-    <h2 class="pv-login-title">Sign in</h2>
-
-    <form method="post" class="pv-login-form">
-      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-      <input type="hidden" name="next" value="{{ next }}" />
-
-      <div class="pv-field-group">
-        <label for="email">Email / Username</label>
-        <input
-          id="email"
-          name="email"
-          type="text"
-          required
-          autocomplete="username"
-          value="{{ email }}"
-        />
+    {% if totp_error %}
+      <div class="pv-alert pv-alert-error" role="alert" style="margin-bottom: 0.5rem;">
+        {{ totp_error }}
       </div>
+    {% endif %}
 
-      <div class="pv-field-group">
-        <label for="password">Password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          autocomplete="current-password"
-        />
-      </div>
+    {% if not totp_pending %}
+      <h2 class="pv-login-title">Sign in</h2>
 
-      <div class="pv-field-group" style="margin-top: 0.35rem;">
-        <div class="pv-login-actions">
-          <button
-            type="button"
-            class="pv-login-button pv-login-button-secondary"
-            onclick="window.location.href='{{ url_for('main.auth_demo') }}';"
-          >
-            Passkey
-          </button>
-          <button type="submit" class="pv-login-button">
-            Sign in
-          </button>
+      <form method="post" class="pv-login-form">
+        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+        <input type="hidden" name="next" value="{{ next }}" />
+
+        <div class="pv-field-group">
+          <label for="email">Email / Username</label>
+          <input
+            id="email"
+            name="email"
+            type="text"
+            required
+            autocomplete="username"
+            value="{{ email }}"
+          />
         </div>
-      </div>
-    </form>
+
+        <div class="pv-field-group">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+
+        <div class="pv-field-group" style="margin-top: 0.35rem;">
+          <div class="pv-login-actions">
+            <button
+              type="button"
+              class="pv-login-button pv-login-button-secondary"
+              onclick="window.location.href='{{ url_for('main.auth_demo') }}';"
+            >
+              Passkey
+            </button>
+            <button type="submit" class="pv-login-button">
+              Sign in
+            </button>
+          </div>
+        </div>
+      </form>
+    {% else %}
+      <h2 class="pv-login-title">Two-factor authentication</h2>
+      <p style="font-size: 0.9rem; color: #e5e7eb; margin-top: 0; margin-bottom: 0.75rem;">
+        Enter the 6-digit code from your authenticator app to complete sign-in.
+      </p>
+
+      <form
+        method="post"
+        action="{{ url_for('main.login_totp') }}"
+        class="pv-login-form"
+      >
+        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+
+        <div class="pv-field-group">
+          <label for="totp_code">Authentication code</label>
+          <input
+            id="totp_code"
+            name="totp_code"
+            type="text"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            required
+          />
+        </div>
+
+        <div class="pv-field-group" style="margin-top: 0.35rem;">
+          <div class="pv-login-actions">
+            <button type="submit" class="pv-login-button">
+              Verify
+            </button>
+          </div>
+        </div>
+      </form>
+    {% endif %}
   </div>
 {% endblock %}
 
 {% block content %}
   {# Main content is intentionally minimal on the login page because the
-     primary interaction happens in the splash overlay login box. #}
-
-  {% if totp_pending %}
-    <div class="pv-modal is-visible" id="pv-totp-modal">
-      <div class="pv-modal-dialog">
-        <h2 style="margin-top: 0; margin-bottom: 0.5rem;">Two-factor authentication</h2>
-        {% if totp_error %}
-          <div class="pv-alert pv-alert-error" role="alert" style="margin-bottom: 0.5rem;">
-            {{ totp_error }}
-          </div>
-        {% endif %}
-        <p style="font-size: 0.9rem; color: #9ca3af; margin-top: 0; margin-bottom: 0.75rem;">
-          Enter the 6-digit code from your authenticator app to complete sign-in.
-        </p>
-        <form method="post" action="{{ url_for('main.login_totp') }}" class="pv-form" style="margin-top: 0; gap: 0.6rem;">
-          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-          <div class="pv-field-group">
-            <label for="totp_code">Authentication code</label>
-            <input
-              id="totp_code"
-              name="totp_code"
-              type="text"
-              autocomplete="one-time-code"
-              inputmode="numeric"
-              required
-            />
-          </div>
-          <button type="submit" class="pv-button-primary" style="align-self: flex-end;">
-            Verify
-          </button>
-        </form>
-      </div>
-    </div>
-  {% endif %}
+     primary interaction happens in the splash overlay login / TOTP box. #}
 {% endblock %}
