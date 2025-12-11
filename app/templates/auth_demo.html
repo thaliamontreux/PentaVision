@@ -201,7 +201,23 @@
       }
 
       function decodeAssertionOptions(opts) {
-        if (!opts || !opts.publicKey) return opts;
+        if (!opts) return opts;
+
+        // Some servers return the PublicKeyCredentialRequestOptions object
+        // directly instead of wrapping it in { publicKey: ... }. Normalize
+        // that here so navigator.credentials.get always sees a publicKey
+        // property.
+        if (!opts.publicKey) {
+          if (opts.public_key) {
+            // python-fido2 serialized via vars(): { public_key: { ... } }
+            opts = { publicKey: opts.public_key };
+          } else if (opts.challenge || opts.allowCredentials) {
+            // Bare PublicKeyCredentialRequestOptions dict.
+            opts = { publicKey: opts };
+          }
+        }
+        if (!opts.publicKey) return opts;
+
         var pk = opts.publicKey;
         if (pk.challenge) {
           pk.challenge = bufferFromBase64Url(pk.challenge);
