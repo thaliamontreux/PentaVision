@@ -70,7 +70,7 @@ def _webauthn_json(data):
         return websafe_encode(data).decode("ascii")
     if isinstance(data, dict):
         return {k: _webauthn_json(v) for k, v in data.items()}
-    if isinstance(data, list):
+    if isinstance(data, (list, tuple, set)):
         return [_webauthn_json(v) for v in data]
     return data
 
