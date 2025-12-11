@@ -54,6 +54,18 @@ def _credential_descriptors(creds: list[WebAuthnCredential]) -> list[PublicKeyCr
 
 
 def _webauthn_json(data):
+    """Recursively convert WebAuthn/FIDO2 objects into JSON-serializable data.
+
+    Handles:
+    - Objects with a ``to_json()`` method (newer python-fido2 versions).
+    - Raw bytes/bytearray values (encoded via websafe base64url).
+    - Nested dicts/lists composed of the above.
+    """
+
+    to_json = getattr(data, "to_json", None)
+    if callable(to_json):
+        return _webauthn_json(to_json())
+
     if isinstance(data, (bytes, bytearray)):
         return websafe_encode(data).decode("ascii")
     if isinstance(data, dict):
@@ -61,6 +73,36 @@ def _webauthn_json(data):
     if isinstance(data, list):
         return [_webauthn_json(v) for v in data]
     return data
+
+
+def _encode_webauthn_state(state):
+    """Encode WebAuthn state so it can be stored safely in the Flask session.
+
+    Some python-fido2 versions return ``bytes`` for the opaque ``state`` value,
+    which cannot be JSON-serialized in cookie-based sessions. For those,
+    encode to websafe base64url text. If the state is already a dict or other
+    JSON-serializable type, pass it through unchanged.
+    """
+
+    if isinstance(state, (bytes, bytearray)):
+        return websafe_encode(state).decode("ascii")
+    return state
+
+
+def _decode_webauthn_state(state):
+    """Decode WebAuthn state read from the Flask session back to its raw form.
+
+    If the stored value looks like a websafe base64url string, attempt to
+    decode it. Otherwise return it unchanged so newer python-fido2 versions
+    that use dict-based state continue to work.
+    """
+
+    if isinstance(state, str):
+        try:
+            return websafe_decode(state)
+        except Exception:  # noqa: BLE001
+            return state
+    return state
 
 
 def _issue_token(user_id: int) -> str:
@@ -441,7 +483,7 @@ def passkey_register_begin():
             _credential_descriptors(creds),
         )
 
-        session["webauthn_register_state"] = state
+        session["webauthn_register_state"] = _encode_webauthn_state(state)
         session["webauthn_register_user_id"] = user.id
         if nickname:
             session["webauthn_register_nickname"] = nickname
@@ -456,7 +498,7 @@ def passkey_register_complete():
     if engine is None:
         return jsonify({"error": "user database not configured"}), 500
 
-    state = session.get("webauthn_register_state")
+    state = _decode_webauthn_state(session.get("webauthn_register_state"))
     user_id = session.get("webauthn_register_user_id")
     nickname = session.pop("webauthn_register_nickname", None)
     if not state or not user_id:
@@ -551,7 +593,7 @@ def passkey_login_begin():
         server = _webauthn_server()
         options, state = server.authenticate_begin(_credential_descriptors(creds))
 
-        session["webauthn_login_state"] = state
+        session["webauthn_login_state"] = _encode_webauthn_state(state)
         session["webauthn_login_user_id"] = user.id
 
         log_event("AUTH_WEBAUTHN_LOGIN_BEGIN", user_id=user.id)
@@ -564,7 +606,7 @@ def passkey_login_complete():
     if engine is None:
         return jsonify({"error": "user database not configured"}), 500
 
-    state = session.get("webauthn_login_state")
+    state = _decode_webauthn_state(session.get("webauthn_login_state"))
     user_id = session.get("webauthn_login_user_id")
     if not state or not user_id:
         return jsonify({"error": "no pending authentication"}), 400
