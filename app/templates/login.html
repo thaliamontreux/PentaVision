@@ -197,6 +197,9 @@
             }
             decodeAssertionOptions(options);
             return navigator.credentials.get(options).then(function (assertion) {
+              if (!assertion) {
+                throw new Error('No passkey was returned. The request may have been cancelled.');
+              }
               var res = {
                 id: assertion.id,
                 rawId: base64UrlFromBuffer(assertion.rawId),
