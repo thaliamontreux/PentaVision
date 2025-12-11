@@ -821,9 +821,12 @@
               return;
             }
             return navigator.credentials.create(options).then(function (cred) {
+              var rawIdB64 = base64UrlFromBuffer(cred.rawId);
               var att = {
-                id: cred.id,
-                rawId: base64UrlFromBuffer(cred.rawId),
+                // Ensure id and rawId are identical base64url strings so the
+                // backend/python-fido2 sees them as consistent.
+                id: rawIdB64,
+                rawId: rawIdB64,
                 type: cred.type,
                 response: {
                   clientDataJSON: base64UrlFromBuffer(cred.response.clientDataJSON),
