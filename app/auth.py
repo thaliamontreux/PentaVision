@@ -582,7 +582,27 @@ def passkey_register_complete():
 
     credential_data = auth_data.credential_data
     credential_id = credential_data.credential_id
-    public_key = credential_data.public_key
+
+    # Serialize the public key object to bytes for storage in the DB. Different
+    # python-fido2 versions may expose this as a COSE key object or a plain
+    # dict like {1: 2, 3: -7, ...}. SQLAlchemy's LargeBinary expects a
+    # bytes-like value, so we CBOR-encode when possible and fall back to a
+    # JSON/string representation.
+    public_key_bytes = b""
+    public_key_obj = getattr(credential_data, "public_key", None)
+    if public_key_obj is not None:
+        try:  # Prefer canonical CBOR encoding used by WebAuthn COSE keys.
+            from fido2 import cbor as _fido2_cbor  # type: ignore
+
+            public_key_bytes = _fido2_cbor.encode(public_key_obj)
+        except Exception:  # noqa: BLE001
+            try:
+                public_key_bytes = json.dumps(_webauthn_json(public_key_obj)).encode(
+                    "utf-8"
+                )
+            except Exception:  # noqa: BLE001
+                public_key_bytes = str(public_key_obj).encode("utf-8")
+
     # Some python-fido2 versions expose the registration counter as
     # auth_data.sign_count, others as auth_data.counter, and some may not
     # expose it at all. Normalize to an int and default to 0.
@@ -605,14 +625,14 @@ def passkey_register_complete():
             cred = WebAuthnCredential(
                 user_id=user.id,
                 credential_id=credential_id,
-                public_key=public_key,
+                public_key=public_key_bytes,
                 sign_count=sign_count,
                 transports=None,
                 nickname=nickname or None,
             )
             session_db.add(cred)
         else:
-            existing.public_key = public_key
+            existing.public_key = public_key_bytes
             existing.sign_count = sign_count
             existing.nickname = nickname or existing.nickname
             session_db.add(existing)
