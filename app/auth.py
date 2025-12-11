@@ -570,12 +570,17 @@ def passkey_register_complete():
     try:
         auth_data = server.register_complete(state, client_data, att_obj)
     except Exception as exc:  # noqa: BLE001
+        details = f"{type(exc).__name__}: {exc}"
         log_event(
             "AUTH_WEBAUTHN_REGISTER_COMPLETE_FAILURE",
             user_id=int(user_id),
-            details=f"{type(exc).__name__}: {exc}",
+            details=details,
         )
-        return jsonify({"error": "failed to verify attestation"}), 400
+        # Surface the detailed reason in the error string so the frontend can
+        # display it during debugging.
+        return jsonify(
+            {"error": f"failed to verify attestation: {details}"}
+        ), 400
 
     credential_data = auth_data.credential_data
     credential_id = credential_data.credential_id
