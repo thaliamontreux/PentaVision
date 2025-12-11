@@ -102,13 +102,35 @@
               window.sessionStorage.setItem('pvSplashSeen', '1');
             } catch (e) {}
           }
-          // On the login page, show only the logo first, then reveal the login box
-          // under it after 5 seconds.
+
+          var stage = loginBox.getAttribute('data-stage') || 'primary';
+          var showDelay = stage === 'totp' ? 400 : 5000;
+
           setTimeout(function () {
             if (loginBox) {
               loginBox.classList.remove('pv-login-box-hidden');
             }
-          }, 5000);
+          }, showDelay);
+
+          function attachFadeOnSubmit(formId) {
+            var form = document.getElementById(formId);
+            if (!form || !loginBox) return;
+            form.addEventListener('submit', function (ev) {
+              if (loginBox.classList.contains('pv-login-box-submitting')) {
+                return;
+              }
+              loginBox.classList.add('pv-login-box-submitting');
+              loginBox.classList.add('pv-login-box-hidden');
+              ev.preventDefault();
+              setTimeout(function () {
+                form.submit();
+              }, 350);
+            });
+          }
+
+          attachFadeOnSubmit('pv-login-form-primary');
+          attachFadeOnSubmit('pv-login-form-totp');
+
           return;
         }
 
