@@ -100,6 +100,11 @@ class User(UserBase):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    failed_logins: Mapped[int] = mapped_column(Integer, server_default="0")
+    locked_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
 
 class StorageSettings(RecordBase):
