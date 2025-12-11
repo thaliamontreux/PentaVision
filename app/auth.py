@@ -719,25 +719,45 @@ def passkey_login_complete():
         if user is None:
             return jsonify({"error": "user not found"}), 400
 
-        creds = (
+        stored_creds = (
             session_db.query(WebAuthnCredential)
             .filter(WebAuthnCredential.user_id == user.id)
             .all()
         )
-        if not creds:
+        if not stored_creds:
             return jsonify({"error": "no passkeys registered"}), 400
 
-        cred_map = {c.credential_id: c for c in creds}
+        cred_map = {c.credential_id: c for c in stored_creds}
         cred_obj = cred_map.get(credential_id)
         if cred_obj is None:
             log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE", user_id=user.id, details="unknown credential")
             return jsonify({"error": "unknown credential"}), 400
 
+        # Build AttestedCredentialData objects from the stored credentials so
+        # python-fido2 sees the expected interface (credential_id,
+        # public_key.verify(), sign_count via the returned object).
+        try:
+            from fido2.cose import CoseKey  # type: ignore
+            from fido2.webauthn import AttestedCredentialData  # type: ignore
+
+            def _to_attested(cred: WebAuthnCredential) -> AttestedCredentialData:
+                # The aaguid is not used for signature verification here; we
+                # can safely set it to zeros.
+                aaguid = b"\x00" * 16
+                cose = CoseKey.from_cbor(cred.public_key)
+                return AttestedCredentialData(aaguid + len(cred.credential_id).to_bytes(2, "big") + cred.credential_id + cose.as_cbor())
+
+            creds = [_to_attested(c) for c in stored_creds]
+        except Exception:  # noqa: BLE001
+            # If reconstruction fails for some reason, fall back to using the
+            # stored WebAuthnCredential objects directly.
+            creds = stored_creds
+
         try:
             # Prefer the newer python-fido2 authenticate_complete(state,
             # credentials, response) API by passing the raw WebAuthn mapping
-            # from the browser, together with the stored WebAuthnCredential
-            # objects which expose credential_id/public_key/sign_count.
+            # from the browser together with AttestedCredentialData objects
+            # derived from the stored credentials.
             try:
                 auth_result = server.authenticate_complete(
                     state,
