@@ -69,7 +69,15 @@ def _webauthn_json(data):
     if isinstance(data, (bytes, bytearray)):
         return websafe_encode(data).decode("ascii")
     if isinstance(data, dict):
-        return {k: _webauthn_json(v) for k, v in data.items()}
+        # Normalize both keys and values so no raw bytes remain anywhere.
+        return {
+            (
+                _webauthn_json(k)
+                if not isinstance(k, str)
+                else k
+            ): _webauthn_json(v)
+            for k, v in data.items()
+        }
     if isinstance(data, (list, tuple, set)):
         return [_webauthn_json(v) for v in data]
     return data
