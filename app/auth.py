@@ -715,7 +715,7 @@ def passkey_login_complete():
 
     server = _webauthn_server()
 
-    with Session(engine) as session_db:
+    with Session(engine, expire_on_commit=False) as session_db:
         user = session_db.get(User, int(user_id))
         if user is None:
             return jsonify({"error": "user not found"}), 400
