@@ -87,12 +87,6 @@
                       {{ p.low_res_stream or '-' }}/{{ p.high_res_stream or '-' }}
                     </div>
                   {% endif %}
-                  {% if p.channels_raw %}
-                    <div><strong>Channels:</strong> {{ p.channels_raw }}</div>
-                  {% endif %}
-                  {% if p.channel_names_raw %}
-                    <div><strong>Ch names:</strong> {{ p.channel_names_raw }}</div>
-                  {% endif %}
                 </td>
                 <td style="min-width: 14rem;">
                   {% if p.default_port is not none %}
