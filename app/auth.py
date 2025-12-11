@@ -159,6 +159,68 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
         return user, None, 200
 
 
+def _authenticate_primary_factor(email: str, password: str):
+    """Authenticate a user by email/password only for HTML login.
+
+    This helper verifies the primary factor (password), including failed-login
+    counters and lockout logic, but does not enforce TOTP. It returns a tuple
+    of (user, error_message, status_code, requires_totp).
+
+    - On success, ``user`` is a detached User instance, ``error_message`` is
+      None, ``status_code`` is 200, and ``requires_totp`` indicates whether the
+      user has TOTP enabled.
+    - On failure, ``user`` is None and the other values describe the problem.
+    """
+
+    if not email or not password:
+        return None, "email and password are required", 400, False
+
+    engine = get_user_engine()
+    if engine is None:
+        return None, "user database not configured", 500, False
+
+    with Session(engine, expire_on_commit=False) as session_db:
+        user = session_db.scalar(select(User).where(User.email == email))
+        if user is None:
+            log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
+            return None, "invalid credentials", 401, False
+
+        now = datetime.now(timezone.utc)
+        if user.locked_until and user.locked_until > now:
+            log_event(
+                "AUTH_LOGIN_LOCKED",
+                user_id=user.id,
+                details=f"locked_until={user.locked_until.isoformat()}",
+            )
+            return None, "account locked. try again later.", 403, False
+
+        try:
+            _ph.verify(user.password_hash, password)
+        except VerifyMismatchError:
+            user.failed_logins = (user.failed_logins or 0) + 1
+            if user.failed_logins >= 5:
+                user.locked_until = now + timedelta(minutes=15)
+                log_event(
+                    "AUTH_LOGIN_LOCKED_SET",
+                    user_id=user.id,
+                    details="failed_logins>=5",
+                )
+            session_db.add(user)
+            session_db.commit()
+            log_event("AUTH_LOGIN_FAILURE", user_id=user.id, details="bad password")
+            return None, "invalid credentials", 401, False
+
+        if _ph.check_needs_rehash(user.password_hash):
+            user.password_hash = _ph.hash(password)
+        user.failed_logins = 0
+        user.locked_until = None
+        session_db.add(user)
+        session_db.commit()
+
+        requires_totp = bool(getattr(user, "totp_secret", None))
+        return user, None, 200, requires_totp
+
+
 @bp.post("/register")
 def register():
     data = request.get_json(silent=True) or {}

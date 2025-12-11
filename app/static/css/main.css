@@ -73,6 +73,19 @@ body {
   gap: 0.6rem;
 }
 
+.pv-login-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.pv-login-button-secondary {
+  background: transparent;
+  border: 1px solid #facc15;
+  color: #facc15;
+}
+
 .pv-login-box .pv-field-group label {
   color: #f9fafb;
 }
@@ -508,7 +521,7 @@ body {
 .pv-modal {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 60;
   display: none;
   align-items: center;
   justify-content: center;

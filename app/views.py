@@ -14,6 +14,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 from sqlalchemy import func, text
@@ -28,7 +29,7 @@ except (SystemExit, ImportError, Exception) as exc:  # noqa: BLE001
     face_recognition = None  # type: ignore[assignment]
     _face_recognition_error = exc
 
-from .auth import _authenticate_user
+from .auth import _authenticate_primary_factor, _authenticate_user, _verify_totp
 from .db import get_face_engine, get_record_engine, get_user_engine
 from .logging_utils import log_event
 from .models import (
@@ -280,18 +281,105 @@ def login():
 
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        totp_code = (request.form.get("totp_code") or "").strip()
-
         if not errors:
-            user, error, status = _authenticate_user(email, password, totp_code)
+            user, error, status, requires_totp = _authenticate_primary_factor(
+                email, password
+            )
             if user is None:
                 errors.append(error or f"Login failed (status {status}).")
             else:
-                login_user(user)
-                log_event("AUTH_LOGIN_SUCCESS", user_id=user.id, details="html_login")
-                return redirect(next_url)
+                if requires_totp:
+                    session["pending_totp_user_id"] = int(user.id)
+                    session["pending_totp_next"] = next_url
+                    return redirect(url_for("main.login_totp"))
+                else:
+                    # No TOTP configured: complete login immediately.
+                    engine = get_user_engine()
+                    if engine is not None:
+                        with Session(engine) as session_db:
+                            db_user = session_db.get(User, int(user.id))
+                            if db_user is not None:
+                                db_user.last_login_at = datetime.now(timezone.utc)
+                                session_db.add(db_user)
+                                session_db.commit()
+                    login_user(user)
+                    log_event("AUTH_LOGIN_SUCCESS", user_id=user.id, details="html_login")
+                    return redirect(next_url)
 
-    return render_template("login.html", errors=errors, email=email, next=next_url)
+    return render_template(
+        "login.html",
+        errors=errors,
+        email=email,
+        next=next_url,
+        totp_pending=False,
+        totp_error=None,
+    )
+
+
+@bp.route("/login/totp", methods=["GET", "POST"])
+def login_totp():
+    """Second step of HTML login: prompt for TOTP if enabled for the user."""
+
+    pending_user_id = session.get("pending_totp_user_id")
+    if not pending_user_id:
+        # No pending TOTP challenge; send the user back to the primary login.
+        return redirect(url_for("main.login"))
+
+    next_url = session.get("pending_totp_next") or url_for("main.index")
+    if not str(next_url).startswith("/"):
+        next_url = url_for("main.index")
+
+    totp_error: str | None = None
+    email = ""
+
+    engine = get_user_engine()
+    user_obj: User | None = None
+    if engine is not None:
+        with Session(engine) as session_db:
+            user_obj = session_db.get(User, int(pending_user_id))
+            if user_obj is not None:
+                email = user_obj.email or ""
+
+    if user_obj is None:
+        # User disappeared between steps; clear state and restart login.
+        session.pop("pending_totp_user_id", None)
+        session.pop("pending_totp_next", None)
+        return redirect(url_for("main.login"))
+
+    if request.method == "POST":
+        if not validate_global_csrf_token(request.form.get("csrf_token")):
+            totp_error = "Invalid or missing CSRF token."
+        else:
+            totp_code = (request.form.get("totp_code") or "").strip()
+            if not totp_code:
+                totp_error = "TOTP code is required."
+            else:
+                if not _verify_totp(user_obj, totp_code):
+                    log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user_obj.id)
+                    totp_error = "Invalid authentication code."
+                else:
+                    # Mark successful 2FA and complete the login.
+                    if engine is not None:
+                        with Session(engine) as session_db:
+                            db_user = session_db.get(User, int(user_obj.id))
+                            if db_user is not None:
+                                db_user.last_login_at = datetime.now(timezone.utc)
+                                session_db.add(db_user)
+                                session_db.commit()
+                    login_user(user_obj)
+                    log_event("AUTH_LOGIN_SUCCESS", user_id=user_obj.id, details="html_login_totp")
+                    session.pop("pending_totp_user_id", None)
+                    session.pop("pending_totp_next", None)
+                    return redirect(next_url)
+
+    return render_template(
+        "login.html",
+        errors=[],
+        email=email,
+        next=next_url,
+        totp_pending=True,
+        totp_error=totp_error,
+    )
 
 
 @bp.post("/logout")
