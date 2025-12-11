@@ -736,16 +736,18 @@ def passkey_login_complete():
         try:
             # Prefer the newer python-fido2 authenticate_complete(state,
             # credentials, response) API by passing the raw WebAuthn mapping
-            # from the browser.
+            # from the browser, together with the stored WebAuthnCredential
+            # objects which expose credential_id/public_key/sign_count.
             try:
                 auth_result = server.authenticate_complete(
                     state,
-                    _credential_descriptors(creds),
+                    creds,
                     data,
                 )
             except TypeError:
                 # Fallback for older python-fido2 versions that expect the
-                # expanded multi-argument form.
+                # expanded multi-argument form and a list of credential
+                # descriptors.
                 client_data = CollectedClientData(websafe_decode(client_data_b64))
                 auth_data = websafe_decode(auth_data_b64)
                 signature = websafe_decode(signature_b64)
