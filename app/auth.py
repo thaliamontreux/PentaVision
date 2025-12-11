@@ -17,7 +17,6 @@ from fido2.webauthn import (
     PublicKeyCredentialRpEntity,
     PublicKeyCredentialUserEntity,
 )
-from fido2.ctap2 import AttestationObject
 
 from .db import get_user_engine
 from .logging_utils import log_event
@@ -563,7 +562,9 @@ def passkey_register_complete():
         return jsonify({"error": "invalid attestation payload"}), 400
 
     client_data = CollectedClientData(websafe_decode(client_data_b64))
-    att_obj = AttestationObject(websafe_decode(att_obj_b64))
+    # Older python-fido2 versions accept raw bytes for attestationObject.
+    # Newer versions will wrap this internally as an AttestationObject.
+    att_obj = websafe_decode(att_obj_b64)
 
     server = _webauthn_server()
     try:
