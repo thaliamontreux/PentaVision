@@ -693,18 +693,24 @@ def passkey_login_complete():
         return jsonify({"error": "no pending authentication"}), 400
 
     data = request.get_json(silent=True) or {}
-    raw_id = data.get("id") or data.get("rawId")
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid assertion payload"}), 400
+
     response = data.get("response") or {}
+    if not isinstance(response, dict):
+        return jsonify({"error": "invalid assertion payload"}), 400
+
+    raw_id_b64 = data.get("rawId") or data.get("id")
     client_data_b64 = response.get("clientDataJSON")
     auth_data_b64 = response.get("authenticatorData")
     signature_b64 = response.get("signature")
-    if not raw_id or not client_data_b64 or not auth_data_b64 or not signature_b64:
+    if not raw_id_b64 or not client_data_b64 or not auth_data_b64 or not signature_b64:
         return jsonify({"error": "invalid assertion payload"}), 400
 
-    credential_id = websafe_decode(raw_id)
-    client_data = CollectedClientData(websafe_decode(client_data_b64))
-    auth_data = websafe_decode(auth_data_b64)
-    signature = websafe_decode(signature_b64)
+    # Decode credential id bytes so we can look up the stored credential, but
+    # otherwise pass the raw WebAuthn response mapping into python-fido2 so it
+    # can handle base64url decoding via its from_dict helpers.
+    credential_id = websafe_decode(raw_id_b64)
 
     server = _webauthn_server()
 
@@ -728,14 +734,29 @@ def passkey_login_complete():
             return jsonify({"error": "unknown credential"}), 400
 
         try:
-            auth_result = server.authenticate_complete(
-                state,
-                _credential_descriptors(creds),
-                credential_id,
-                client_data,
-                auth_data,
-                signature,
-            )
+            # Prefer the newer python-fido2 authenticate_complete(state,
+            # credentials, response) API by passing the raw WebAuthn mapping
+            # from the browser.
+            try:
+                auth_result = server.authenticate_complete(
+                    state,
+                    _credential_descriptors(creds),
+                    data,
+                )
+            except TypeError:
+                # Fallback for older python-fido2 versions that expect the
+                # expanded multi-argument form.
+                client_data = CollectedClientData(websafe_decode(client_data_b64))
+                auth_data = websafe_decode(auth_data_b64)
+                signature = websafe_decode(signature_b64)
+                auth_result = server.authenticate_complete(
+                    state,
+                    _credential_descriptors(creds),
+                    credential_id,
+                    client_data,
+                    auth_data,
+                    signature,
+                )
         except Exception as exc:  # noqa: BLE001
             details = f"{type(exc).__name__}: {exc}"
             log_event(
