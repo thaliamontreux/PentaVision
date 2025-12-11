@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from fido2.server import Fido2Server
 from fido2.utils import websafe_decode, websafe_encode
 from fido2.webauthn import (
+    AttestedCredentialData,
     CollectedClientData,
     PublicKeyCredentialDescriptor,
     PublicKeyCredentialRpEntity,
@@ -730,26 +731,29 @@ def passkey_login_complete():
         cred_map = {c.credential_id: c for c in stored_creds}
         cred_obj = cred_map.get(credential_id)
         if cred_obj is None:
-            log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE", user_id=user.id, details="unknown credential")
+            log_event(
+                "AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE",
+                user_id=user.id,
+                details="unknown credential",
+            )
             return jsonify({"error": "unknown credential"}), 400
 
+        # Build AttestedCredentialData objects from the stored credentials so
+        # python-fido2 sees the expected interface (credential_id,
+        # public_key.verify(), etc.). We persisted the COSE public key bytes
+        # in WebAuthnCredential.public_key, so we can reconstruct the binary
+        # attested credential data structure directly.
         try:
-            from fido2.cose import CoseKey  # type: ignore
-
-            class _StoredCredential:
-                def __init__(self, cid: bytes, pk: CoseKey):  # type: ignore[name-defined]
-                    self.credential_id = cid
-                    self.public_key = pk
-
-            creds_for_verify: list[_StoredCredential] = []
+            creds_for_verify: list[AttestedCredentialData] = []
             for c in stored_creds:
-                cose = CoseKey.from_cbor(c.public_key)
-                creds_for_verify.append(_StoredCredential(c.credential_id, cose))
+                aaguid = b"\x00" * 16
+                cid = c.credential_id
+                raw = aaguid + len(cid).to_bytes(2, "big") + cid + c.public_key
+                creds_for_verify.append(AttestedCredentialData(raw))
 
             # Prefer the newer python-fido2 authenticate_complete(state,
             # credentials, response) API by passing the raw WebAuthn mapping
-            # from the browser together with wrapped credentials exposing
-            # credential_id and public_key.verify().
+            # from the browser together with AttestedCredentialData objects.
             try:
                 auth_result = server.authenticate_complete(
                     state,
@@ -758,8 +762,8 @@ def passkey_login_complete():
                 )
             except TypeError:
                 # Fallback for older python-fido2 versions that expect the
-                # expanded multi-argument form using the same wrapped
-                # credentials list.
+                # expanded multi-argument form using the same credentials
+                # list.
                 client_data = CollectedClientData(websafe_decode(client_data_b64))
                 auth_data = websafe_decode(auth_data_b64)
                 signature = websafe_decode(signature_b64)
