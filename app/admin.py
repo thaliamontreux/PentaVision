@@ -299,6 +299,7 @@ def user_create():
         "pronouns": "",
         "timezone": "America/Chicago",
     }
+    selected_property_ids: List[int] = []
     csrf_token = _ensure_csrf_token()
 
     if engine is None:
@@ -312,7 +313,13 @@ def user_create():
             user_id=None,
             pronoun_options=PRONOUN_OPTIONS,
             timezone_options=TIMEZONE_OPTIONS,
+            properties=[],
+            selected_property_ids=selected_property_ids,
         )
+
+    properties: List[Property] = []
+    with Session(engine) as db:
+        properties = db.query(Property).order_by(Property.name).all()
 
     if request.method == "POST":
         if not _validate_csrf_token(request.form.get("csrf_token")):
@@ -325,8 +332,15 @@ def user_create():
         form["timezone"] = (request.form.get("timezone") or "").strip()
         if not form["timezone"]:
             form["timezone"] = "America/Chicago"
+        selected_property_ids = []
+        for raw_id in request.form.getlist("property_ids"):
+            try:
+                selected_property_ids.append(int(raw_id))
+            except ValueError:
+                continue
         password = request.form.get("password") or ""
         password_confirm = request.form.get("password_confirm") or ""
+        make_viewer = request.form.get("make_viewer") == "1"
         make_admin = request.form.get("make_admin") == "1"
         make_tech = request.form.get("make_tech") == "1"
 
@@ -359,8 +373,10 @@ def user_create():
                     db.add(user)
                     db.flush()
 
-                    if make_admin or make_tech:
+                    if make_viewer or make_admin or make_tech:
                         roles_to_apply: List[str] = []
+                        if make_viewer:
+                            roles_to_apply.append("Viewer")
                         if make_admin:
                             roles_to_apply.append("System Administrator")
                         if make_tech:
@@ -393,6 +409,24 @@ def user_create():
                                     )
                                 )
 
+                    # Link the new user to any selected properties/households.
+                    for prop_id in selected_property_ids:
+                        existing_link = (
+                            db.query(UserProperty)
+                            .filter(
+                                UserProperty.user_id == user.id,
+                                UserProperty.property_id == prop_id,
+                            )
+                            .first()
+                        )
+                        if existing_link is None:
+                            db.add(
+                                UserProperty(
+                                    user_id=user.id,
+                                    property_id=prop_id,
+                                )
+                            )
+
                     db.commit()
 
             actor = get_current_user()
@@ -412,6 +446,8 @@ def user_create():
         user_id=None,
         pronoun_options=PRONOUN_OPTIONS,
         timezone_options=TIMEZONE_OPTIONS,
+        properties=properties,
+        selected_property_ids=selected_property_ids,
     )
 
 

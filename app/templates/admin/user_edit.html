@@ -102,6 +102,28 @@
           </div>
         {% else %}
           <div class="pv-field-group">
+            <label for="property_ids">Households this user can view</label>
+            <select
+              id="property_ids"
+              name="property_ids"
+              multiple
+              size="5"
+            >
+              {% for prop in properties %}
+                <option
+                  value="{{ prop.id }}"
+                  {% if prop.id in selected_property_ids %}selected{% endif %}
+                >
+                  {{ prop.name }}{% if prop.city %} – {{ prop.city }}{% if prop.state %}, {{ prop.state }}{% endif %}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+            <p class="pv-card-subtitle">
+              Hold Ctrl (Windows) or Cmd (macOS) to select multiple households.
+            </p>
+          </div>
+
+          <div class="pv-field-group">
             <label for="password">Initial password</label>
             <input
               id="password"
@@ -123,6 +145,14 @@
 
           <fieldset class="pv-field-group">
             <legend>Initial roles</legend>
+            <label class="pv-checkbox-label">
+              <input
+                type="checkbox"
+                name="make_viewer"
+                value="1"
+              />
+              <span>Viewer</span>
+            </label>
             <label class="pv-checkbox-label">
               <input
                 type="checkbox"
