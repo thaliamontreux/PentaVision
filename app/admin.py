@@ -351,6 +351,9 @@ def user_create():
         if password != password_confirm:
             errors.append("Passwords do not match.")
 
+        created_user_id = None
+        created_user_email = None
+
         if not errors:
             with Session(engine) as db:
                 existing = (
@@ -372,6 +375,12 @@ def user_create():
                     )
                     db.add(user)
                     db.flush()
+
+                    # Capture primitive identifiers for logging after the
+                    # session is closed to avoid DetachedInstanceError on
+                    # expired attributes.
+                    created_user_id = int(user.id)
+                    created_user_email = user.email
 
                     if make_viewer or make_admin or make_tech:
                         roles_to_apply: List[str] = []
@@ -429,12 +438,16 @@ def user_create():
 
                     db.commit()
 
-            actor = get_current_user()
-            log_event(
-                "ADMIN_USER_CREATE",
-                user_id=actor.id if actor else None,
-                details=f"target_user_id={user.id}, email={user.email}",
-            )
+            if created_user_id is not None and created_user_email is not None:
+                actor = get_current_user()
+                log_event(
+                    "ADMIN_USER_CREATE",
+                    user_id=actor.id if actor else None,
+                    details=(
+                        f"target_user_id={created_user_id}, "
+                        f"email={created_user_email}"
+                    ),
+                )
             return redirect(url_for("admin.users_list"))
 
     return render_template(
