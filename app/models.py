@@ -107,6 +107,17 @@ class User(UserBase):
     totp_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
 
+class IpAllowlist(UserBase):
+    __tablename__ = "ip_allowlist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cidr: Mapped[str] = mapped_column(String(64), unique=True)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class StorageSettings(RecordBase):
     __tablename__ = "storage_settings"
 

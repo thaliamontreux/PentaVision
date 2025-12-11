@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from typing import Optional
+from ipaddress import ip_address, ip_network
 
 from flask import Request, has_request_context, request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .db import get_user_engine
-from .models import AuditEvent
+from .models import AuditEvent, IpAllowlist
 
 
 def _client_ip() -> Optional[str]:
@@ -45,6 +46,40 @@ def log_event(event_type: str, user_id: Optional[int] = None, details: str = "")
         return
 
 
+def _ip_is_allowlisted(ip: str) -> bool:
+    """Return True if the given IP string is present in the allowlist.
+
+    The allowlist stores CIDR entries (e.g. 192.0.2.0/24 or 203.0.113.5), and
+    we treat single-host entries as /32 (or /128 for IPv6). Any DB or parsing
+    errors are treated as not allowlisted to avoid silently disabling
+    protections.
+    """
+
+    engine = get_user_engine()
+    if engine is None:
+        return False
+
+    try:
+        addr = ip_address(ip)
+    except ValueError:
+        return False
+
+    try:
+        with Session(engine) as session:
+            entries = session.query(IpAllowlist.cidr).all()
+        for (cidr,) in entries:
+            try:
+                net = ip_network(str(cidr), strict=False)
+            except ValueError:
+                continue
+            if addr in net:
+                return True
+    except Exception:  # noqa: BLE001
+        return False
+
+    return False
+
+
 def ip_is_locked() -> bool:
     """Return True if the current request IP is locked out due to failures.
 
@@ -59,6 +94,9 @@ def ip_is_locked() -> bool:
 
     ip = _client_ip()
     if not ip:
+        return False
+
+    if _ip_is_allowlisted(ip):
         return False
 
     try:
@@ -90,6 +128,10 @@ def update_ip_lockout_after_failure(threshold: int = 3) -> None:
 
     ip = _client_ip()
     if not ip:
+        return
+
+    # Never apply IP lockout to allowlisted IPs/subnets.
+    if _ip_is_allowlisted(ip):
         return
 
     try:

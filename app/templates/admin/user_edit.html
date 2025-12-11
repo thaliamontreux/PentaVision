@@ -64,24 +64,26 @@
 
         <div class="pv-field-group">
           <label for="pronouns">Pronouns</label>
-          <input
-            id="pronouns"
-            name="pronouns"
-            type="text"
-            value="{{ form.pronouns }}"
-          />
+          <select id="pronouns" name="pronouns">
+            {% for p in pronoun_options %}
+              <option value="{{ p }}" {% if form.pronouns == p %}selected{% endif %}>
+                {{ p if p else '— Select pronouns —' }}
+              </option>
+            {% endfor %}
+          </select>
         </div>
 
         <div class="pv-field-group">
           <label for="timezone">Time zone</label>
-          <input
-            id="timezone"
-            name="timezone"
-            type="text"
-            value="{{ form.timezone }}"
-          />
+          <select id="timezone" name="timezone">
+            {% for tz in timezone_options %}
+              <option value="{{ tz }}" {% if form.timezone == tz %}selected{% endif %}>
+                {{ tz }}
+              </option>
+            {% endfor %}
+          </select>
           <p class="pv-card-subtitle">
-            Optional IANA time zone (for example, <code>America/Chicago</code>).
+            IANA time zone (for example, <code>America/Chicago</code>).
           </p>
         </div>
 
@@ -155,4 +157,31 @@
       <p>Nothing to edit.</p>
     {% endif %}
   </section>
+  <script>
+    (function () {
+      // Only apply the auto-preferred-name behavior on the new-user form.
+      var isEdit = {{ 'true' if is_edit else 'false' }};
+      if (isEdit) return;
+
+      var fullInput = document.getElementById('full_name');
+      var preferredInput = document.getElementById('preferred_name');
+      if (!fullInput || !preferredInput) return;
+
+      var userTouchedPreferred = false;
+
+      preferredInput.addEventListener('input', function () {
+        // Once the admin starts typing in Preferred name, stop auto-syncing.
+        if (preferredInput.value.trim() !== '') {
+          userTouchedPreferred = true;
+        }
+      });
+
+      fullInput.addEventListener('input', function () {
+        if (userTouchedPreferred) return;
+        var full = fullInput.value || '';
+        var first = full.split(/\s+/).filter(function (p) { return p.length > 0; })[0] || '';
+        preferredInput.value = first;
+      });
+    })();
+  </script>
 {% endblock %}

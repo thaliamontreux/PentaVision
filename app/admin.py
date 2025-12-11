@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Set
+from typing import Dict, List, Sequence, Set
 
 from argon2 import PasswordHasher
 from flask import (
@@ -198,6 +198,96 @@ def update_user_roles(user_id: int):
     return redirect(url_for("admin.users_list"))
 
 
+PRONOUN_OPTIONS: Sequence[str] = (
+    "",
+    "she/her",
+    "he/him",
+    "they/them",
+    "she/they",
+    "he/they",
+    "ze/zir",
+    "ze/hir",
+    "xe/xem",
+)
+
+
+TIMEZONE_OPTIONS: Sequence[str] = (
+    "Africa/Cairo",
+    "Africa/Johannesburg",
+    "Africa/Lagos",
+    "Africa/Nairobi",
+    "America/Anchorage",
+    "America/Argentina/Buenos_Aires",
+    "America/Bogota",
+    "America/Chicago",
+    "America/Denver",
+    "America/Halifax",
+    "America/Los_Angeles",
+    "America/Mexico_City",
+    "America/New_York",
+    "America/Phoenix",
+    "America/Santiago",
+    "America/Sao_Paulo",
+    "America/Toronto",
+    "America/Vancouver",
+    "America/Winnipeg",
+    "Asia/Almaty",
+    "Asia/Amman",
+    "Asia/Bangkok",
+    "Asia/Beirut",
+    "Asia/Calcutta",
+    "Asia/Colombo",
+    "Asia/Dubai",
+    "Asia/Ho_Chi_Minh",
+    "Asia/Hong_Kong",
+    "Asia/Jakarta",
+    "Asia/Jerusalem",
+    "Asia/Karachi",
+    "Asia/Kathmandu",
+    "Asia/Kolkata",
+    "Asia/Kuala_Lumpur",
+    "Asia/Manila",
+    "Asia/Riyadh",
+    "Asia/Seoul",
+    "Asia/Shanghai",
+    "Asia/Singapore",
+    "Asia/Taipei",
+    "Asia/Tbilisi",
+    "Asia/Tehran",
+    "Asia/Tokyo",
+    "Australia/Adelaide",
+    "Australia/Brisbane",
+    "Australia/Melbourne",
+    "Australia/Perth",
+    "Australia/Sydney",
+    "Europe/Amsterdam",
+    "Europe/Athens",
+    "Europe/Berlin",
+    "Europe/Brussels",
+    "Europe/Bucharest",
+    "Europe/Budapest",
+    "Europe/Copenhagen",
+    "Europe/Dublin",
+    "Europe/Helsinki",
+    "Europe/Istanbul",
+    "Europe/Kiev",
+    "Europe/Lisbon",
+    "Europe/London",
+    "Europe/Madrid",
+    "Europe/Moscow",
+    "Europe/Oslo",
+    "Europe/Paris",
+    "Europe/Prague",
+    "Europe/Rome",
+    "Europe/Stockholm",
+    "Europe/Vienna",
+    "Europe/Warsaw",
+    "Pacific/Auckland",
+    "Pacific/Fiji",
+    "Pacific/Honolulu",
+)
+
+
 @bp.route("/users/new", methods=["GET", "POST"])
 def user_create():
     engine = get_user_engine()
@@ -207,7 +297,7 @@ def user_create():
         "full_name": "",
         "preferred_name": "",
         "pronouns": "",
-        "timezone": "",
+        "timezone": "America/Chicago",
     }
     csrf_token = _ensure_csrf_token()
 
@@ -220,6 +310,8 @@ def user_create():
             csrf_token=csrf_token,
             is_edit=False,
             user_id=None,
+            pronoun_options=PRONOUN_OPTIONS,
+            timezone_options=TIMEZONE_OPTIONS,
         )
 
     if request.method == "POST":
@@ -231,6 +323,8 @@ def user_create():
         form["preferred_name"] = (request.form.get("preferred_name") or "").strip()
         form["pronouns"] = (request.form.get("pronouns") or "").strip()
         form["timezone"] = (request.form.get("timezone") or "").strip()
+        if not form["timezone"]:
+            form["timezone"] = "America/Chicago"
         password = request.form.get("password") or ""
         password_confirm = request.form.get("password_confirm") or ""
         make_admin = request.form.get("make_admin") == "1"
@@ -316,6 +410,8 @@ def user_create():
         csrf_token=csrf_token,
         is_edit=False,
         user_id=None,
+        pronoun_options=PRONOUN_OPTIONS,
+        timezone_options=TIMEZONE_OPTIONS,
     )
 
 
@@ -354,7 +450,7 @@ def user_edit(user_id: int):
             "full_name": user.full_name or "",
             "preferred_name": user.preferred_name or "",
             "pronouns": user.pronouns or "",
-            "timezone": user.timezone or "",
+            "timezone": user.timezone or "America/Chicago",
             "account_status": user.account_status or "",
         }
 
@@ -395,6 +491,8 @@ def user_edit(user_id: int):
         csrf_token=csrf_token,
         is_edit=True,
         user_id=user_id,
+        pronoun_options=PRONOUN_OPTIONS,
+        timezone_options=TIMEZONE_OPTIONS,
     )
 
 
