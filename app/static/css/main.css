@@ -43,7 +43,7 @@ body {
   height: 240px;
   max-height: 260px;
   position: relative;
-  background: linear-gradient(135deg, #facc15, #eab308 35%, #a16207 70%, #854d0e 100%);
+  background: #000;
   border-radius: 0.75rem;
   border: 1px solid rgba(250, 204, 21, 0.95);
   box-shadow:
@@ -73,6 +73,10 @@ body {
   opacity: 0;
   transform: translateY(12px);
   pointer-events: none;
+}
+
+.pv-login-box-totp-suppressed {
+  display: none !important;
 }
 
 .pv-login-title {
