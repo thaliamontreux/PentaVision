@@ -723,8 +723,20 @@
         if (pk.challenge) {
           pk.challenge = bufferFromBase64Url(pk.challenge);
         }
-        if (pk.user && pk.user.id) {
-          pk.user.id = bufferFromBase64Url(pk.user.id);
+        if (pk.user) {
+          if (pk.user.id) {
+            pk.user.id = bufferFromBase64Url(pk.user.id);
+          }
+          // Normalize display_name (snake_case) to displayName as required by WebAuthn.
+          if (!pk.user.displayName && pk.user.display_name) {
+            pk.user.displayName = String(pk.user.display_name);
+          }
+          if (!pk.user.displayName && pk.user.name) {
+            pk.user.displayName = String(pk.user.name);
+          }
+          if (pk.user.display_name) {
+            delete pk.user.display_name;
+          }
         }
         // Edge is very strict about the optional "hints" field and expects a
         // sequence. We don't rely on it, so remove it entirely to avoid type
