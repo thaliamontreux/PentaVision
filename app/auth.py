@@ -17,6 +17,7 @@ from fido2.webauthn import (
     PublicKeyCredentialRpEntity,
     PublicKeyCredentialUserEntity,
 )
+from fido2.ctap2 import AttestationObject
 
 from .db import get_user_engine
 from .logging_utils import log_event
@@ -562,13 +563,17 @@ def passkey_register_complete():
         return jsonify({"error": "invalid attestation payload"}), 400
 
     client_data = CollectedClientData(websafe_decode(client_data_b64))
-    att_obj = websafe_decode(att_obj_b64)
+    att_obj = AttestationObject(websafe_decode(att_obj_b64))
 
     server = _webauthn_server()
     try:
         auth_data = server.register_complete(state, client_data, att_obj)
-    except Exception:
-        log_event("AUTH_WEBAUTHN_REGISTER_COMPLETE_FAILURE", user_id=int(user_id))
+    except Exception as exc:  # noqa: BLE001
+        log_event(
+            "AUTH_WEBAUTHN_REGISTER_COMPLETE_FAILURE",
+            user_id=int(user_id),
+            details=f"{type(exc).__name__}: {exc}",
+        )
         return jsonify({"error": "failed to verify attestation"}), 400
 
     credential_data = auth_data.credential_data
