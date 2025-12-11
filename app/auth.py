@@ -82,7 +82,8 @@ def _issue_token(user_id: int) -> str:
 def _verify_totp(user: User, code: str) -> bool:
     """Verify a TOTP code for the given user if TOTP is enabled."""
 
-    if not user.totp_secret:
+    raw_secret = getattr(user, "totp_secret", None) or ""
+    if not raw_secret:
         return True
 
     if not code:
@@ -91,8 +92,17 @@ def _verify_totp(user: User, code: str) -> bool:
     try:
         import pyotp
 
-        totp = pyotp.TOTP(user.totp_secret)
-        return bool(totp.verify(code, valid_window=1))
+        secrets: list[str] = [
+            s.strip() for s in str(raw_secret).split("|") if s.strip()
+        ]
+        if not secrets:
+            return True
+
+        for secret in secrets:
+            totp = pyotp.TOTP(secret)
+            if totp.verify(code, valid_window=1):
+                return True
+        return False
     except Exception:  # noqa: BLE001
         return False
 
@@ -310,8 +320,12 @@ def totp_setup():
             log_event("AUTH_TOTP_SETUP_FAILURE", user_id=user.id, details="bad password")
             return jsonify({"error": "invalid credentials"}), 401
 
-        if user.totp_secret:
-            return jsonify({"error": "totp already configured"}), 400
+        existing_raw = getattr(user, "totp_secret", None) or ""
+        existing_secrets = [
+            s.strip() for s in str(existing_raw).split("|") if s.strip()
+        ]
+        if len(existing_secrets) >= 2:
+            return jsonify({"error": "maximum totp keys reached"}), 400
 
         import pyotp
 
@@ -320,12 +334,68 @@ def totp_setup():
         issuer = current_app.config.get("TOTP_ISSUER", "PentaVision")
         otpauth_url = totp.provisioning_uri(name=email, issuer_name=issuer)
 
-        user.totp_secret = secret
+        new_secrets = existing_secrets + [secret]
+        user.totp_secret = "|".join(new_secrets)
         session.add(user)
         session.commit()
 
         log_event("AUTH_TOTP_SETUP_SUCCESS", user_id=user.id)
         return jsonify({"secret": secret, "otpauth_url": otpauth_url}), 201
+
+
+@bp.post("/totp/verify")
+def totp_verify():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    code = (data.get("code") or "").strip()
+
+    if not email or not password or not code:
+        return (jsonify({"error": "email, password, and code are required"}), 400)
+
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"error": "user database not configured"}), 500
+
+    with Session(engine) as session_db:
+        user = session_db.scalar(select(User).where(User.email == email))
+        if user is None:
+            log_event("AUTH_TOTP_VERIFY_FAILURE", details=f"unknown email={email}")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        try:
+            _ph.verify(user.password_hash, password)
+        except VerifyMismatchError:
+            log_event("AUTH_TOTP_VERIFY_FAILURE", user_id=user.id, details="bad password")
+            return jsonify({"error": "invalid credentials"}), 401
+
+        raw_secret = getattr(user, "totp_secret", None) or ""
+        secrets = [s.strip() for s in str(raw_secret).split("|") if s.strip()]
+        if not secrets:
+            return jsonify({"error": "no totp configured"}), 400
+
+        try:
+            import pyotp
+
+            latest_secret = secrets[-1]
+            totp = pyotp.TOTP(latest_secret)
+            if not totp.verify(code, valid_window=1):
+                log_event(
+                    "AUTH_TOTP_VERIFY_FAILURE",
+                    user_id=user.id,
+                    details="bad_totp_code",
+                )
+                return jsonify({"error": "invalid 2FA code"}), 401
+        except Exception:  # noqa: BLE001
+            log_event(
+                "AUTH_TOTP_VERIFY_FAILURE",
+                user_id=user.id,
+                details="totp_verify_exception",
+            )
+            return jsonify({"error": "failed to verify 2FA code"}), 400
+
+        log_event("AUTH_TOTP_VERIFY_SUCCESS", user_id=user.id)
+        return jsonify({"ok": True}), 200
 
 
 @bp.post("/passkeys/register/begin")
