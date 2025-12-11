@@ -733,47 +733,39 @@ def passkey_login_complete():
             log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE", user_id=user.id, details="unknown credential")
             return jsonify({"error": "unknown credential"}), 400
 
-        # Build AttestedCredentialData objects from the stored credentials so
-        # python-fido2 sees the expected interface (credential_id,
-        # public_key.verify(), sign_count via the returned object).
         try:
             from fido2.cose import CoseKey  # type: ignore
-            from fido2.webauthn import AttestedCredentialData  # type: ignore
 
-            def _to_attested(cred: WebAuthnCredential) -> AttestedCredentialData:
-                # The aaguid is not used for signature verification here; we
-                # can safely set it to zeros.
-                aaguid = b"\x00" * 16
-                cose = CoseKey.from_cbor(cred.public_key)
-                return AttestedCredentialData(aaguid + len(cred.credential_id).to_bytes(2, "big") + cred.credential_id + cose.as_cbor())
+            class _StoredCredential:
+                def __init__(self, cid: bytes, pk: CoseKey):  # type: ignore[name-defined]
+                    self.credential_id = cid
+                    self.public_key = pk
 
-            creds = [_to_attested(c) for c in stored_creds]
-        except Exception:  # noqa: BLE001
-            # If reconstruction fails for some reason, fall back to using the
-            # stored WebAuthnCredential objects directly.
-            creds = stored_creds
+            creds_for_verify: list[_StoredCredential] = []
+            for c in stored_creds:
+                cose = CoseKey.from_cbor(c.public_key)
+                creds_for_verify.append(_StoredCredential(c.credential_id, cose))
 
-        try:
             # Prefer the newer python-fido2 authenticate_complete(state,
             # credentials, response) API by passing the raw WebAuthn mapping
-            # from the browser together with AttestedCredentialData objects
-            # derived from the stored credentials.
+            # from the browser together with wrapped credentials exposing
+            # credential_id and public_key.verify().
             try:
                 auth_result = server.authenticate_complete(
                     state,
-                    creds,
+                    creds_for_verify,
                     data,
                 )
             except TypeError:
                 # Fallback for older python-fido2 versions that expect the
-                # expanded multi-argument form and a list of credential
-                # descriptors.
+                # expanded multi-argument form using the same wrapped
+                # credentials list.
                 client_data = CollectedClientData(websafe_decode(client_data_b64))
                 auth_data = websafe_decode(auth_data_b64)
                 signature = websafe_decode(signature_b64)
                 auth_result = server.authenticate_complete(
                     state,
-                    _credential_descriptors(creds),
+                    creds_for_verify,
                     credential_id,
                     client_data,
                     auth_data,
