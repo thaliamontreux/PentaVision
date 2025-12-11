@@ -583,7 +583,10 @@ def passkey_register_complete():
     credential_data = auth_data.credential_data
     credential_id = credential_data.credential_id
     public_key = credential_data.public_key
-    sign_count = auth_data.sign_count
+    # Some python-fido2 versions expose the registration counter as
+    # auth_data.sign_count, others as auth_data.counter, and some may not
+    # expose it at all. Normalize to an int and default to 0.
+    sign_count = getattr(auth_data, "sign_count", getattr(auth_data, "counter", 0))
 
     with Session(engine) as session_db:
         user = session_db.get(User, int(user_id))
