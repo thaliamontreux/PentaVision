@@ -341,7 +341,11 @@
               setOutput(options);
               return;
             }
-            decodeAssertionOptions(options);
+            options = decodeAssertionOptions(options);
+            if (!options || !options.publicKey) {
+              setOutput({ error: 'invalid passkey assertion options', options: options });
+              return;
+            }
             return navigator.credentials.get(options).then(function (assertion) {
               if (!assertion) {
                 throw new Error('No assertion was returned. The request may have been cancelled.');
