@@ -568,7 +568,14 @@ def passkey_register_complete():
 
     server = _webauthn_server()
     try:
-        auth_data = server.register_complete(state, client_data, att_obj)
+        try:
+            auth_data = server.register_complete(state, client_data, att_obj)
+        except TypeError as type_exc:
+            msg = str(type_exc)
+            if "takes 3 positional arguments but 4 were given" in msg:
+                auth_data = server.register_complete(state, client_data)
+            else:
+                raise
     except Exception as exc:  # noqa: BLE001
         details = f"{type(exc).__name__}: {exc}"
         log_event(
@@ -576,8 +583,6 @@ def passkey_register_complete():
             user_id=int(user_id),
             details=details,
         )
-        # Surface the detailed reason in the error string so the frontend can
-        # display it during debugging.
         return jsonify(
             {"error": f"failed to verify attestation: {details}"}
         ), 400
