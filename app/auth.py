@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from fido2.server import Fido2Server
 from fido2.utils import websafe_decode, websafe_encode
 from fido2.webauthn import (
-    AuthenticatorAttachment,
     CollectedClientData,
     PublicKeyCredentialDescriptor,
     PublicKeyCredentialRpEntity,
@@ -440,9 +439,6 @@ def passkey_register_begin():
         options, state = server.register_begin(
             user_entity,
             _credential_descriptors(creds),
-            authenticator_selection={
-                "authenticatorAttachment": AuthenticatorAttachment.CROSS_PLATFORM,
-            },
         )
 
         session["webauthn_register_state"] = state
