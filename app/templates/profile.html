@@ -732,6 +732,26 @@
         if (Object.prototype.hasOwnProperty.call(pk, 'hints')) {
           delete pk.hints;
         }
+        // Normalize pub_key_cred_params (snake_case from backend) to
+        // pubKeyCredParams as required by WebAuthn.
+        if (!pk.pubKeyCredParams && Array.isArray(pk.pub_key_cred_params)) {
+          pk.pubKeyCredParams = pk.pub_key_cred_params.map(function (param) {
+            if (!param) return { type: 'public-key', alg: -7 };
+            var t = param.type;
+            // If python-fido2 enum or object, try to extract .value.
+            if (t && typeof t === 'object' && typeof t.value === 'string') {
+              t = t.value;
+            }
+            if (typeof t !== 'string') {
+              t = 'public-key';
+            }
+            var alg = typeof param.alg === 'number' ? param.alg : -7;
+            return { type: t, alg: alg };
+          });
+        }
+        if (pk.pub_key_cred_params) {
+          delete pk.pub_key_cred_params;
+        }
         if (Array.isArray(pk.excludeCredentials)) {
           pk.excludeCredentials = pk.excludeCredentials.map(function (cred) {
             if (cred && cred.id) {
