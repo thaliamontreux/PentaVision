@@ -222,6 +222,11 @@
         if (pk.challenge) {
           pk.challenge = bufferFromBase64Url(pk.challenge);
         }
+        // Edge is strict about the optional "hints" field. We don't rely on
+        // it for authentication, so remove it entirely to avoid type errors.
+        if (Object.prototype.hasOwnProperty.call(pk, 'hints')) {
+          delete pk.hints;
+        }
         if (Array.isArray(pk.allowCredentials)) {
           pk.allowCredentials = pk.allowCredentials.map(function (cred) {
             if (cred && cred.id) {
