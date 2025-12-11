@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -81,6 +82,37 @@ def _webauthn_json(data):
     if isinstance(data, (list, tuple, set)):
         return [_webauthn_json(v) for v in data]
     return data
+
+
+def _json_default(obj):
+    """Fallback serializer for json.dumps to handle bytes and FIDO2 objects.
+
+    This is only used in our custom _json_response helper for WebAuthn options.
+    """
+
+    if isinstance(obj, (bytes, bytearray)):
+        return websafe_encode(obj).decode("ascii")
+
+    to_json = getattr(obj, "to_json", None)
+    if callable(to_json):
+        return to_json()
+
+    # Last resort: string representation so JSON encoding never fails.
+    return str(obj)
+
+
+def _json_response(data, status_code: int = 200):
+    """Return a Flask Response with JSON generated via json.dumps.
+
+    We bypass Flask's jsonify here so that our _json_default handler is used,
+    ensuring that any remaining bytes or custom WebAuthn objects are encoded
+    safely instead of triggering TypeError in Flask's JSON provider.
+    """
+
+    payload = json.dumps(data, default=_json_default)
+    return current_app.response_class(
+        payload + "\n", mimetype="application/json", status=status_code
+    )
 
 
 def _encode_webauthn_state(state):
@@ -497,7 +529,7 @@ def passkey_register_begin():
             session["webauthn_register_nickname"] = nickname
 
         log_event("AUTH_WEBAUTHN_REGISTER_BEGIN", user_id=user.id)
-        return jsonify(_webauthn_json(options))
+        return _json_response(_webauthn_json(options))
 
 
 @bp.post("/passkeys/register/complete")
@@ -605,7 +637,7 @@ def passkey_login_begin():
         session["webauthn_login_user_id"] = user.id
 
         log_event("AUTH_WEBAUTHN_LOGIN_BEGIN", user_id=user.id)
-        return jsonify(_webauthn_json(options))
+        return _json_response(_webauthn_json(options))
 
 
 @bp.post("/passkeys/login/complete")
