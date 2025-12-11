@@ -119,24 +119,24 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
             return None, "invalid credentials", 401
 
         now = datetime.now(timezone.utc)
-        if user.locked_until and user.locked_until > now:
+        if user.pin_locked_until and user.pin_locked_until > now:
             log_event(
                 "AUTH_LOGIN_LOCKED",
                 user_id=user.id,
-                details=f"locked_until={user.locked_until.isoformat()}",
+                details=f"pin_locked_until={user.pin_locked_until.isoformat()}",
             )
             return None, "account locked. try again later.", 403
 
         try:
             _ph.verify(user.password_hash, password)
         except VerifyMismatchError:
-            user.failed_logins = (user.failed_logins or 0) + 1
-            if user.failed_logins >= 5:
-                user.locked_until = now + timedelta(minutes=15)
+            user.failed_pin_attempts = (user.failed_pin_attempts or 0) + 1
+            if user.failed_pin_attempts >= 5:
+                user.pin_locked_until = now + timedelta(minutes=15)
                 log_event(
                     "AUTH_LOGIN_LOCKED_SET",
                     user_id=user.id,
-                    details="failed_logins>=5",
+                    details="failed_pin_attempts>=5",
                 )
             session_db.add(user)
             session_db.commit()
@@ -150,8 +150,8 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
 
         if _ph.check_needs_rehash(user.password_hash):
             user.password_hash = _ph.hash(password)
-        user.failed_logins = 0
-        user.locked_until = None
+        user.failed_pin_attempts = 0
+        user.pin_locked_until = None
         user.last_login_at = now
         session_db.add(user)
         session_db.commit()
@@ -186,24 +186,24 @@ def _authenticate_primary_factor(email: str, password: str):
             return None, "invalid credentials", 401, False
 
         now = datetime.now(timezone.utc)
-        if user.locked_until and user.locked_until > now:
+        if user.pin_locked_until and user.pin_locked_until > now:
             log_event(
                 "AUTH_LOGIN_LOCKED",
                 user_id=user.id,
-                details=f"locked_until={user.locked_until.isoformat()}",
+                details=f"pin_locked_until={user.pin_locked_until.isoformat()}",
             )
             return None, "account locked. try again later.", 403, False
 
         try:
             _ph.verify(user.password_hash, password)
         except VerifyMismatchError:
-            user.failed_logins = (user.failed_logins or 0) + 1
-            if user.failed_logins >= 5:
-                user.locked_until = now + timedelta(minutes=15)
+            user.failed_pin_attempts = (user.failed_pin_attempts or 0) + 1
+            if user.failed_pin_attempts >= 5:
+                user.pin_locked_until = now + timedelta(minutes=15)
                 log_event(
                     "AUTH_LOGIN_LOCKED_SET",
                     user_id=user.id,
-                    details="failed_logins>=5",
+                    details="failed_pin_attempts>=5",
                 )
             session_db.add(user)
             session_db.commit()
@@ -212,8 +212,8 @@ def _authenticate_primary_factor(email: str, password: str):
 
         if _ph.check_needs_rehash(user.password_hash):
             user.password_hash = _ph.hash(password)
-        user.failed_logins = 0
-        user.locked_until = None
+        user.failed_pin_attempts = 0
+        user.pin_locked_until = None
         session_db.add(user)
         session_db.commit()
 
