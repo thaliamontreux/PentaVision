@@ -736,9 +736,14 @@ def passkey_login_complete():
                 auth_data,
                 signature,
             )
-        except Exception:
-            log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE", user_id=user.id, details="verification failed")
-            return jsonify({"error": "failed to verify assertion"}), 400
+        except Exception as exc:  # noqa: BLE001
+            details = f"{type(exc).__name__}: {exc}"
+            log_event(
+                "AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE",
+                user_id=user.id,
+                details=details,
+            )
+            return jsonify({"error": f"failed to verify assertion: {details}"}), 400
 
         cred_obj.sign_count = auth_result.new_sign_count
         cred_obj.last_used_at = datetime.now(timezone.utc)

@@ -355,9 +355,12 @@
               if (!assertion) {
                 throw new Error('No assertion was returned. The request may have been cancelled.');
               }
+              var rawIdB64 = base64UrlFromBuffer(assertion.rawId);
               var res = {
-                id: assertion.id,
-                rawId: base64UrlFromBuffer(assertion.rawId),
+                // Ensure id and rawId are identical base64url strings so the
+                // backend/python-fido2 sees them as consistent.
+                id: rawIdB64,
+                rawId: rawIdB64,
                 type: assertion.type,
                 response: {
                   clientDataJSON: base64UrlFromBuffer(assertion.response.clientDataJSON),
