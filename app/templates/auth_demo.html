@@ -191,7 +191,15 @@
       if (pkRegisterBtn) {
         pkRegisterBtn.addEventListener('click', function () {
           if (!window.PublicKeyCredential) {
-            setOutput('WebAuthn is not supported in this browser.');
+            if (!window.isSecureContext) {
+              setOutput(
+                'Passkeys require a secure context (HTTPS or localhost). Load this page over HTTPS to use passkeys.'
+              );
+            } else {
+              setOutput(
+                'Passkeys/WebAuthn are not available or are disabled in this browser.'
+              );
+            }
             return;
           }
           var email = document.getElementById('pk-email').value.trim();
@@ -235,7 +243,15 @@
       if (pkLoginBtn) {
         pkLoginBtn.addEventListener('click', function () {
           if (!window.PublicKeyCredential) {
-            setOutput('WebAuthn is not supported in this browser.');
+            if (!window.isSecureContext) {
+              setOutput(
+                'Passkeys require a secure context (HTTPS or localhost). Load this page over HTTPS to use passkeys.'
+              );
+            } else {
+              setOutput(
+                'Passkeys/WebAuthn are not available or are disabled in this browser.'
+              );
+            }
             return;
           }
           var email = document.getElementById('pk-email').value.trim();

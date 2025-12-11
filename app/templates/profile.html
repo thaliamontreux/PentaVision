@@ -727,7 +727,17 @@
         pkBtn.addEventListener('click', function () {
           var out = document.getElementById('pk-output');
           if (!window.PublicKeyCredential) {
-            setOutput(out, 'Passkeys are not supported in this browser.');
+            if (!window.isSecureContext) {
+              setOutput(
+                out,
+                'Passkeys require a secure context (HTTPS or localhost). Load this page over HTTPS to use passkeys.'
+              );
+            } else {
+              setOutput(
+                out,
+                'Passkeys/WebAuthn are not available or are disabled in this browser.'
+              );
+            }
             return;
           }
           if (!email) {
