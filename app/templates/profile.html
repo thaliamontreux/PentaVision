@@ -703,7 +703,15 @@
       }
 
       function decodePublicKeyOptions(opts) {
-        if (!opts || !opts.publicKey) return opts;
+        if (!opts) return opts;
+
+        // Some servers return the publicKey options object directly instead of
+        // wrapping it in { publicKey: ... }. Normalize that here.
+        if (!opts.publicKey && (opts.challenge || opts.rp || opts.user)) {
+          opts = { publicKey: opts };
+        }
+        if (!opts.publicKey) return opts;
+
         var pk = opts.publicKey;
         if (pk.challenge) {
           pk.challenge = bufferFromBase64Url(pk.challenge);
@@ -762,7 +770,11 @@
               setOutput(out, 'Error: ' + options.error);
               return;
             }
-            decodePublicKeyOptions(options);
+            options = decodePublicKeyOptions(options);
+            if (!options || !options.publicKey) {
+              setOutput(out, { error: 'invalid passkey registration options', options: options });
+              return;
+            }
             return navigator.credentials.create(options).then(function (cred) {
               var att = {
                 id: cred.id,
