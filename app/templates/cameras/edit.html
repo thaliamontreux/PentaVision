@@ -114,13 +114,22 @@
         </div>
 
         <div class="pv-field-group">
-          <label for="oui_regex">OUI / MAC regex</label>
+          <label for="oui_regex_lines">OUI / MAC prefixes</label>
+          <textarea
+            id="oui_regex_lines"
+            rows="4"
+            style="width: 100%; resize: vertical;"
+          ></textarea>
           <input
             id="oui_regex"
             name="oui_regex"
-            type="text"
+            type="hidden"
             value="{{ form.oui_regex }}"
           />
+          <p class="pv-card-subtitle">
+            Enter each OUI (like <code>AA:BB:CC</code>) on its own line. The
+            system will combine them into a single regex internally.
+          </p>
         </div>
 
         <div class="pv-field-group">
@@ -268,6 +277,46 @@
             Create pattern
           {% endif %}
         </button>
+        <script>
+          (function () {
+            var form = document.querySelector('.pv-form');
+            if (!form) return;
+
+            var hidden = document.getElementById('oui_regex');
+            var textarea = document.getElementById('oui_regex_lines');
+            if (!hidden || !textarea) return;
+
+            // Initialize textarea from existing regex: split simple
+            // "AA:BB:CC|DD:EE:FF" style patterns into one OUI per line.
+            var raw = String(hidden.value || '');
+            if (raw) {
+              var simple = /^[0-9A-Fa-f:\s|]+$/;
+              if (simple.test(raw) && raw.indexOf('|') !== -1) {
+                var parts = raw.split('|');
+                var lines = [];
+                for (var i = 0; i < parts.length; i++) {
+                  var p = parts[i].trim();
+                  if (p) lines.push(p);
+                }
+                textarea.value = lines.join('\n');
+              } else {
+                textarea.value = raw;
+              }
+            }
+
+            form.addEventListener('submit', function () {
+              if (!hidden || !textarea) return;
+              var lines = String(textarea.value || '').split(/\r?\n/);
+              var items = [];
+              for (var i = 0; i < lines.length; i++) {
+                var t = lines[i].trim();
+                if (t) items.push(t);
+              }
+              // Join OUI entries into a single regex separated by |.
+              hidden.value = items.join('|');
+            });
+          })();
+        </script>
       </form>
     {% else %}
       <p>Nothing to edit.</p>
