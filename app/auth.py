@@ -568,10 +568,16 @@ def passkey_register_complete():
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": f"invalid attestation encoding: {exc}"}), 400
 
+    # Derive id directly from rawId so python-fido2's internal consistency
+    # check (id vs rawId) always passes.
+    id_text = websafe_encode(raw_id)
+    if isinstance(id_text, (bytes, bytearray)):
+        id_text = id_text.decode("ascii")
+
     # Normalize the response mapping so python-fido2 sees bytes for all
-    # binary fields instead of base64url strings.
+    # binary fields instead of base64url strings, with a consistent id/rawId.
     normalized_response = {
-        "id": data.get("id") or data.get("rawId") or "",
+        "id": id_text,
         "rawId": raw_id,
         "type": data.get("type") or "public-key",
         "response": {
