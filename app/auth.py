@@ -784,7 +784,12 @@ def passkey_login_complete():
             )
             return jsonify({"error": f"failed to verify assertion: {details}"}), 400
 
-        cred_obj.sign_count = auth_result.new_sign_count
+        # Newer python-fido2 authenticate_complete implementations may not
+        # expose a new_sign_count attribute on the returned object. In that
+        # case, keep the existing stored sign_count. Older versions that do
+        # provide new_sign_count will still be supported via getattr.
+        new_sign_count = getattr(auth_result, "new_sign_count", cred_obj.sign_count)
+        cred_obj.sign_count = int(new_sign_count or 0)
         cred_obj.last_used_at = datetime.now(timezone.utc)
         session_db.add(cred_obj)
 
