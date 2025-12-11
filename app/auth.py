@@ -554,28 +554,36 @@ def passkey_register_complete():
         return jsonify({"error": "no pending registration"}), 400
 
     data = request.get_json(silent=True) or {}
-    raw_id = data.get("id") or data.get("rawId")
+    raw_id_b64 = data.get("rawId") or data.get("id")
     response = data.get("response") or {}
     client_data_b64 = response.get("clientDataJSON")
     att_obj_b64 = response.get("attestationObject")
-    if not raw_id or not client_data_b64 or not att_obj_b64:
+    if not raw_id_b64 or not client_data_b64 or not att_obj_b64:
         return jsonify({"error": "invalid attestation payload"}), 400
 
-    client_data = CollectedClientData(websafe_decode(client_data_b64))
-    # Older python-fido2 versions accept raw bytes for attestationObject.
-    # Newer versions will wrap this internally as an AttestationObject.
-    att_obj = websafe_decode(att_obj_b64)
+    try:
+        raw_id = websafe_decode(raw_id_b64)
+        client_data_bytes = websafe_decode(client_data_b64)
+        att_obj_bytes = websafe_decode(att_obj_b64)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": f"invalid attestation encoding: {exc}"}), 400
+
+    # Normalize the response mapping so python-fido2 sees bytes for all
+    # binary fields instead of base64url strings.
+    normalized_response = {
+        "id": data.get("id") or data.get("rawId") or "",
+        "rawId": raw_id,
+        "type": data.get("type") or "public-key",
+        "response": {
+            "clientDataJSON": client_data_bytes,
+            "attestationObject": att_obj_bytes,
+        },
+        "clientExtensionResults": data.get("clientExtensionResults") or {},
+    }
 
     server = _webauthn_server()
     try:
-        try:
-            auth_data = server.register_complete(state, client_data, att_obj)
-        except TypeError as type_exc:
-            msg = str(type_exc)
-            if "takes 3 positional arguments but 4 were given" in msg:
-                auth_data = server.register_complete(state, client_data)
-            else:
-                raise
+        auth_data = server.register_complete(state, normalized_response)
     except Exception as exc:  # noqa: BLE001
         details = f"{type(exc).__name__}: {exc}"
         log_event(
