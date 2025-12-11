@@ -68,7 +68,12 @@ def _webauthn_json(data):
         return _webauthn_json(to_json())
 
     if isinstance(data, (bytes, bytearray)):
-        return websafe_encode(data).decode("ascii")
+        encoded = websafe_encode(data)
+        # websafe_encode may return either bytes or str depending on
+        # python-fido2 version. Normalize to a plain str.
+        if isinstance(encoded, (bytes, bytearray)):
+            return encoded.decode("ascii")
+        return encoded
     if isinstance(data, dict):
         # Normalize both keys and values so no raw bytes remain anywhere.
         return {
