@@ -64,7 +64,12 @@
                 <td>{{ p.manufacturer }}</td>
                 <td>{{ p.model_or_note or '' }}</td>
                 <td>{{ p.device_type or '' }}</td>
-                <td><code>{{ p.oui_regex or '' }}</code></td>
+                <td>
+                  {% set oui = p.oui_regex or '' %}
+                  {% if oui %}
+                    <code>{{ oui.replace('|', '<br>')|safe }}</code>
+                  {% endif %}
+                </td>
                 <td>{{ p.protocol or 'RTSP' }}</td>
                 <td>
                   <code>{{ p.rtsp_url_pattern }}</code>
