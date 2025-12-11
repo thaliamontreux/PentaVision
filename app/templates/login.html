@@ -234,7 +234,8 @@
                   clientDataJSON: base64UrlFromBuffer(assertion.response.clientDataJSON),
                   authenticatorData: base64UrlFromBuffer(assertion.response.authenticatorData),
                   signature: base64UrlFromBuffer(assertion.response.signature)
-                }
+                },
+                next: nextUrl
               };
               return apiPostJson('{{ url_for("auth.passkey_login_complete") }}', res);
             });
@@ -243,6 +244,13 @@
             if (!data) return;
             if (data.error) {
               alert('Error: ' + data.error);
+              return;
+            }
+            if (data.totp_required) {
+              // Backend has stored pending_totp_user_id/pending_totp_next; send
+              // the user to the existing TOTP step to complete sign-in.
+              var redirectUrl = data.redirect || '{{ url_for("main.login_totp") }}';
+              window.location.href = redirectUrl;
               return;
             }
             window.location.href = nextUrl;

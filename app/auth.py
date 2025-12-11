@@ -5,7 +5,7 @@ import json
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request, session, url_for
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -800,6 +800,31 @@ def passkey_login_complete():
 
     session.pop("webauthn_login_state", None)
     session.pop("webauthn_login_user_id", None)
+
+    # If the user has TOTP configured, require it as a second step even after
+    # successful passkey verification. This mirrors the HTML password login
+    # flow, which always routes TOTP-enabled users through /login/totp.
+    has_totp = bool(getattr(user, "totp_secret", None))
+    if has_totp:
+        next_url = data.get("next") or url_for("main.index")
+        if not str(next_url).startswith("/"):
+            next_url = url_for("main.index")
+        session["pending_totp_user_id"] = int(user.id)
+        session["pending_totp_next"] = next_url
+        log_event(
+            "AUTH_WEBAUTHN_LOGIN_TOTP_REQUIRED",
+            user_id=int(user_id),
+        )
+        return (
+            jsonify(
+                {
+                    "totp_required": True,
+                    "redirect": url_for("main.login_totp"),
+                    "next": next_url,
+                }
+            ),
+            200,
+        )
 
     login_user(user)
 
