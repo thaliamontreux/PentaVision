@@ -97,8 +97,12 @@ def _json_default(obj):
     if callable(to_json):
         return to_json()
 
-    # Last resort: string representation so JSON encoding never fails.
-    return str(obj)
+    # Try to serialize arbitrary FIDO2 or dataclass-like objects by attrs.
+    try:
+        return _webauthn_json(vars(obj))
+    except TypeError:
+        # Last resort: string representation so JSON encoding never fails.
+        return str(obj)
 
 
 def _json_response(data, status_code: int = 200):

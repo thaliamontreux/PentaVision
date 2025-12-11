@@ -132,8 +132,15 @@
 
         // Some servers return the publicKey options object directly instead of
         // wrapping it in { publicKey: ... }. Normalize that here.
-        if (!opts.publicKey && (opts.challenge || opts.rp || opts.user)) {
-          opts = { publicKey: opts };
+        if (!opts.publicKey) {
+          if (opts.public_key) {
+            // python-fido2 CredentialCreationOptions serialized via vars():
+            // { public_key: { rp, user, challenge, ... } }
+            opts = { publicKey: opts.public_key };
+          } else if (opts.challenge || opts.rp || opts.user) {
+            // Bare PublicKeyCredentialCreationOptions dict.
+            opts = { publicKey: opts };
+          }
         }
         if (!opts.publicKey) return opts;
 
