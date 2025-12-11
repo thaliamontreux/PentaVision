@@ -21,7 +21,7 @@ from fido2.webauthn import (
 from .db import get_user_engine
 from .logging_utils import log_event
 from .models import User, WebAuthnCredential
-from .security import seed_system_admin_role_for_email
+from .security import seed_system_admin_role_for_email, login_user
 
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -608,7 +608,7 @@ def passkey_register_complete():
     # expose it at all. Normalize to an int and default to 0.
     sign_count = getattr(auth_data, "sign_count", getattr(auth_data, "counter", 0))
 
-    with Session(engine) as session_db:
+    with Session(engine, expire_on_commit=False) as session_db:
         user = session_db.get(User, int(user_id))
         if user is None:
             return jsonify({"error": "user not found"}), 400
@@ -743,10 +743,16 @@ def passkey_login_complete():
         cred_obj.sign_count = auth_result.new_sign_count
         cred_obj.last_used_at = datetime.now(timezone.utc)
         session_db.add(cred_obj)
+
+        user.last_login_at = datetime.now(timezone.utc)
+        session_db.add(user)
+
         session_db.commit()
 
     session.pop("webauthn_login_state", None)
     session.pop("webauthn_login_user_id", None)
+
+    login_user(user)
 
     token = _issue_token(int(user_id))
     log_event("AUTH_WEBAUTHN_LOGIN_COMPLETE", user_id=int(user_id))
