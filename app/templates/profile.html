@@ -726,9 +726,10 @@
         if (pk.user && pk.user.id) {
           pk.user.id = bufferFromBase64Url(pk.user.id);
         }
-        // Some python-fido2 versions may include a non-array "hints" value
-        // that Edge cannot convert to a sequence. If it's not an array, drop it.
-        if (pk.hints && !Array.isArray(pk.hints)) {
+        // Edge is very strict about the optional "hints" field and expects a
+        // sequence. We don't rely on it, so remove it entirely to avoid type
+        // errors.
+        if (Object.prototype.hasOwnProperty.call(pk, 'hints')) {
           delete pk.hints;
         }
         if (Array.isArray(pk.excludeCredentials)) {
