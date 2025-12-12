@@ -65,7 +65,10 @@ class DlnaManager:
 
         with self._lock:
             running = self._proc is not None and self._proc.poll() is None
-            config_changed = interface_name and interface_name != self._current_interface
+            config_changed = (
+                interface_name
+                and interface_name != self._current_interface
+            )
 
             if enabled and (not running or config_changed):
                 self._stop_locked()
@@ -98,7 +101,9 @@ class DlnaManager:
             if settings is None:
                 return
             if code != 0:
-                settings.last_error = f"MiniDLNA exited with code {code}"[:512]
+                settings.last_error = (
+                    f"Gerbera exited with code {code}"
+                )[:512]
             session_db.add(settings)
             session_db.commit()
 
@@ -132,28 +137,46 @@ class DlnaManager:
         db_dir = base_dir / "db"
         log_dir = base_dir / "log"
         media_dir = base_dir / "media"
-        for p in (base_dir, db_dir, log_dir, media_dir):
-            p.mkdir(parents=True, exist_ok=True)
+        for path in (base_dir, db_dir, log_dir, media_dir):
+            path.mkdir(parents=True, exist_ok=True)
 
-        friendly = str(self.app.config.get("DLNA_FRIENDLY_NAME", "PentaVision DLNA") or "PentaVision DLNA")
-        minidlna_bin = str(self.app.config.get("MINIDLNA_BIN", "minidlnad") or "minidlnad")
+        friendly_raw = self.app.config.get(
+            "DLNA_FRIENDLY_NAME",
+            "PentaVision DLNA",
+        )
+        friendly = str(friendly_raw or "PentaVision DLNA")
+        gerbera_raw = self.app.config.get("GERBERA_BIN", "gerbera")
+        gerbera_bin = str(gerbera_raw or "gerbera")
 
-        conf_path = base_dir / "minidlna.conf"
-        lines = [
-            f"media_dir=V,{media_dir}",
-            f"db_dir={db_dir}",
-            f"log_dir={log_dir}",
-            f"friendly_name={friendly}",
-            f"network_interface={name}",
-            "inotify=yes",
+        conf_path = base_dir / "gerbera-config.xml"
+        db_file = db_dir / "gerbera.db"
+
+        # Minimal Gerbera configuration: SQLite storage and a single import
+        # directory pointing at the DLNA media folder. Additional tuning can
+        # be done by editing this file manually if needed.
+        conf_lines = [
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+            "<config version=\"2\">",
+            "  <server>",
+            f"    <name>{friendly}</name>",
+            "  </server>",
+            "  <storage>",
+            "    <sqlite3 enabled=\"yes\">",
+            f"      <database-file>{db_file}</database-file>",
+            "    </sqlite3>",
+            "  </storage>",
+            "  <import>",
+            f"    <directory recursive=\"yes\">{media_dir}</directory>",
+            "  </import>",
+            "</config>",
         ]
-        conf_text = "\n".join(str(x) for x in lines) + "\n"
+        conf_text = "\n".join(conf_lines) + "\n"
         conf_path.write_text(conf_text, encoding="utf-8")
 
         env = os.environ.copy()
         try:
             proc = subprocess.Popen(
-                [minidlna_bin, "-d", "-f", str(conf_path)],
+                [gerbera_bin, "-c", str(conf_path)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -168,7 +191,9 @@ class DlnaManager:
                 )
                 if row is None:
                     return
-                row.last_error = f"MiniDLNA executable not found: {exc}"[:512]
+                row.last_error = (
+                    f"Gerbera executable not found: {exc}"
+                )[:512]
                 session_db.add(row)
                 session_db.commit()
             return

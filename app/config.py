@@ -47,8 +47,12 @@ def load_config() -> Dict[str, Any]:
         "RTMP_ENABLED": os.getenv("RTMP_ENABLED", "0"),
         "RTMP_LOW_LATENCY": _get_bool_env("RTMP_LOW_LATENCY", False),
         "DLNA_ENABLED": os.getenv("DLNA_ENABLED", "0"),
-        "DLNA_FRIENDLY_NAME": os.getenv("DLNA_FRIENDLY_NAME", "PentaVision DLNA"),
+        "DLNA_FRIENDLY_NAME": os.getenv(
+            "DLNA_FRIENDLY_NAME",
+            "PentaVision DLNA",
+        ),
         "MINIDLNA_BIN": os.getenv("MINIDLNA_BIN", "minidlnad"),
+        "GERBERA_BIN": os.getenv("GERBERA_BIN", "gerbera"),
         "IPTV_ENABLED": os.getenv("IPTV_ENABLED", "0"),
         "RECORDING_BASE_DIR": os.getenv("RECORDING_BASE_DIR", ""),
         "STORAGE_TARGETS": os.getenv("STORAGE_TARGETS", ""),
