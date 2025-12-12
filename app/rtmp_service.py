@@ -111,6 +111,8 @@ class RtmpWorker(threading.Thread):
             "veryfast",
             "-tune",
             "zerolatency",
+            "-vf",
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             "-pix_fmt",
             "yuv420p",
             "-f",
