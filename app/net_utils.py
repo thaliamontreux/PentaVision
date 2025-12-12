@@ -16,32 +16,33 @@ def get_ipv4_interfaces() -> List[Dict[str, str]]:
     if psutil is not None:
         try:
             for name, addrs in psutil.net_if_addrs().items():
+                ipv4_ip = ""
+                ipv4_netmask = ""
+                ipv4_broadcast = ""
                 for addr in addrs:
-                    if getattr(addr, "family", None) != socket.AF_INET:
-                        continue
-                    ip = getattr(addr, "address", "") or ""
-                    netmask = getattr(addr, "netmask", "") or ""
-                    broadcast = getattr(addr, "broadcast", "") or ""
-                    if not ip:
-                        continue
-                    network_cidr = ""
-                    if netmask:
-                        try:
-                            network = ipaddress.IPv4Network(
-                                f"{ip}/{netmask}", strict=False
-                            )
-                            network_cidr = str(network)
-                        except Exception:
-                            network_cidr = ""
-                    interfaces.append(
-                        {
-                            "name": str(name),
-                            "ip": ip,
-                            "netmask": netmask,
-                            "broadcast": broadcast,
-                            "network": network_cidr,
-                        }
-                    )
+                    if getattr(addr, "family", None) == socket.AF_INET:
+                        ipv4_ip = getattr(addr, "address", "") or ""
+                        ipv4_netmask = getattr(addr, "netmask", "") or ""
+                        ipv4_broadcast = getattr(addr, "broadcast", "") or ""
+                        break
+                network_cidr = ""
+                if ipv4_ip and ipv4_netmask:
+                    try:
+                        network = ipaddress.IPv4Network(
+                            f"{ipv4_ip}/{ipv4_netmask}", strict=False
+                        )
+                        network_cidr = str(network)
+                    except Exception:
+                        network_cidr = ""
+                interfaces.append(
+                    {
+                        "name": str(name),
+                        "ip": ipv4_ip,
+                        "netmask": ipv4_netmask,
+                        "broadcast": ipv4_broadcast,
+                        "network": network_cidr,
+                    }
+                )
         except Exception:
             interfaces = []
 

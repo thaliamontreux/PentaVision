@@ -110,7 +110,7 @@ class DlnaManager:
             if item.get("name") == name:
                 match = item
                 break
-        if not match:
+        if not match or not (match.get("ip") or ""):
             with Session(engine) as session_db:
                 row = (
                     session_db.query(DlnaSettings)
