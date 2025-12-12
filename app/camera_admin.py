@@ -35,6 +35,7 @@ from .models import (
     Property,
     UserProperty,
 )
+from .models_iptv import CameraIptvChannel
 from .security import get_current_user, user_has_property_access, user_has_role
 from .stream_service import get_stream_manager
 from .camera_utils import build_camera_url
@@ -276,6 +277,51 @@ def _upsert_rtmp_output(
     row.target_url = url
     row.is_active = is_active
     session_db.add(row)
+
+
+def _upsert_iptv_channel(
+    session_db: Session,
+    device_id: int,
+    is_enabled: bool,
+    multicast_address: str,
+    port: int,
+    ttl: Optional[int],
+    channel_name: str,
+) -> CameraIptvChannel:
+    bind = session_db.get_bind()
+    if bind is not None:
+        CameraIptvChannel.__table__.create(bind=bind, checkfirst=True)
+
+    row = (
+        session_db.query(CameraIptvChannel)
+        .filter(CameraIptvChannel.device_id == device_id)
+        .first()
+    )
+
+    enabled_value = 1 if is_enabled else 0
+    addr_value = (multicast_address or "").strip()
+    name_value = (channel_name or "").strip() or None
+    ttl_value: Optional[int] = ttl if ttl is not None else None
+
+    if row is None:
+        row = CameraIptvChannel(
+            device_id=device_id,
+            is_enabled=enabled_value,
+            multicast_address=addr_value,
+            port=port,
+            ttl=ttl_value,
+            channel_name=name_value,
+        )
+        session_db.add(row)
+        return row
+
+    row.is_enabled = enabled_value
+    row.multicast_address = addr_value
+    row.port = port
+    row.ttl = ttl_value
+    row.channel_name = name_value
+    session_db.add(row)
+    return row
 
 
 def _upsert_dlna_media(
@@ -1505,6 +1551,183 @@ def dlna_media_restart(output_id: int):
             session_db.commit()
 
     return redirect(url_for("camera_admin.dlna_media_list"))
+
+
+@bp.get("/iptv")
+def iptv_list():
+    engine = get_record_engine()
+    errors: List[str] = []
+    devices: List[CameraDevice] = []
+    channels: List[CameraIptvChannel] = []
+    device_index: dict[int, CameraDevice] = {}
+
+    if engine is None:
+        errors.append("Record database is not configured.")
+    else:
+        with Session(engine) as session_db:
+            CameraIptvChannel.__table__.create(bind=engine, checkfirst=True)
+            devices = (
+                session_db.query(CameraDevice)
+                .order_by(CameraDevice.name)
+                .all()
+            )
+            channels = (
+                session_db.query(CameraIptvChannel)
+                .order_by(CameraIptvChannel.id)
+                .all()
+            )
+            device_index = {d.id: d for d in devices}
+
+    csrf_token = _ensure_csrf_token()
+    return render_template(
+        "cameras/iptv_list.html",
+        devices=device_index,
+        channels=channels,
+        errors=errors,
+        csrf_token=csrf_token,
+    )
+
+
+@bp.route("/iptv/<int:channel_id>", methods=["GET", "POST"])
+def iptv_edit(channel_id: int):
+    engine = get_record_engine()
+    errors: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("Record database is not configured.")
+        return render_template(
+            "cameras/iptv_edit.html",
+            form=None,
+            devices=[],
+            channel=None,
+            errors=errors,
+            csrf_token=csrf_token,
+            is_edit=True,
+        )
+
+    with Session(engine) as session_db:
+        CameraIptvChannel.__table__.create(bind=engine, checkfirst=True)
+        devices = (
+            session_db.query(CameraDevice)
+            .order_by(CameraDevice.name)
+            .all()
+        )
+
+        if channel_id == 0:
+            channel = None
+        else:
+            channel = session_db.get(CameraIptvChannel, channel_id)
+            if channel is None:
+                errors.append("IPTV channel not found.")
+
+        form = {
+            "device_id": "",
+            "is_enabled": False,
+            "multicast_address": "",
+            "port": "",
+            "ttl": "",
+            "channel_name": "",
+        }
+
+        if channel is not None:
+            form["device_id"] = str(channel.device_id)
+            form["is_enabled"] = bool(getattr(channel, "is_enabled", 0))
+            form["multicast_address"] = channel.multicast_address or ""
+            form["port"] = str(channel.port or "")
+            form["ttl"] = "" if channel.ttl is None else str(channel.ttl)
+            form["channel_name"] = channel.channel_name or ""
+
+        if request.method == "POST":
+            if not _validate_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+
+            device_id_raw = (request.form.get("device_id") or "").strip()
+            is_enabled_flag = request.form.get("is_enabled") == "1"
+            multicast_address = (request.form.get("multicast_address") or "").strip()
+            port_raw = (request.form.get("port") or "").strip()
+            ttl_raw = (request.form.get("ttl") or "").strip()
+            channel_name = (request.form.get("channel_name") or "").strip()
+
+            form["device_id"] = device_id_raw
+            form["is_enabled"] = is_enabled_flag
+            form["multicast_address"] = multicast_address
+            form["port"] = port_raw
+            form["ttl"] = ttl_raw
+            form["channel_name"] = channel_name
+
+            device_id_int: Optional[int]
+            if device_id_raw:
+                try:
+                    device_id_int = int(device_id_raw)
+                except ValueError:
+                    errors.append("Invalid camera selection.")
+                    device_id_int = None
+                else:
+                    device_ids = {d.id for d in devices}
+                    if device_id_int not in device_ids:
+                        errors.append("Selected camera does not exist.")
+            else:
+                device_id_int = None
+                errors.append("Camera is required.")
+
+            port_int: Optional[int]
+            if port_raw:
+                try:
+                    port_int = int(port_raw)
+                except ValueError:
+                    errors.append("Port must be a number.")
+                    port_int = None
+                else:
+                    if not (1 <= port_int <= 65535):
+                        errors.append("Port must be between 1 and 65535.")
+            else:
+                errors.append("Port is required.")
+                port_int = None
+
+            ttl_int: Optional[int]
+            if ttl_raw:
+                try:
+                    ttl_int = int(ttl_raw)
+                except ValueError:
+                    errors.append("TTL must be a number.")
+                    ttl_int = None
+                else:
+                    if ttl_int <= 0:
+                        errors.append("TTL must be a positive number.")
+            else:
+                ttl_int = None
+
+            if multicast_address:
+                try:
+                    ipaddress.ip_address(multicast_address)
+                except ValueError:
+                    errors.append("Multicast address must be a valid IP address.")
+            else:
+                errors.append("Multicast address is required.")
+
+            if not errors and device_id_int is not None and port_int is not None:
+                row = _upsert_iptv_channel(
+                    session_db,
+                    device_id_int,
+                    is_enabled_flag,
+                    multicast_address,
+                    port_int,
+                    ttl_int,
+                    channel_name,
+                )
+                session_db.commit()
+                return redirect(url_for("camera_admin.iptv_list"))
+
+    return render_template(
+        "cameras/iptv_edit.html",
+        form=form,
+        devices=devices,
+        channel=channel,
+        errors=errors,
+        csrf_token=csrf_token,
+        is_edit=(channel_id != 0),
+    )
 
 
 @bp.route("/devices/new", methods=["GET", "POST"])

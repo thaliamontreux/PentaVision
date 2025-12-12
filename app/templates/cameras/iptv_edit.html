@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if is_edit %}Edit IPTV Channel{% else %}New IPTV Channel{% endif %} · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>
+      {% if is_edit %}
+        Edit IPTV Channel
+      {% else %}
+        New IPTV Channel
+      {% endif %}
+    </h1>
+
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" class="pv-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+      <div class="pv-field-group">
+        <label for="device_id">Camera</label>
+        <select id="device_id" name="device_id" required>
+          <option value="">(select a camera)</option>
+          {% for d in devices %}
+            <option
+              value="{{ d.id }}"
+              {% if form.device_id == d.id|string %}selected{% endif %}
+            >
+              {{ d.name }} ({{ d.ip_address }})
+            </option>
+          {% endfor %}
+        </select>
+        <p class="pv-card-subtitle">
+          Select which camera feed this IPTV channel should broadcast.
+        </p>
+      </div>
+
+      <div class="pv-field-group">
+        <label>
+          <input
+            type="checkbox"
+            name="is_enabled"
+            value="1"
+            {% if form.is_enabled %}checked{% endif %}
+          />
+          Enable this IPTV channel
+        </label>
+        <p class="pv-card-subtitle">
+          When enabled, the IPTV worker service will restream this camera as an
+          MPEG-TS multicast stream.
+        </p>
+      </div>
+
+      <div class="pv-field-group">
+        <label for="multicast_address">Multicast address</label>
+        <input
+          id="multicast_address"
+          name="multicast_address"
+          type="text"
+          required
+          value="{{ form.multicast_address }}"
+        />
+        <p class="pv-card-subtitle">
+          Example: <code>239.2.0.10</code>. Must be a valid multicast IP address
+          reachable from the TVs.
+        </p>
+      </div>
+
+      <div class="pv-field-group">
+        <label for="port">UDP port</label>
+        <input
+          id="port"
+          name="port"
+          type="number"
+          min="1"
+          max="65535"
+          required
+          value="{{ form.port }}"
+        />
+        <p class="pv-card-subtitle">
+          Per-channel UDP port that the TVs will tune to (for example via REACH
+          or LYNK channel maps).
+        </p>
+      </div>
+
+      <div class="pv-field-group">
+        <label for="ttl">TTL (optional)</label>
+        <input
+          id="ttl"
+          name="ttl"
+          type="number"
+          min="1"
+          value="{{ form.ttl }}"
+        />
+        <p class="pv-card-subtitle">
+          Optional time-to-live for multicast packets. Leave blank to use the
+          default (4).
+        </p>
+      </div>
+
+      <div class="pv-field-group">
+        <label for="channel_name">Channel name (optional)</label>
+        <input
+          id="channel_name"
+          name="channel_name"
+          type="text"
+          value="{{ form.channel_name }}"
+        />
+        <p class="pv-card-subtitle">
+          Optional friendly name for this IPTV channel, shown in the admin UI.
+        </p>
+      </div>
+
+      <button type="submit" class="pv-button-primary">
+        {% if is_edit %}
+          Save changes
+        {% else %}
+          Create IPTV channel
+        {% endif %}
+      </button>
+      <a href="{{ url_for('camera_admin.iptv_list') }}" class="pv-button" style="margin-left: 0.5rem;">
+        Cancel
+      </a>
+    </form>
+  </section>
+{% endblock %}

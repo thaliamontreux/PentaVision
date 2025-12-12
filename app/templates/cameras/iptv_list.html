@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}IPTV Channels · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>IPTV Channels</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div style="margin-bottom: 1rem;">
+      <a
+        class="pv-button-primary"
+        href="{{ url_for('camera_admin.iptv_edit', channel_id=0) }}"
+      >
+        Add IPTV channel
+      </a>
+    </div>
+
+    {% if channels %}
+      <div style="overflow-x: auto;">
+        <table class="pv-table">
+          <thead>
+            <tr>
+              <th>Camera</th>
+              <th>Channel name</th>
+              <th>Multicast address</th>
+              <th>Port</th>
+              <th>TTL</th>
+              <th>Enabled</th>
+              <th>Last started</th>
+              <th>Last error</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in channels %}
+              {% set device = devices.get(row.device_id) if devices else None %}
+              <tr>
+                <td>
+                  {% if device %}
+                    <a
+                      href="{{ url_for('main.camera_detail', device_id=device.id) }}"
+                      class="pv-link-muted"
+                    >
+                      {{ device.name }}
+                    </a>
+                  {% else %}
+                    (camera {{ row.device_id }})
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.channel_name %}
+                    {{ row.channel_name }}
+                  {% elif device %}
+                    {{ device.name }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td>{{ row.multicast_address }}</td>
+                <td>{{ row.port }}</td>
+                <td>{{ row.ttl or '' }}</td>
+                <td>
+                  {% if row.is_enabled %}
+                    Yes
+                  {% else %}
+                    No
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.last_started_at %}
+                    {{ row.last_started_at }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  {{ row.last_error or '' }}
+                </td>
+                <td style="white-space: nowrap;">
+                  <a href="{{ url_for('camera_admin.iptv_edit', channel_id=row.id) }}">Edit</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p>No IPTV channels configured yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}
