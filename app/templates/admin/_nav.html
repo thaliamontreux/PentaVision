@@ -10,6 +10,7 @@
   {% if is_system_admin or is_technician %}
     <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
     <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URL templates</a>
+    <a href="{{ url_for('camera_admin.rtmp_list') }}">RTMP outputs</a>
   {% endif %}
 
   {# Advanced system configuration for System Administrators only #}

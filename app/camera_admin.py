@@ -896,11 +896,13 @@ def list_devices():
     patterns_index: dict[int, CameraUrlPattern] = {}
     stream_status: dict[int, dict] = {}
     device_properties: dict[int, int] = {}
+    rtmp_status: dict[int, dict] = {}
 
     if engine is None:
         errors.append("Record database is not configured.")
     else:
         CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
+        CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
 
         with Session(engine) as session_db:
             devices = (
@@ -913,6 +915,18 @@ def list_devices():
 
             links = session_db.query(CameraPropertyLink).all()
             device_properties = {link.device_id: link.property_id for link in links}
+
+            # Build per-camera RTMP summary so the list view can show a
+            # lightweight badge without editing RTMP configuration here.
+            outputs = session_db.query(CameraRtmpOutput).all()
+            for row in outputs:
+                info = rtmp_status.setdefault(
+                    row.device_id,
+                    {"total": 0, "active": 0},
+                )
+                info["total"] += 1
+                if getattr(row, "is_active", 0):
+                    info["active"] += 1
 
         user = get_current_user()
         if user is not None and not user_has_role(user, "System Administrator"):
@@ -940,7 +954,233 @@ def list_devices():
         errors=errors,
         csrf_token=csrf_token,
         stream_status=stream_status,
+        rtmp_status=rtmp_status,
     )
+
+
+@bp.get("/rtmp")
+def rtmp_list():
+    engine = get_record_engine()
+    errors: List[str] = []
+    outputs: List[CameraRtmpOutput] = []
+    devices_index: dict[int, CameraDevice] = {}
+
+    if engine is None:
+        errors.append("Record database is not configured.")
+    else:
+        with Session(engine) as session_db:
+            CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
+            outputs = (
+                session_db.query(CameraRtmpOutput)
+                .order_by(CameraRtmpOutput.device_id, CameraRtmpOutput.id)
+                .all()
+            )
+            devices = session_db.query(CameraDevice).all()
+            devices_index = {d.id: d for d in devices}
+
+    csrf_token = _ensure_csrf_token()
+    return render_template(
+        "cameras/rtmp_outputs_list.html",
+        outputs=outputs,
+        devices=devices_index,
+        errors=errors,
+        csrf_token=csrf_token,
+    )
+
+
+@bp.route("/rtmp/new", methods=["GET", "POST"])
+def rtmp_create():
+    engine = get_record_engine()
+    errors: List[str] = []
+    form = {
+        "device_id": "",
+        "target_url": "",
+        "is_active": True,
+    }
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("Record database is not configured.")
+        devices: List[CameraDevice] = []
+    else:
+        with Session(engine) as session_db:
+            devices = (
+                session_db.query(CameraDevice)
+                .order_by(CameraDevice.name)
+                .all()
+            )
+
+    # Allow linking from the camera list with a pre-selected device.
+    if request.method == "GET" and not form["device_id"]:
+        preselect_id = (request.args.get("device_id") or "").strip()
+        if preselect_id:
+            for d in devices:
+                if str(d.id) == preselect_id:
+                    form["device_id"] = preselect_id
+                    break
+
+    if request.method == "POST" and engine is not None:
+        if not _validate_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+
+        form["device_id"] = (request.form.get("device_id") or "").strip()
+        form["target_url"] = (request.form.get("target_url") or "").strip()
+        form["is_active"] = request.form.get("is_active") == "1"
+
+        device_id_int: Optional[int]
+        if form["device_id"]:
+            try:
+                device_id_int = int(form["device_id"])
+            except ValueError:
+                device_id_int = None
+                errors.append("Invalid camera selection.")
+        else:
+            device_id_int = None
+            errors.append("Camera selection is required.")
+
+        if not form["target_url"]:
+            errors.append("RTMP output URL is required.")
+        else:
+            lower_rtmp = form["target_url"].lower()
+            if not (
+                lower_rtmp.startswith("rtmp://")
+                or lower_rtmp.startswith("rtmps://")
+            ):
+                errors.append(
+                    "RTMP output URL must start with rtmp:// or rtmps://."
+                )
+
+        if not errors and engine is not None and device_id_int is not None:
+            with Session(engine) as session_db:
+                CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
+                output = CameraRtmpOutput(
+                    device_id=device_id_int,
+                    target_url=form["target_url"],
+                    is_active=1 if form["is_active"] else 0,
+                )
+                session_db.add(output)
+                session_db.commit()
+            return redirect(url_for("camera_admin.rtmp_list"))
+
+    return render_template(
+        "cameras/rtmp_outputs_edit.html",
+        form=form,
+        devices=devices,
+        errors=errors,
+        csrf_token=csrf_token,
+        is_edit=False,
+    )
+
+
+@bp.route("/rtmp/<int:output_id>/edit", methods=["GET", "POST"])
+def rtmp_edit(output_id: int):
+    engine = get_record_engine()
+    errors: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("Record database is not configured.")
+        return render_template(
+            "cameras/rtmp_outputs_edit.html",
+            form=None,
+            devices=[],
+            errors=errors,
+            csrf_token=csrf_token,
+            is_edit=True,
+        )
+
+    with Session(engine) as session_db:
+        CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
+        devices = (
+            session_db.query(CameraDevice)
+            .order_by(CameraDevice.name)
+            .all()
+        )
+        output = session_db.get(CameraRtmpOutput, output_id)
+
+        if output is None:
+            errors.append("RTMP output not found.")
+            return render_template(
+                "cameras/rtmp_outputs_edit.html",
+                form=None,
+                devices=devices,
+                errors=errors,
+                csrf_token=csrf_token,
+                is_edit=True,
+            )
+
+        form = {
+            "device_id": str(output.device_id),
+            "target_url": output.target_url,
+            "is_active": bool(getattr(output, "is_active", 1)),
+        }
+
+        if request.method == "POST":
+            if not _validate_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+
+            form["device_id"] = (request.form.get("device_id") or "").strip()
+            form["target_url"] = (request.form.get("target_url") or "").strip()
+            form["is_active"] = request.form.get("is_active") == "1"
+
+            device_id_int: Optional[int]
+            if form["device_id"]:
+                try:
+                    device_id_int = int(form["device_id"])
+                except ValueError:
+                    device_id_int = None
+                    errors.append("Invalid camera selection.")
+            else:
+                device_id_int = None
+                errors.append("Camera selection is required.")
+
+            if not form["target_url"]:
+                errors.append("RTMP output URL is required.")
+            else:
+                lower_rtmp = form["target_url"].lower()
+                if not (
+                    lower_rtmp.startswith("rtmp://")
+                    or lower_rtmp.startswith("rtmps://")
+                ):
+                    errors.append(
+                        "RTMP output URL must start with rtmp:// or rtmps://."
+                    )
+
+            if not errors and device_id_int is not None:
+                output.device_id = device_id_int
+                output.target_url = form["target_url"]
+                output.is_active = 1 if form["is_active"] else 0
+                session_db.add(output)
+                session_db.commit()
+                return redirect(url_for("camera_admin.rtmp_list"))
+
+    return render_template(
+        "cameras/rtmp_outputs_edit.html",
+        form=form,
+        devices=devices,
+        errors=errors,
+        csrf_token=csrf_token,
+        is_edit=True,
+    )
+
+
+@bp.post("/rtmp/<int:output_id>/delete")
+def rtmp_delete(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraRtmpOutput, output_id)
+        if output is not None:
+            session_db.delete(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.rtmp_list"))
 
 
 @bp.route("/devices/new", methods=["GET", "POST"])
@@ -965,8 +1205,6 @@ def create_device():
         "facing_direction": "",
         "property_id": "",
         "use_auth": True,
-        "rtmp_url": "",
-        "rtmp_enabled": False,
     }
     csrf_token = _ensure_csrf_token()
 
@@ -1019,8 +1257,6 @@ def create_device():
         form["retention_days"] = (
             request.form.get("retention_days") or ""
         ).strip()
-        form["rtmp_url"] = (request.form.get("rtmp_url") or "").strip()
-        form["rtmp_enabled"] = request.form.get("rtmp_enabled") == "1"
         if is_admin:
             form["admin_lock"] = request.form.get("admin_lock") == "1"
         else:
@@ -1078,18 +1314,6 @@ def create_device():
         else:
             retention_days_int = None
 
-        # Basic validation for RTMP configuration.
-        if form["rtmp_enabled"] and not form["rtmp_url"]:
-            errors.append("RTMP output URL is required when enabling RTMP streaming.")
-        if form["rtmp_url"]:
-            lower_rtmp = form["rtmp_url"].lower()
-            if not (
-                lower_rtmp.startswith("rtmp://")
-                or lower_rtmp.startswith("rtmps://")
-            ):
-                errors.append(
-                    "RTMP output URL must start with rtmp:// or rtmps://."
-                )
 
         if not errors:
             with Session(engine) as session_db:
@@ -1133,12 +1357,6 @@ def create_device():
                     device.id,
                     form["storage_targets"],
                     retention_days_int,
-                )
-                _upsert_rtmp_output(
-                    session_db,
-                    device.id,
-                    form["rtmp_url"],
-                    form["rtmp_enabled"],
                 )
                 session_db.commit()
                 actor = get_current_user()
