@@ -44,6 +44,7 @@ def load_config() -> Dict[str, Any]:
         "INSTALL_LOCKED": os.getenv("INSTALL_LOCKED", ""),
         "INSTALL_ACCESS_CODE": os.getenv("INSTALL_ACCESS_CODE", ""),
         "RECORDING_ENABLED": os.getenv("RECORDING_ENABLED", "0"),
+        "RTMP_ENABLED": os.getenv("RTMP_ENABLED", "0"),
         "RECORDING_BASE_DIR": os.getenv("RECORDING_BASE_DIR", ""),
         "STORAGE_TARGETS": os.getenv("STORAGE_TARGETS", ""),
         "LOCAL_STORAGE_PATH": os.getenv("LOCAL_STORAGE_PATH", ""),

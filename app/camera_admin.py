@@ -28,6 +28,7 @@ from .logging_utils import log_event
 from .models import (
     CameraDevice,
     CameraPropertyLink,
+    CameraRtmpOutput,
     CameraStoragePolicy,
     CameraUrlPattern,
     Property,
@@ -231,6 +232,49 @@ def _upsert_storage_policy(
         policy.storage_targets = storage_targets or None
         policy.retention_days = retention_days
         session_db.add(policy)
+
+
+def _upsert_rtmp_output(
+    session_db: Session,
+    device_id: int,
+    target_url: str,
+    enabled: bool,
+) -> None:
+    """Create, update, or delete the RTMP output row for a camera.
+
+    This ensures there is at most one CameraRtmpOutput per device. If
+    ``target_url`` is blank, any existing row is removed.
+    """
+
+    bind = session_db.get_bind()
+    if bind is not None:
+        CameraRtmpOutput.__table__.create(bind=bind, checkfirst=True)
+
+    row = (
+        session_db.query(CameraRtmpOutput)
+        .filter(CameraRtmpOutput.device_id == device_id)
+        .first()
+    )
+
+    url = (target_url or "").strip()
+    if not url:
+        if row is not None:
+            session_db.delete(row)
+        return
+
+    is_active = 1 if enabled else 0
+    if row is None:
+        row = CameraRtmpOutput(
+            device_id=device_id,
+            target_url=url,
+            is_active=is_active,
+        )
+        session_db.add(row)
+        return
+
+    row.target_url = url
+    row.is_active = is_active
+    session_db.add(row)
 
 
 def _is_port_open(ip: str, port: int, timeout: float = 0.5) -> bool:
@@ -921,6 +965,8 @@ def create_device():
         "facing_direction": "",
         "property_id": "",
         "use_auth": True,
+        "rtmp_url": "",
+        "rtmp_enabled": False,
     }
     csrf_token = _ensure_csrf_token()
 
@@ -973,6 +1019,8 @@ def create_device():
         form["retention_days"] = (
             request.form.get("retention_days") or ""
         ).strip()
+        form["rtmp_url"] = (request.form.get("rtmp_url") or "").strip()
+        form["rtmp_enabled"] = request.form.get("rtmp_enabled") == "1"
         if is_admin:
             form["admin_lock"] = request.form.get("admin_lock") == "1"
         else:
@@ -1030,6 +1078,19 @@ def create_device():
         else:
             retention_days_int = None
 
+        # Basic validation for RTMP configuration.
+        if form["rtmp_enabled"] and not form["rtmp_url"]:
+            errors.append("RTMP output URL is required when enabling RTMP streaming.")
+        if form["rtmp_url"]:
+            lower_rtmp = form["rtmp_url"].lower()
+            if not (
+                lower_rtmp.startswith("rtmp://")
+                or lower_rtmp.startswith("rtmps://")
+            ):
+                errors.append(
+                    "RTMP output URL must start with rtmp:// or rtmps://."
+                )
+
         if not errors:
             with Session(engine) as session_db:
                 username_value = form["username"] or None
@@ -1072,6 +1133,12 @@ def create_device():
                     device.id,
                     form["storage_targets"],
                     retention_days_int,
+                )
+                _upsert_rtmp_output(
+                    session_db,
+                    device.id,
+                    form["rtmp_url"],
+                    form["rtmp_enabled"],
                 )
                 session_db.commit()
                 actor = get_current_user()
@@ -1139,6 +1206,7 @@ def edit_device(device_id: int):
         # Ensure the auxiliary tables exist before querying.
         CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
         CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
+        CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
         device = session_db.get(CameraDevice, device_id)
         patterns = (
             session_db.query(CameraUrlPattern)
@@ -1153,6 +1221,11 @@ def edit_device(device_id: int):
         prop_link = (
             session_db.query(CameraPropertyLink)
             .filter(CameraPropertyLink.device_id == device_id)
+            .first()
+        )
+        rtmp_row = (
+            session_db.query(CameraRtmpOutput)
+            .filter(CameraRtmpOutput.device_id == device_id)
             .first()
         )
 
@@ -1194,6 +1267,8 @@ def edit_device(device_id: int):
             "location": device.location or "",
             "facing_direction": device.facing_direction or "",
             "use_auth": bool(device.username or device.password),
+            "rtmp_url": rtmp_row.target_url if rtmp_row else "",
+            "rtmp_enabled": bool(rtmp_row.is_active) if rtmp_row else False,
         }
         pattern_params_json = device.pattern_params or ""
 
@@ -1220,6 +1295,8 @@ def edit_device(device_id: int):
             form["retention_days"] = (
                 request.form.get("retention_days") or ""
             ).strip()
+            form["rtmp_url"] = (request.form.get("rtmp_url") or "").strip()
+            form["rtmp_enabled"] = request.form.get("rtmp_enabled") == "1"
 
             locked = bool(getattr(device, "admin_lock", 0))
             if is_admin:
@@ -1287,6 +1364,21 @@ def edit_device(device_id: int):
                     "This camera is locked by an administrator and cannot be modified."
                 )
 
+            # Basic validation for RTMP configuration.
+            if form["rtmp_enabled"] and not form["rtmp_url"]:
+                errors.append(
+                    "RTMP output URL is required when enabling RTMP streaming."
+                )
+            if form["rtmp_url"]:
+                lower_rtmp = form["rtmp_url"].lower()
+                if not (
+                    lower_rtmp.startswith("rtmp://")
+                    or lower_rtmp.startswith("rtmps://")
+                ):
+                    errors.append(
+                        "RTMP output URL must start with rtmp:// or rtmps://."
+                    )
+
             if not errors:
                 username_value = form["username"] or None
                 password_value = form["password"] or None
@@ -1331,6 +1423,12 @@ def edit_device(device_id: int):
                     device.id,
                     form["storage_targets"],
                     retention_days_int,
+                )
+                _upsert_rtmp_output(
+                    session_db,
+                    device.id,
+                    form["rtmp_url"],
+                    form["rtmp_enabled"],
                 )
                 session_db.commit()
                 actor = get_current_user()

@@ -160,6 +160,37 @@
         </div>
 
         <div class="pv-field-group">
+          <label for="rtmp_url">RTMP output URL (optional)</label>
+          <input
+            id="rtmp_url"
+            name="rtmp_url"
+            type="text"
+            value="{{ form.rtmp_url }}"
+          />
+          <p class="pv-card-subtitle">
+            Example: <code>rtmp://server/app/streamkey</code> or
+            <code>rtmps://server/app/streamkey</code>. Leave blank to disable RTMP
+            for this camera.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
+          <label>
+            <input
+              type="checkbox"
+              name="rtmp_enabled"
+              value="1"
+              {% if form.rtmp_enabled %}checked{% endif %}
+            />
+            Enable RTMP streaming for this camera
+          </label>
+          <p class="pv-card-subtitle">
+            When enabled, the RTMP worker service will restream this camera to the
+            configured RTMP output URL.
+          </p>
+        </div>
+
+        <div class="pv-field-group">
           <label for="placement">Placement</label>
           <select id="placement" name="placement">
             {% for value, label in placement_options %}
