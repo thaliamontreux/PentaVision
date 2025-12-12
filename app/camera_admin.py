@@ -1550,8 +1550,6 @@ def edit_device(device_id: int):
             "location": device.location or "",
             "facing_direction": device.facing_direction or "",
             "use_auth": bool(device.username or device.password),
-            "rtmp_url": rtmp_row.target_url if rtmp_row else "",
-            "rtmp_enabled": bool(rtmp_row.is_active) if rtmp_row else False,
         }
         pattern_params_json = device.pattern_params or ""
 
@@ -1578,8 +1576,6 @@ def edit_device(device_id: int):
             form["retention_days"] = (
                 request.form.get("retention_days") or ""
             ).strip()
-            form["rtmp_url"] = (request.form.get("rtmp_url") or "").strip()
-            form["rtmp_enabled"] = request.form.get("rtmp_enabled") == "1"
 
             locked = bool(getattr(device, "admin_lock", 0))
             if is_admin:
@@ -1647,21 +1643,6 @@ def edit_device(device_id: int):
                     "This camera is locked by an administrator and cannot be modified."
                 )
 
-            # Basic validation for RTMP configuration.
-            if form["rtmp_enabled"] and not form["rtmp_url"]:
-                errors.append(
-                    "RTMP output URL is required when enabling RTMP streaming."
-                )
-            if form["rtmp_url"]:
-                lower_rtmp = form["rtmp_url"].lower()
-                if not (
-                    lower_rtmp.startswith("rtmp://")
-                    or lower_rtmp.startswith("rtmps://")
-                ):
-                    errors.append(
-                        "RTMP output URL must start with rtmp:// or rtmps://."
-                    )
-
             if not errors:
                 username_value = form["username"] or None
                 password_value = form["password"] or None
@@ -1706,12 +1687,6 @@ def edit_device(device_id: int):
                     device.id,
                     form["storage_targets"],
                     retention_days_int,
-                )
-                _upsert_rtmp_output(
-                    session_db,
-                    device.id,
-                    form["rtmp_url"],
-                    form["rtmp_enabled"],
                 )
                 session_db.commit()
                 actor = get_current_user()
