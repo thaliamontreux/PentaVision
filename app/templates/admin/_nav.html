@@ -11,8 +11,6 @@
     <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
     <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URL templates</a>
     <a href="{{ url_for('camera_admin.rtmp_list') }}">RTMP outputs</a>
-    <a href="{{ url_for('camera_admin.iptv_list') }}">IPTV channels</a>
-    <a href="{{ url_for('camera_admin.dlna_media_list') }}">DLNA media</a>
   {% endif %}
 
   {# Advanced system configuration for System Administrators only #}
@@ -20,7 +18,6 @@
     <a href="{{ url_for('admin.recordings_alias') }}">Recordings</a>
     <a href="{{ url_for('admin.storage_alias') }}">Storage</a>
     <a href="{{ url_for('admin.audit_alias') }}">Audit log</a>
-    <a href="{{ url_for('admin.dlna_alias') }}">DLNA server</a>
     <a href="{{ url_for('installer.install') }}">Installer & databases</a>
   {% endif %}
 </nav>

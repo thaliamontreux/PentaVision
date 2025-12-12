@@ -72,11 +72,6 @@ def storage_alias():
     return redirect(url_for("main.storage_settings"))
 
 
-@bp.get("/dlna")
-def dlna_alias():
-    return redirect(url_for("main.dlna_settings"))
-
-
 @bp.get("/audit")
 def audit_alias():
     """Admin-scoped alias for the main audit log view."""

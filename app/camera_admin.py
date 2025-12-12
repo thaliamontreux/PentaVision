@@ -1365,6 +1365,7 @@ def rtmp_restart(output_id: int):
 
 @bp.get("/dlna-media")
 def dlna_media_list():
+    abort(404)
     engine = get_record_engine()
     errors: List[str] = []
     devices: List[CameraDevice] = []
@@ -1395,6 +1396,7 @@ def dlna_media_list():
 
 @bp.route("/dlna-media/<int:device_id>", methods=["GET", "POST"])
 def dlna_media_edit(device_id: int):
+    abort(404)
     engine = get_record_engine()
     errors: List[str] = []
     csrf_token = _ensure_csrf_token()
@@ -1471,6 +1473,7 @@ def dlna_media_edit(device_id: int):
 
 @bp.post("/dlna-media/<int:output_id>/delete")
 def dlna_media_delete(output_id: int):
+    abort(404)
     engine = get_record_engine()
     if engine is None:
         abort(400)
@@ -1490,6 +1493,7 @@ def dlna_media_delete(output_id: int):
 
 @bp.post("/dlna-media/<int:output_id>/start")
 def dlna_media_start(output_id: int):
+    abort(404)
     engine = get_record_engine()
     if engine is None:
         abort(400)
@@ -1510,6 +1514,7 @@ def dlna_media_start(output_id: int):
 
 @bp.post("/dlna-media/<int:output_id>/stop")
 def dlna_media_stop(output_id: int):
+    abort(404)
     engine = get_record_engine()
     if engine is None:
         abort(400)
@@ -1530,6 +1535,7 @@ def dlna_media_stop(output_id: int):
 
 @bp.post("/dlna-media/<int:output_id>/restart")
 def dlna_media_restart(output_id: int):
+    abort(404)
     engine = get_record_engine()
     if engine is None:
         abort(400)
@@ -1555,6 +1561,7 @@ def dlna_media_restart(output_id: int):
 
 @bp.get("/iptv")
 def iptv_list():
+    abort(404)
     engine = get_record_engine()
     errors: List[str] = []
     devices: List[CameraDevice] = []
@@ -1590,6 +1597,7 @@ def iptv_list():
 
 @bp.route("/iptv/<int:channel_id>", methods=["GET", "POST"])
 def iptv_edit(channel_id: int):
+    abort(404)
     engine = get_record_engine()
     errors: List[str] = []
     csrf_token = _ensure_csrf_token()

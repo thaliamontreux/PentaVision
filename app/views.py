@@ -1577,6 +1577,7 @@ def storage_settings():
 
 @bp.route("/dlna", methods=["GET", "POST"])
 def dlna_settings():
+	abort(404)
 	user = get_current_user()
 	if user is None:
 		next_url = request.path or url_for("main.index")
