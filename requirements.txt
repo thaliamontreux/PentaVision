@@ -16,3 +16,4 @@ azure-storage-blob
 dropbox
 requests
 gunicorn
+psutil

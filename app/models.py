@@ -181,6 +181,28 @@ class StorageSettings(RecordBase):
     )
 
 
+class DlnaSettings(RecordBase):
+    __tablename__ = "dlna_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    interface_name: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
+    bind_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    network_cidr: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    last_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class WebAuthnCredential(UserBase):
     __tablename__ = "webauthn_credentials"
 
