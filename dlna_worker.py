@@ -6,6 +6,7 @@ import time
 
 from app import create_app
 from app.dlna_service import start_dlna_service
+from app.dlna_media_service import start_dlna_media_service
 
 
 class _StderrFilter:
@@ -53,6 +54,7 @@ def main() -> None:
     _install_stderr_filter()
     app = create_app()
     start_dlna_service(app)
+    start_dlna_media_service(app)
     try:
         while True:
             time.sleep(3600)
