@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}DLNA server · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>DLNA server</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if saved %}
+      <div class="pv-alert pv-alert-success" role="status">
+        <p>DLNA settings updated.</p>
+      </div>
+    {% endif %}
+
+    <form method="post" class="pv-form" style="margin-bottom: 1.5rem;">
+      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+      <input type="hidden" name="action" value="save" />
+
+      <div class="pv-card">
+        <h2>Interface and network</h2>
+        <p class="pv-card-subtitle">
+          Choose which network interface the DLNA server should advertise on.
+        </p>
+
+        <div class="pv-field-group">
+          <label for="interface_name">Network interface</label>
+          <select id="interface_name" name="interface_name">
+            {% for iface in interfaces %}
+              <option value="{{ iface.name }}" {% if iface.name == form.interface_name %}selected{% endif %}>
+                {{ iface.name }} – {{ iface.ip }}{% if iface.network %} ({{ iface.network }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="pv-field-group">
+          <label>Current interface IP</label>
+          <input
+            type="text"
+            value="{{ current_interface.ip if current_interface else '' }}"
+            readonly
+          />
+        </div>
+
+        <div class="pv-field-group">
+          <label>Current interface network</label>
+          <input
+            type="text"
+            value="{{ current_interface.network if current_interface else '' }}"
+            readonly
+          />
+        </div>
+
+        <button type="submit" class="pv-button pv-button-primary">
+          Save DLNA settings
+        </button>
+      </div>
+    </form>
+
+    <div class="pv-card">
+      <h2>DLNA service status</h2>
+      <p class="pv-card-subtitle">
+        Environment flag DLNA_ENABLED is
+        <strong>{% if dlna_enabled_env %}on{% else %}off{% endif %}</strong>.
+      </p>
+
+      <div class="pv-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <div class="pv-field-group">
+            <label>Enabled in settings</label>
+            <input
+              type="text"
+              value="{% if settings.enabled %}Yes{% else %}No{% endif %}"
+              readonly
+            />
+          </div>
+          <div class="pv-field-group">
+            <label>Bind address</label>
+            <input
+              type="text"
+              value="{{ settings.bind_address or 'not set' }}"
+              readonly
+            />
+          </div>
+        </div>
+        <div>
+          <div class="pv-field-group">
+            <label>Network CIDR</label>
+            <input
+              type="text"
+              value="{{ settings.network_cidr or 'not set' }}"
+              readonly
+            />
+          </div>
+          <div class="pv-field-group">
+            <label>Last started at</label>
+            <input
+              type="text"
+              value="{{ settings.last_started_at or 'never' }}"
+              readonly
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="pv-field-group">
+        <label>Last error</label>
+        <textarea rows="2" readonly>{{ settings.last_error or 'None' }}</textarea>
+      </div>
+
+      <div class="pv-field-group" style="margin-top: 1rem;">
+        <form method="post" style="display: inline-block; margin-right: 0.5rem;">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+          <input type="hidden" name="action" value="start" />
+          <button type="submit" class="pv-button pv-button-primary">Start</button>
+        </form>
+
+        <form method="post" style="display: inline-block; margin-right: 0.5rem;">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+          <input type="hidden" name="action" value="stop" />
+          <button type="submit" class="pv-button">Stop</button>
+        </form>
+
+        <form method="post" style="display: inline-block;">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+          <input type="hidden" name="action" value="restart" />
+          <button type="submit" class="pv-button">Restart</button>
+        </form>
+      </div>
+    </div>
+  </section>
+{% endblock %}

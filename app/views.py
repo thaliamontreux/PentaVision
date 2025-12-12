@@ -42,6 +42,7 @@ from .models import (
     FacePrivacySetting,
     RecordingData,
     StorageSettings,
+    DlnaSettings,
     User,
     UserNotificationSettings,
     WebAuthnCredential,
@@ -57,6 +58,7 @@ from .security import (
 )
 from .stream_service import get_stream_manager
 from .storage_providers import build_storage_providers, _load_storage_settings
+from .net_utils import get_ipv4_interfaces
 
 
 bp = Blueprint("main", __name__)
@@ -1571,6 +1573,113 @@ def storage_settings():
         errors=errors,
         saved=saved,
     )
+
+
+@bp.route("/dlna", methods=["GET", "POST"])
+def dlna_settings():
+	user = get_current_user()
+	if user is None:
+		next_url = request.path or url_for("main.index")
+		return redirect(url_for("main.login", next=next_url))
+	if not user_has_role(user, "System Administrator"):
+		abort(403)
+
+	errors: list[str] = []
+	saved = False
+	record_engine = get_record_engine()
+	if record_engine is None:
+		errors.append("Record database is not configured.")
+
+	if request.method == "POST":
+		if not validate_global_csrf_token(request.form.get("csrf_token")):
+			errors.append("Invalid or missing CSRF token.")
+		action = (request.form.get("action") or "").strip() or "save"
+		interface_name_form = (request.form.get("interface_name") or "").strip()
+		if not errors and record_engine is not None:
+			with Session(record_engine) as session_db:
+				DlnaSettings.__table__.create(bind=record_engine, checkfirst=True)
+				settings_row = (
+					session_db.query(DlnaSettings)
+					.order_by(DlnaSettings.id)
+					.first()
+				)
+				if settings_row is None:
+					settings_row = DlnaSettings(enabled=0)
+					session_db.add(settings_row)
+					session_db.flush()
+				if action == "save":
+					settings_row.interface_name = interface_name_form or None
+				elif action == "start":
+					settings_row.enabled = 1
+				elif action == "stop":
+					settings_row.enabled = 0
+				elif action == "restart":
+					settings_row.enabled = 0
+					session_db.add(settings_row)
+					session_db.commit()
+					settings_row.enabled = 1
+				settings_row.updated_at = datetime.now(timezone.utc)
+				session_db.add(settings_row)
+				session_db.commit()
+				saved = True
+
+	settings = {
+		"enabled": 0,
+		"interface_name": "",
+		"bind_address": "",
+		"network_cidr": "",
+		"last_started_at": None,
+		"last_error": "",
+	}
+	if record_engine is not None:
+		with Session(record_engine) as session_db:
+			DlnaSettings.__table__.create(bind=record_engine, checkfirst=True)
+			row = (
+				session_db.query(DlnaSettings)
+				.order_by(DlnaSettings.id)
+				.first()
+			)
+			if row is not None:
+				settings = {
+					"enabled": int(getattr(row, "enabled", 0) or 0),
+					"interface_name": row.interface_name or "",
+					"bind_address": row.bind_address or "",
+					"network_cidr": row.network_cidr or "",
+					"last_started_at": row.last_started_at,
+					"last_error": row.last_error or "",
+				}
+
+	interfaces = get_ipv4_interfaces()
+	selected_name = settings["interface_name"] or ""
+	if not selected_name and interfaces:
+		selected_name = interfaces[0]["name"]
+	current_interface = None
+	for item in interfaces:
+		if item.get("name") == selected_name:
+			current_interface = item
+			break
+
+	form = {
+		"interface_name": selected_name,
+	}
+
+	dlna_enabled_env = str(current_app.config.get("DLNA_ENABLED", "0") or "0").strip().lower() not in {
+		"0",
+		"false",
+		"no",
+		"",
+	}
+
+	return render_template(
+		"dlna.html",
+		form=form,
+		interfaces=interfaces,
+		current_interface=current_interface,
+		settings=settings,
+		errors=errors,
+		saved=saved,
+		dlna_enabled_env=dlna_enabled_env,
+	)
 
 
 @bp.get("/recordings")
