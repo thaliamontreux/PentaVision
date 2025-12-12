@@ -4,14 +4,14 @@ import subprocess
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, Optional
 
 from flask import Flask
 from sqlalchemy.orm import Session
 
+from .camera_utils import build_camera_url
 from .db import get_record_engine
-from .models import CameraDevice, CameraRtmpOutput
+from .models import CameraDevice, CameraRtmpOutput, CameraUrlPattern
 
 
 def _normalize_bool(value: str) -> bool:
@@ -67,125 +67,71 @@ class RtmpWorker(threading.Thread):
             row.last_error = None
             session.add(row)
             session.commit()
-        # Derive preview source configuration. We restream from the
-        # PentaVision preview frames written by the video worker into
-        # PREVIEW_CACHE_DIR instead of opening a separate RTSP session
-        # to the camera.
-        preview_dir = str(
-            self.app.config.get(
-                "PREVIEW_CACHE_DIR",
-                "/var/lib/pentavision/previews",
-            )
-        )
+        # Build a GStreamer pipeline that pulls H.264 from the camera's RTSP
+        # stream and pushes it as FLV to the RTMP target. This avoids the
+        # JPEG preview cache and keeps the RTMP stream as a live video feed.
         try:
-            fps = float(self.app.config.get("RTMP_INPUT_FPS", 0.0) or 0.0)
+            latency_ms = int(
+                self.app.config.get("GST_RTSP_LATENCY_MS", 200) or 200
+            )
         except (TypeError, ValueError):
-            fps = 0.0
-        if fps <= 0.0:
-            try:
-                fps = float(
-                    self.app.config.get("PREVIEW_CAPTURE_FPS", 10.0) or 10.0
-                )
-            except (TypeError, ValueError):
-                fps = 10.0
-        if fps <= 0.0:
-            fps = 10.0
-        interval = 1.0 / fps
+            latency_ms = 200
+        if latency_ms < 0:
+            latency_ms = 0
 
-        src_path = Path(preview_dir) / f"{self.device_id}.jpg"
-
-        cmd = [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-re",
-            "-f",
-            "mjpeg",
-            "-i",
-            "pipe:0",
-            "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-tune",
-            "zerolatency",
-            "-vf",
-            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-            "-pix_fmt",
-            "yuv420p",
-            "-f",
-            "flv",
-            self.target_url,
+        command = [
+            "gst-launch-1.0",
+            "-e",
+            "rtspsrc",
+            f"location={self.camera_url}",
+            f"latency={latency_ms}",
+            "protocols=tcp",
+            "!",
+            "rtph264depay",
+            "!",
+            "h264parse",
+            "!",
+            "flvmux",
+            "name=mux",
+            "streamable=true",
+            "!",
+            "rtmpsink",
+            f"location={self.target_url}",
+            "sync=false",
+            "async=false",
         ]
 
-        proc: Optional[subprocess.Popen[bytes]] = None
-        feeder: Optional[threading.Thread] = None
+        proc: Optional[subprocess.Popen[str]] = None
         try:
             proc = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
+                command,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
+                text=True,
             )
         except FileNotFoundError as exc:
-            self._update_error(f"ffmpeg executable not found: {exc}")
+            self._update_error(
+                f"gst-launch-1.0 executable not found: {exc}"
+            )
             raise
         except Exception as exc:
             self._update_error(str(exc))
             raise
-
-        def _feed_frames() -> None:
-            if proc is None or proc.stdin is None:
-                return
-            stdin = proc.stdin
-            while self._running:
-                try:
-                    if not src_path.exists():
-                        time.sleep(interval)
-                        continue
-                    try:
-                        data = src_path.read_bytes()
-                    except OSError:
-                        time.sleep(interval)
-                        continue
-                    if not data:
-                        time.sleep(interval)
-                        continue
-                    try:
-                        stdin.write(data)
-                        stdin.flush()
-                    except BrokenPipeError:
-                        break
-                    except Exception:
-                        time.sleep(interval)
-                        continue
-                    time.sleep(interval)
-                except Exception:
-                    time.sleep(interval)
-                    continue
-
-        feeder = threading.Thread(target=_feed_frames, daemon=True)
-        feeder.start()
 
         try:
             stderr = proc.stderr
             if stderr is None:
                 proc.wait()
             else:
-                for raw_line in stderr:
+                for line in stderr:
                     if not self._running:
                         break
-                    try:
-                        text = raw_line.decode("utf-8", "ignore").strip()
-                    except Exception:
-                        text = ""
+                    text = (line or "").strip()
                     if not text:
                         continue
                     try:
                         self.app.logger.warning(
-                            "RTMP ffmpeg device=%s output=%s: %s",
+                            "RTMP gst device=%s output=%s: %s",
                             self.device_id,
                             self.output_id,
                             text,
@@ -193,17 +139,11 @@ class RtmpWorker(threading.Thread):
                     except Exception:
                         pass
         finally:
-            self._running = False
             returncode: Optional[int]
             try:
                 returncode = proc.poll() if proc is not None else None
             except Exception:
                 returncode = None
-            if feeder is not None and feeder.is_alive():
-                try:
-                    feeder.join(timeout=5.0)
-                except Exception:
-                    pass
             if proc is not None and returncode is None:
                 try:
                     proc.terminate()
@@ -215,7 +155,9 @@ class RtmpWorker(threading.Thread):
                     except Exception:
                         pass
             if returncode not in (0, None):
-                self._update_error(f"ffmpeg exited with code {returncode}")
+                self._update_error(
+                    f"gst-launch-1.0 exited with code {returncode}"
+                )
 
     def _update_error(self, message: str) -> None:
         engine = get_record_engine()
@@ -256,26 +198,35 @@ class RtmpManager:
         with Session(engine) as session:
             CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
             devices = session.query(CameraDevice).all()
+            patterns = session.query(CameraUrlPattern).all()
             outputs = (
                 session.query(CameraRtmpOutput)
                 .filter(CameraRtmpOutput.is_active == 1)
                 .all()
             )
+        patterns_index = {p.id: p for p in patterns}
         devices_index = {d.id: d for d in devices}
-        desired: Dict[int, tuple[int, str]] = {}
+        desired: Dict[int, tuple[int, str, str]] = {}
         for output in outputs:
             device = devices_index.get(output.device_id)
             if device is None or not getattr(device, "is_active", 1):
                 continue
-            desired[output.id] = (device.id, output.target_url)
+            pattern = None
+            if getattr(device, "pattern_id", None):
+                pattern = patterns_index.get(device.pattern_id)
+            url = build_camera_url(device, pattern)
+            if not url:
+                continue
+            desired[output.id] = (device.id, url, output.target_url)
         with self._lock:
-            for output_id, (device_id, target_url) in desired.items():
+            for output_id, (device_id, camera_url, target_url) in desired.items():
                 worker = self._workers.get(output_id)
                 needs_new = False
                 if worker is None or not worker.is_alive():
                     needs_new = True
                 elif (
-                    worker.target_url != target_url
+                    worker.camera_url != camera_url
+                    or worker.target_url != target_url
                     or worker.device_id != device_id
                 ):
                     worker.stop()
@@ -285,7 +236,7 @@ class RtmpManager:
                         self.app,
                         output_id,
                         device_id,
-                        f"device-{device_id}",
+                        camera_url,
                         target_url,
                     )
                     new_worker.start()
