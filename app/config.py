@@ -49,6 +49,7 @@ def load_config() -> Dict[str, Any]:
         "DLNA_ENABLED": os.getenv("DLNA_ENABLED", "0"),
         "DLNA_FRIENDLY_NAME": os.getenv("DLNA_FRIENDLY_NAME", "PentaVision DLNA"),
         "MINIDLNA_BIN": os.getenv("MINIDLNA_BIN", "minidlnad"),
+        "IPTV_ENABLED": os.getenv("IPTV_ENABLED", "0"),
         "RECORDING_BASE_DIR": os.getenv("RECORDING_BASE_DIR", ""),
         "STORAGE_TARGETS": os.getenv("STORAGE_TARGETS", ""),
         "LOCAL_STORAGE_PATH": os.getenv("LOCAL_STORAGE_PATH", ""),
