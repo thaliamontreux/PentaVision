@@ -27,6 +27,7 @@ from .db import get_record_engine, get_user_engine
 from .logging_utils import log_event
 from .models import (
     CameraDevice,
+    CameraDlnaMedia,
     CameraPropertyLink,
     CameraRtmpOutput,
     CameraStoragePolicy,
