@@ -1183,6 +1183,71 @@ def rtmp_delete(output_id: int):
     return redirect(url_for("camera_admin.rtmp_list"))
 
 
+@bp.post("/rtmp/<int:output_id>/start")
+def rtmp_start(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraRtmpOutput, output_id)
+        if output is not None:
+            output.is_active = 1
+            session_db.add(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.rtmp_list"))
+
+
+@bp.post("/rtmp/<int:output_id>/stop")
+def rtmp_stop(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraRtmpOutput, output_id)
+        if output is not None:
+            output.is_active = 0
+            session_db.add(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.rtmp_list"))
+
+
+@bp.post("/rtmp/<int:output_id>/restart")
+def rtmp_restart(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraRtmpOutput, output_id)
+        if output is not None:
+            # Toggle off and back on so the RTMP manager will restart
+            # the underlying worker on its next sync cycle.
+            output.is_active = 0
+            session_db.add(output)
+            session_db.commit()
+            output.is_active = 1
+            session_db.add(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.rtmp_list"))
+
+
 @bp.route("/devices/new", methods=["GET", "POST"])
 def create_device():
     engine = get_record_engine()

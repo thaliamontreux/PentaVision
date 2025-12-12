@@ -30,7 +30,7 @@
             <tr>
               <th>Camera</th>
               <th>RTMP URL</th>
-              <th>Active</th>
+              <th>Status</th>
               <th>Last started</th>
               <th>Last error</th>
               <th></th>
@@ -52,7 +52,17 @@
                 <td style="max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                   {{ row.target_url }}
                 </td>
-                <td>{{ 'Yes' if row.is_active else 'No' }}</td>
+                <td>
+                  {% if not row.is_active %}
+                    <span style="color: #6b7280;">Stopped</span>
+                  {% elif row.last_error %}
+                    <span style="color: #ef4444;">Error</span>
+                  {% elif row.last_started_at %}
+                    <span style="color: #16a34a;">Running</span>
+                  {% else %}
+                    <span style="color: #6b7280;">Pending</span>
+                  {% endif %}
+                </td>
                 <td>
                   {% if row.last_started_at %}
                     {{ row.last_started_at }}
@@ -65,6 +75,41 @@
                 </td>
                 <td style="white-space: nowrap;">
                   <a href="{{ url_for('camera_admin.rtmp_edit', output_id=row.id) }}">Edit</a>
+
+                  {% if row.is_active %}
+                    <form
+                      method="post"
+                      action="{{ url_for('camera_admin.rtmp_stop', output_id=row.id) }}"
+                      style="display: inline; margin-left: 0.5rem;"
+                    >
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <button type="submit" style="background: none; border: none; color: #f97316; cursor: pointer;">
+                        Stop
+                      </button>
+                    </form>
+                    <form
+                      method="post"
+                      action="{{ url_for('camera_admin.rtmp_restart', output_id=row.id) }}"
+                      style="display: inline; margin-left: 0.5rem;"
+                    >
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <button type="submit" style="background: none; border: none; color: #22c55e; cursor: pointer;">
+                        Restart
+                      </button>
+                    </form>
+                  {% else %}
+                    <form
+                      method="post"
+                      action="{{ url_for('camera_admin.rtmp_start', output_id=row.id) }}"
+                      style="display: inline; margin-left: 0.5rem;"
+                    >
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <button type="submit" style="background: none; border: none; color: #22c55e; cursor: pointer;">
+                        Start
+                      </button>
+                    </form>
+                  {% endif %}
+
                   <form
                     method="post"
                     action="{{ url_for('camera_admin.rtmp_delete', output_id=row.id) }}"
