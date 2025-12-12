@@ -343,9 +343,4 @@ class DlnaMediaManager:
 
 
 def start_dlna_media_service(app: Flask) -> None:
-    raw = str(app.config.get("DLNA_ENABLED", "0") or "0")
-    if not _normalize_bool(raw):
-        return
-    manager = DlnaMediaManager(app)
-    app.extensions["dlna_media_manager"] = manager
-    manager.start()
+    return

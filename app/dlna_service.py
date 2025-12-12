@@ -250,9 +250,4 @@ class DlnaManager:
 
 
 def start_dlna_service(app: Flask) -> None:
-    raw = str(app.config.get("DLNA_ENABLED", "0") or "0")
-    if not _normalize_bool(raw):
-        return
-    manager = DlnaManager(app)
-    app.extensions["dlna_manager"] = manager
-    manager.start()
+    return

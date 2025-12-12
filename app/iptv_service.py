@@ -335,9 +335,4 @@ class IptvManager:
 
 
 def start_iptv_service(app: Flask) -> None:
-    raw = str(app.config.get("IPTV_ENABLED", "0") or "0")
-    if not _normalize_bool(raw):
-        return
-    manager = IptvManager(app)
-    app.extensions["iptv_manager"] = manager
-    manager.start()
+    return
