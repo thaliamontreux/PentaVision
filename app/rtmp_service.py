@@ -79,6 +79,8 @@ class RtmpWorker(threading.Thread):
         if latency_ms < 0:
             latency_ms = 0
 
+        low_latency = bool(self.app.config.get("RTMP_LOW_LATENCY", False))
+
         command = [
             "gst-launch-1.0",
             "-e",
@@ -86,20 +88,46 @@ class RtmpWorker(threading.Thread):
             f"location={self.camera_url}",
             f"latency={latency_ms}",
             "protocols=tcp",
-            "!",
-            "rtph264depay",
-            "!",
-            "h264parse",
-            "!",
-            "flvmux",
-            "name=mux",
-            "streamable=true",
-            "!",
-            "rtmpsink",
-            f"location={self.target_url}",
-            "sync=false",
-            "async=false",
         ]
+        if low_latency:
+            command.extend(
+                [
+                    "buffer-mode=none",
+                    "drop-on-latency=true",
+                ]
+            )
+        command.extend(
+            [
+                "!",
+                "rtph264depay",
+                "!",
+                "h264parse",
+            ]
+        )
+        if low_latency:
+            command.extend(
+                [
+                    "!",
+                    "queue",
+                    "max-size-buffers=0",
+                    "max-size-time=0",
+                    "max-size-bytes=0",
+                    "leaky=downstream",
+                ]
+            )
+        command.extend(
+            [
+                "!",
+                "flvmux",
+                "name=mux",
+                "streamable=true",
+                "!",
+                "rtmpsink",
+                f"location={self.target_url}",
+                "sync=false",
+                "async=false",
+            ]
+        )
 
         proc: Optional[subprocess.Popen[str]] = None
         try:
