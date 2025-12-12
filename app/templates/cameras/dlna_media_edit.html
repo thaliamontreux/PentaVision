@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}DLNA Media · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>DLNA Media</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if not device %}
+      <p>Camera device not found.</p>
+    {% else %}
+      <form method="post" class="pv-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        <div class="pv-card">
+          <h2>{{ device.name }}</h2>
+          <p class="pv-card-subtitle">
+            Configure whether this camera should be exposed as a near-live DLNA media item.
+          </p>
+
+          <div class="pv-field-group">
+            <label>
+              <input
+                type="checkbox"
+                name="is_enabled"
+                value="1"
+                {% if form.is_enabled %}checked{% endif %}
+              />
+              Enable DLNA media for this camera
+            </label>
+          </div>
+
+          <div class="pv-field-group">
+            <label for="title">DLNA title</label>
+            <input
+              id="title"
+              name="title"
+              type="text"
+              value="{{ form.title }}"
+            />
+            <p class="pv-card-subtitle">
+              Optional. Defaults to the camera name if left blank.
+            </p>
+          </div>
+
+          <button type="submit" class="pv-button pv-button-primary">
+            Save
+          </button>
+          <a href="{{ url_for('camera_admin.dlna_media_list') }}" class="pv-button" style="margin-left: 0.5rem;">
+            Cancel
+          </a>
+        </div>
+      </form>
+    {% endif %}
+  </section>
+{% endblock %}

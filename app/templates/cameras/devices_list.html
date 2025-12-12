@@ -105,6 +105,13 @@
                   >
                     RTMP…
                   </a>
+                  <a
+                    href="{{ url_for('camera_admin.dlna_media_edit', device_id=d.id) }}"
+                    class="pv-link-muted"
+                    style="margin-right: 0.5rem;"
+                  >
+                    DLNA…
+                  </a>
                   <a href="{{ url_for('camera_admin.edit_device', device_id=d.id) }}">Edit</a>
                   <form
                     method="post"

@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}DLNA Media · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>DLNA Media</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if devices %}
+      <div style="overflow-x: auto;">
+        <table class="pv-table">
+          <thead>
+            <tr>
+              <th>Camera</th>
+              <th>DLNA title</th>
+              <th>Enabled</th>
+              <th>Last started</th>
+              <th>Last error</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in devices %}
+              {% set media = media_index.get(d.id) if media_index else None %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('main.camera_detail', device_id=d.id) }}" class="pv-link-muted">
+                    {{ d.name }}
+                  </a>
+                </td>
+                <td>
+                  {% if media and media.title %}
+                    {{ media.title }}
+                  {% else %}
+                    {{ d.name }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if media and media.is_enabled %}
+                    Yes
+                  {% else %}
+                    No
+                  {% endif %}
+                </td>
+                <td>
+                  {% if media and media.last_started_at %}
+                    {{ media.last_started_at }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  {% if media and media.last_error %}
+                    {{ media.last_error }}
+                  {% else %}
+                    None
+                  {% endif %}
+                </td>
+                <td style="white-space: nowrap;">
+                  <a href="{{ url_for('camera_admin.dlna_media_edit', device_id=d.id) }}">Edit</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p>No cameras configured yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -278,6 +278,74 @@ def _upsert_rtmp_output(
     session_db.add(row)
 
 
+def _upsert_dlna_media(
+    session_db: Session,
+    device_id: int,
+    is_enabled: bool,
+    title: str,
+) -> CameraDlnaMedia:
+    bind = session_db.get_bind()
+    if bind is not None:
+        CameraDlnaMedia.__table__.create(bind=bind, checkfirst=True)
+
+    row = (
+        session_db.query(CameraDlnaMedia)
+        .filter(CameraDlnaMedia.device_id == device_id)
+        .first()
+    )
+
+    enabled_value = 1 if is_enabled else 0
+    title_value = (title or "").strip() or None
+
+    if row is None:
+        row = CameraDlnaMedia(
+            device_id=device_id,
+            is_enabled=enabled_value,
+            title=title_value,
+        )
+        session_db.add(row)
+        return row
+
+    row.is_enabled = enabled_value
+    row.title = title_value
+    session_db.add(row)
+    return row
+
+
+def _upsert_dlna_media(
+    session_db: Session,
+    device_id: int,
+    is_enabled: bool,
+    title: str,
+) -> CameraDlnaMedia:
+    bind = session_db.get_bind()
+    if bind is not None:
+        CameraDlnaMedia.__table__.create(bind=bind, checkfirst=True)
+
+    row = (
+        session_db.query(CameraDlnaMedia)
+        .filter(CameraDlnaMedia.device_id == device_id)
+        .first()
+    )
+
+    enabled_value = 1 if is_enabled else 0
+    title_value = (title or "").strip() or None
+
+    if row is None:
+        row = CameraDlnaMedia(
+            device_id=device_id,
+            is_enabled=enabled_value,
+            title=title_value,
+        )
+        session_db.add(row)
+        return row
+
+    row.is_enabled = enabled_value
+    row.title = title_value
+    session_db.add(row)
+    return row
+
+
 def _is_port_open(ip: str, port: int, timeout: float = 0.5) -> bool:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -1247,6 +1315,196 @@ def rtmp_restart(output_id: int):
             session_db.commit()
 
     return redirect(url_for("camera_admin.rtmp_list"))
+
+
+@bp.get("/dlna-media")
+def dlna_media_list():
+    engine = get_record_engine()
+    errors: List[str] = []
+    devices: List[CameraDevice] = []
+    media_index: dict[int, CameraDlnaMedia] = {}
+
+    if engine is None:
+        errors.append("Record database is not configured.")
+    else:
+        with Session(engine) as session_db:
+            CameraDlnaMedia.__table__.create(bind=engine, checkfirst=True)
+            devices = (
+                session_db.query(CameraDevice)
+                .order_by(CameraDevice.name)
+                .all()
+            )
+            rows = session_db.query(CameraDlnaMedia).all()
+            media_index = {row.device_id: row for row in rows}
+
+    csrf_token = _ensure_csrf_token()
+    return render_template(
+        "cameras/dlna_media_list.html",
+        devices=devices,
+        media_index=media_index,
+        errors=errors,
+        csrf_token=csrf_token,
+    )
+
+
+@bp.route("/dlna-media/<int:device_id>", methods=["GET", "POST"])
+def dlna_media_edit(device_id: int):
+    engine = get_record_engine()
+    errors: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("Record database is not configured.")
+        return render_template(
+            "cameras/dlna_media_edit.html",
+            form=None,
+            device=None,
+            errors=errors,
+            csrf_token=csrf_token,
+            is_edit=True,
+        )
+
+    with Session(engine) as session_db:
+        CameraDlnaMedia.__table__.create(bind=engine, checkfirst=True)
+        device = session_db.get(CameraDevice, device_id)
+        if device is None:
+            errors.append("Camera device not found.")
+            return render_template(
+                "cameras/dlna_media_edit.html",
+                form=None,
+                device=None,
+                errors=errors,
+                csrf_token=csrf_token,
+                is_edit=True,
+            )
+
+        row = (
+            session_db.query(CameraDlnaMedia)
+            .filter(CameraDlnaMedia.device_id == device_id)
+            .first()
+        )
+
+        if row is None:
+            is_enabled_default = False
+            title_default = device.name
+        else:
+            is_enabled_default = bool(getattr(row, "is_enabled", 0))
+            title_default = row.title or device.name
+
+        form = {
+            "is_enabled": is_enabled_default,
+            "title": title_default,
+        }
+
+        if request.method == "POST":
+            if not _validate_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+
+            enabled_flag = request.form.get("is_enabled") == "1"
+            title_value = (request.form.get("title") or "").strip()
+
+            if not errors:
+                _upsert_dlna_media(
+                    session_db,
+                    device.id,
+                    enabled_flag,
+                    title_value,
+                )
+                session_db.commit()
+                return redirect(url_for("camera_admin.dlna_media_list"))
+
+    return render_template(
+        "cameras/dlna_media_edit.html",
+        form=form,
+        device=device,
+        errors=errors,
+        csrf_token=csrf_token,
+        is_edit=True,
+    )
+
+
+@bp.post("/dlna-media/<int:output_id>/delete")
+def dlna_media_delete(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraDlnaMedia.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraDlnaMedia, output_id)
+        if output is not None:
+            session_db.delete(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.dlna_media_list"))
+
+
+@bp.post("/dlna-media/<int:output_id>/start")
+def dlna_media_start(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraDlnaMedia.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraDlnaMedia, output_id)
+        if output is not None:
+            output.is_enabled = 1
+            session_db.add(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.dlna_media_list"))
+
+
+@bp.post("/dlna-media/<int:output_id>/stop")
+def dlna_media_stop(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraDlnaMedia.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraDlnaMedia, output_id)
+        if output is not None:
+            output.is_enabled = 0
+            session_db.add(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.dlna_media_list"))
+
+
+@bp.post("/dlna-media/<int:output_id>/restart")
+def dlna_media_restart(output_id: int):
+    engine = get_record_engine()
+    if engine is None:
+        abort(400)
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    with Session(engine) as session_db:
+        CameraDlnaMedia.__table__.create(bind=engine, checkfirst=True)
+        output = session_db.get(CameraDlnaMedia, output_id)
+        if output is not None:
+            # Toggle off and back on so the DLNA media manager will restart
+            # the underlying worker on its next sync cycle.
+            output.is_enabled = 0
+            session_db.add(output)
+            session_db.commit()
+            output.is_enabled = 1
+            session_db.add(output)
+            session_db.commit()
+
+    return redirect(url_for("camera_admin.dlna_media_list"))
 
 
 @bp.route("/devices/new", methods=["GET", "POST"])
