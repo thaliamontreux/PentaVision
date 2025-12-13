@@ -197,6 +197,32 @@ class StorageSettings(RecordBase):
     )
 
 
+class StorageModule(RecordBase):
+    __tablename__ = "storage_modules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Unique name used by workers and policies (for example, "gcs:corp-backups").
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    # Human-friendly label shown in the UI (for example, "Corp GCS – Backups").
+    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Provider type key, such as "local_fs", "db", "s3", "gcs", "azure_blob",
+    # "dropbox", "webdav", "gdrive", etc.
+    provider_type: Mapped[str] = mapped_column(String(64))
+    # When disabled, this module is ignored by build_storage_providers and never
+    # instantiated by the recording workers.
+    is_enabled: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Provider-specific configuration stored as a JSON-encoded object. This keeps
+    # the schema flexible so that each provider can define its own fields without
+    # requiring additional columns.
+    config_json: Mapped[Optional[str]] = mapped_column(String(4096), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class DlnaSettings(RecordBase):
     __tablename__ = "dlna_settings"
 

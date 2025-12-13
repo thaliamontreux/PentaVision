@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +15,7 @@ import dropbox
 import requests
 
 from .db import get_record_engine
-from .models import RecordingData, StorageSettings
+from .models import RecordingData, StorageModule, StorageSettings
 
 
 class StorageProvider:
@@ -274,6 +275,105 @@ class WebDAVStorageProvider(StorageProvider):
             return
 
 
+class GoogleDriveStorageProvider(StorageProvider):
+    def __init__(self, access_token: str, folder_id: Optional[str] = None) -> None:
+        # Logical provider type; the actual provider name used by workers is
+        # overridden by the StorageModule name so multiple instances can
+        # coexist.
+        self.name = "gdrive"
+        self.access_token = access_token
+        self.folder_id = folder_id or None
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        """Upload a recording to Google Drive using the HTTP API.
+
+        This implementation uses a pre-generated OAuth 2.0 access token
+        provided by the administrator. For production use, the token should be
+        managed by an external process (for example, a service account or a
+        scheduled refresh flow).
+        """
+
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        filename = f"recording_{now}_{safe_hint}.mp4"
+
+        metadata: dict[str, object] = {"name": filename}
+        if self.folder_id:
+            metadata["parents"] = [self.folder_id]
+
+        boundary = "----pentavision-drive-boundary"
+        meta_json = json.dumps(metadata).encode("utf-8")
+
+        # Build a multipart/related body: JSON metadata + binary media.
+        body_prefix = (
+            f"--{boundary}\r\n"
+            "Content-Type: application/json; charset=UTF-8\r\n\r\n"
+        ).encode("utf-8") + meta_json + (
+            f"\r\n--{boundary}\r\n"
+            "Content-Type: video/mp4\r\n\r\n"
+        ).encode("utf-8")
+        body_suffix = f"\r\n--{boundary}--\r\n".encode("utf-8")
+        body = body_prefix + data + body_suffix
+
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": f"multipart/related; boundary={boundary}",
+        }
+        url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+        response = requests.post(url, headers=headers, data=body)
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Google Drive upload failed with status {response.status_code}: "
+                f"{response.text[:512]}"
+            )
+        try:
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Google Drive upload returned invalid JSON") from exc
+        file_id = payload.get("id")
+        if not file_id:
+            raise RuntimeError("Google Drive upload response missing file id")
+        return str(file_id)
+
+    def get_url(self, storage_key: str) -> Optional[str]:
+        # Return a direct download URL for the file when possible.
+        return f"https://drive.google.com/uc?id={storage_key}&export=download"
+
+    def delete(self, storage_key: str) -> None:
+        try:
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            url = f"https://www.googleapis.com/drive/v3/files/{storage_key}"
+            response = requests.delete(url, headers=headers)
+            if response.status_code >= 400:
+                # Best-effort cleanup; failures are logged by callers when
+                # needed but should not crash the worker.
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+
+def _load_storage_modules() -> list[StorageModule]:
+    """Load named storage modules from the recordings database, if present.
+
+    When one or more modules are defined, they take precedence over the legacy
+    StorageSettings/"storage_targets" configuration so that deployments can
+    cleanly migrate to per-module settings and multiple instances of the same
+    provider type.
+    """
+
+    engine = get_record_engine()
+    if engine is None:
+        return []
+    StorageModule.__table__.create(bind=engine, checkfirst=True)
+    with Session(engine) as session:
+        rows = (
+            session.query(StorageModule)
+            .order_by(StorageModule.id)
+            .all()
+        )
+    return list(rows)
+
+
 def _load_storage_settings() -> dict | None:
     """Load global storage settings from the recordings database, if present.
 
@@ -314,13 +414,102 @@ def _load_storage_settings() -> dict | None:
 
 
 def build_storage_providers(app: Flask) -> List[StorageProvider]:
+    """Build active storage providers for the recording system.
+
+    Priority is given to the new StorageModule-based configuration which
+    supports multiple named instances per provider type. When no modules are
+    defined, the legacy StorageSettings/"storage_targets" configuration is
+    used as a fallback for backwards compatibility.
+    """
+
+    modules = _load_storage_modules()
+    providers: List[StorageProvider] = []
+
+    if modules:
+        for module in modules:
+            if not getattr(module, "is_enabled", 0):
+                continue
+            raw_config = getattr(module, "config_json", None) or ""
+            try:
+                cfg = json.loads(raw_config) if raw_config else {}
+            except Exception:  # noqa: BLE001
+                cfg = {}
+
+            provider: Optional[StorageProvider] = None
+            ptype = (module.provider_type or "").strip().lower()
+
+            if ptype == "local_fs":
+                base_dir = (
+                    str(cfg.get("base_dir") or "").strip()
+                    or app.config.get("LOCAL_STORAGE_PATH")
+                    or app.config.get("RECORDING_BASE_DIR")
+                    or os.path.join(app.instance_path, "recordings")
+                )
+                provider = LocalFilesystemStorageProvider(str(base_dir))
+            elif ptype == "db":
+                provider = DatabaseStorageProvider()
+            elif ptype == "s3":
+                bucket = str(cfg.get("bucket") or "").strip()
+                access_key = str(cfg.get("access_key") or "").strip()
+                secret_key = str(cfg.get("secret_key") or "").strip()
+                if bucket and access_key and secret_key:
+                    endpoint = str(cfg.get("endpoint") or "").strip() or None
+                    region = str(cfg.get("region") or "").strip() or None
+                    provider = S3StorageProvider(
+                        endpoint,
+                        region,
+                        bucket,
+                        access_key,
+                        secret_key,
+                    )
+            elif ptype == "gcs":
+                bucket = str(cfg.get("bucket") or "").strip()
+                if bucket:
+                    provider = GCSStorageProvider(bucket)
+            elif ptype == "azure_blob":
+                conn = str(cfg.get("connection_string") or "").strip()
+                container = str(cfg.get("container") or "").strip()
+                if conn and container:
+                    provider = AzureBlobStorageProvider(conn, container)
+            elif ptype == "dropbox":
+                token = str(cfg.get("access_token") or "").strip()
+                if token:
+                    provider = DropboxStorageProvider(token)
+            elif ptype == "webdav":
+                base_url = str(cfg.get("base_url") or "").strip()
+                username = (
+                    str(cfg.get("username") or "").strip() or None
+                )
+                password = (
+                    str(cfg.get("password") or "").strip() or None
+                )
+                if base_url:
+                    provider = WebDAVStorageProvider(base_url, username, password)
+            elif ptype == "gdrive":
+                access_token = str(cfg.get("access_token") or "").strip()
+                folder_id = str(cfg.get("folder_id") or "").strip() or None
+                if access_token:
+                    provider = GoogleDriveStorageProvider(access_token, folder_id)
+
+            if provider is None:
+                continue
+
+            # Use the StorageModule's name as the provider key seen by
+            # RecordingManager and policies so multiple instances of the same
+            # provider type can coexist.
+            provider.name = module.name
+            providers.append(provider)
+
+        return providers
+
+    # Fallback: legacy StorageSettings-based single-instance configuration.
     db_settings = _load_storage_settings() or {}
 
     raw_targets = db_settings.get("storage_targets") or str(
         app.config.get("STORAGE_TARGETS", "local_fs") or "local_fs"
     )
     targets = [item.strip() for item in raw_targets.split(",") if item.strip()]
-    providers: List[StorageProvider] = []
+
     if "local_fs" in targets:
         base_dir = (
             db_settings.get("local_storage_path")
@@ -333,7 +522,9 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
     if "db" in targets:
         providers.append(DatabaseStorageProvider())
     if "s3" in targets:
-        bucket = str(db_settings.get("s3_bucket") or app.config.get("S3_BUCKET") or "").strip()
+        bucket = str(
+            db_settings.get("s3_bucket") or app.config.get("S3_BUCKET") or ""
+        ).strip()
         access_key = str(
             db_settings.get("s3_access_key")
             or app.config.get("S3_ACCESS_KEY")
@@ -415,4 +606,5 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
         )
         if base_url:
             providers.append(WebDAVStorageProvider(base_url, username, password))
+
     return providers
