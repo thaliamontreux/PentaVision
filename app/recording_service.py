@@ -19,6 +19,7 @@ from .models import (
     CameraPropertyLink,
     CameraRecording,
     CameraRecordingSchedule,
+    CameraRecordingWindow,
     CameraStoragePolicy,
     CameraUrlPattern,
     Property,
@@ -102,6 +103,7 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
     now_utc = datetime.now(timezone.utc)
     with Session(engine) as session:
         CameraRecordingSchedule.__table__.create(bind=engine, checkfirst=True)
+        CameraRecordingWindow.__table__.create(bind=engine, checkfirst=True)
         CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
         Property.__table__.create(bind=engine, checkfirst=True)
         schedule = (
@@ -111,6 +113,20 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
         )
         if schedule is None:
             return True
+        windows_raw = (
+            session.query(CameraRecordingWindow)
+            .filter(CameraRecordingWindow.schedule_id == schedule.id)
+            .all()
+        )
+        windows = [
+            {
+                "day_of_week": w.day_of_week,
+                "start_time": w.start_time or "",
+                "end_time": w.end_time or "",
+                "mode": (w.mode or "").strip().lower() or None,
+            }
+            for w in windows_raw
+        ]
         link = (
             session.query(CameraPropertyLink)
             .filter(CameraPropertyLink.device_id == device_id)
@@ -126,12 +142,35 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
         sched_tz_name = schedule.timezone or property_tz
         if not sched_tz_name:
             sched_tz_name = str(app.config.get("DEFAULT_TIMEZONE") or "UTC")
+
     try:
         tz = ZoneInfo(str(sched_tz_name))
     except Exception:
         tz = timezone.utc
+
     now_local = now_utc.astimezone(tz)
     weekday = now_local.weekday()
+    now_minutes = now_local.hour * 60 + now_local.minute
+
+    if windows:
+        day_windows: list[tuple[int, int, str]] = []
+        for item in windows:
+            day = item.get("day_of_week")
+            if day is not None and day != weekday:
+                continue
+            start_minutes = _parse_time_str(item.get("start_time", "") or "")
+            end_minutes = _parse_time_str(item.get("end_time", "") or "")
+            if start_minutes is None or end_minutes is None:
+                continue
+            window_mode = item.get("mode") or mode
+            day_windows.append((start_minutes, end_minutes, window_mode))
+
+        for start_minutes, end_minutes, _window_mode in day_windows:
+            if _is_time_in_window(now_minutes, start_minutes, end_minutes):
+                return True
+
+        return False
+
     if days_raw and days_raw != "*":
         allowed_days: set[int] = set()
         for token in days_raw.split(","):
@@ -146,13 +185,14 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
                 allowed_days.add(day_idx)
         if allowed_days and weekday not in allowed_days:
             return False
+
     if mode in {"always", "motion_only"}:
         return True
+
     start_minutes = _parse_time_str(getattr(schedule, "start_time", "") or "")
     end_minutes = _parse_time_str(getattr(schedule, "end_time", "") or "")
     if start_minutes is None or end_minutes is None:
         return True
-    now_minutes = now_local.hour * 60 + now_local.minute
     return _is_time_in_window(now_minutes, start_minutes, end_minutes)
 
 

@@ -23,6 +23,15 @@
       </div>
     {% endif %}
 
+    {% if test_result %}
+      <div class="pv-alert {% if test_result.ok %}pv-alert-success{% else %}pv-alert-error{% endif %}" role="status">
+        <p>
+          Storage module <code>{{ test_result.module_name }}</code>:
+          {{ test_result.message }}
+        </p>
+      </div>
+    {% endif %}
+
     <div class="pv-card" style="margin-bottom: 1.5rem;">
       <h2>Overview</h2>
       <p class="pv-card-subtitle">
@@ -47,6 +56,7 @@
                 <th>Label</th>
                 <th>Provider</th>
                 <th>Status</th>
+                <th style="width: 1%; white-space: nowrap;">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -62,6 +72,16 @@
                       <span style="color: #6b7280;">Disabled</span>
                     {% endif %}
                   </td>
+                  <td>
+                    <form method="post" class="pv-inline-form">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="test_module" />
+                      <input type="hidden" name="module_id" value="{{ m.id }}" />
+                      <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
+                        Test
+                      </button>
+                    </form>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -74,16 +94,16 @@
       </div>
 
       <div class="pv-card">
-        <h2>Per-camera schedules</h2>
+        <h2>Per-camera storage & schedules</h2>
         <p class="pv-card-subtitle">
-          Configure when each camera records. Use "Always" to record 24 hours a day, or "Scheduled" with start and stop times.
+          Choose where each camera records and when it records. Only storage modules defined above can be selected.
         </p>
         {% if cameras %}
           <table class="pv-table">
             <thead>
               <tr>
                 <th>Camera</th>
-                <th>Storage targets</th>
+                <th>Storage modules</th>
                 <th>Retention (days)</th>
                 <th>Mode</th>
                 <th>Window</th>
@@ -94,11 +114,39 @@
               {% for c in cameras %}
                 <tr>
                   <td>{{ c.name }}</td>
-                  <td style="font-size: 0.85rem;">{{ c.storage_targets or 'Global default' }}</td>
+                  <td style="font-size: 0.85rem;">
+                    <form method="post" class="pv-inline-form" style="align-items: flex-start; gap: 0.5rem;">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="update_storage" />
+                      <input type="hidden" name="device_id" value="{{ c.id }}" />
+                      <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                        {% for m in modules %}
+                          {% if m.is_enabled %}
+                            <label style="display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid #e5e7eb; font-size: 0.75rem; white-space: nowrap;">
+                              <input
+                                type="checkbox"
+                                name="targets"
+                                value="{{ m.name }}"
+                                {% if m.name in c.selected_targets %}checked{% endif %}
+                              />
+                              <span>{{ m.label or m.name }}</span>
+                            </label>
+                          {% endif %}
+                        {% endfor %}
+                      </div>
+                      <button type="submit" class="pv-button-secondary" style="padding: 0.15rem 0.6rem; font-size: 0.75rem; white-space: nowrap;">
+                        Save
+                      </button>
+                    </form>
+                    <p class="pv-card-subtitle" style="font-size: 0.7rem; margin-top: 0.1rem;">
+                      Effective targets: {{ c.storage_targets or 'Global default' }}
+                    </p>
+                  </td>
                   <td>{{ c.retention_days if c.retention_days is not none else '\u2013' }}</td>
                   <td>
                     <form method="post" class="pv-inline-form">
                       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="update_schedule" />
                       <input type="hidden" name="device_id" value="{{ c.id }}" />
                       <select name="mode">
                         <option value="always" {% if c.mode == 'always' %}selected{% endif %}>Always</option>

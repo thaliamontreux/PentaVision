@@ -409,6 +409,7 @@ def profile():
     engine = get_user_engine()
     errors: list[str] = []
     saved = False
+    test_result: dict | None = None
 
     if engine is None:
         errors.append("User database is not configured.")
@@ -1606,47 +1607,143 @@ def recording_settings():
         if not validate_global_csrf_token(request.form.get("csrf_token")):
             errors.append("Invalid or missing CSRF token.")
         else:
-            device_id_raw = request.form.get("device_id") or ""
-            mode = (request.form.get("mode") or "").strip().lower()
-            start_time = (request.form.get("start_time") or "").strip()
-            end_time = (request.form.get("end_time") or "").strip()
+            action = (request.form.get("action") or "").strip() or "update_schedule"
 
-            try:
-                device_id = int(device_id_raw)
-            except ValueError:
-                device_id = None
+            if action == "test_module":
+                module_id_raw = request.form.get("module_id") or ""
+                try:
+                    module_id = int(module_id_raw)
+                except ValueError:
+                    module_id = None
 
-            valid_modes = {"always", "scheduled", "motion_only", "scheduled_motion"}
-            if mode not in valid_modes:
-                mode = "always"
-
-            if device_id is not None:
-                with Session(record_engine) as session_db:
-                    CameraRecordingSchedule.__table__.create(
-                        bind=record_engine,
-                        checkfirst=True,
-                    )
-                    sched = (
-                        session_db.query(CameraRecordingSchedule)
-                        .filter(CameraRecordingSchedule.device_id == device_id)
-                        .first()
-                    )
-                    if sched is None:
-                        sched = CameraRecordingSchedule(device_id=device_id)
-
-                    sched.mode = mode
-                    sched.days_of_week = "*"
-                    if mode == "always":
-                        sched.start_time = None
-                        sched.end_time = None
+                if module_id is not None:
+                    with Session(record_engine) as session_db:
+                        StorageModule.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        module = session_db.get(StorageModule, module_id)
+                    if module is None:
+                        test_result = {
+                            "ok": False,
+                            "module_name": f"#{module_id_raw}",
+                            "message": "Storage module not found.",
+                        }
                     else:
-                        sched.start_time = start_time or None
-                        sched.end_time = end_time or None
-                    sched.updated_at = datetime.now(timezone.utc)
+                        providers = build_storage_providers(current_app)
+                        provider = None
+                        for item in providers:
+                            if getattr(item, "name", "") == module.name:
+                                provider = item
+                                break
+                        if provider is None:
+                            test_result = {
+                                "ok": False,
+                                "module_name": module.name,
+                                "message": "Module is not active. Check that it is enabled and configured.",
+                            }
+                        else:
+                            data = b"PentaVision storage test"
+                            timestamp_hint = datetime.now(timezone.utc).strftime(
+                                "%Y%m%d%H%M%S"
+                            )
+                            key_hint = f"pv_test_{timestamp_hint}"
+                            try:
+                                storage_key = provider.upload(data, key_hint)
+                                try:
+                                    provider.delete(storage_key)
+                                except Exception:  # noqa: BLE001
+                                    pass
+                            except Exception as exc:  # noqa: BLE001
+                                test_result = {
+                                    "ok": False,
+                                    "module_name": module.name,
+                                    "message": str(exc)[:300],
+                                }
+                            else:
+                                test_result = {
+                                    "ok": True,
+                                    "module_name": module.name,
+                                    "message": "Test upload succeeded.",
+                                }
 
-                    session_db.add(sched)
-                    session_db.commit()
-                    saved = True
+            elif action == "update_storage":
+                device_id_raw = request.form.get("device_id") or ""
+                try:
+                    device_id = int(device_id_raw)
+                except ValueError:
+                    device_id = None
+
+                targets = request.form.getlist("targets")
+                clean_targets = [name.strip() for name in targets if name.strip()]
+                targets_str = ",".join(sorted(set(clean_targets))) if clean_targets else None
+
+                if device_id is not None:
+                    with Session(record_engine) as session_db:
+                        CameraStoragePolicy.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        pol = (
+                            session_db.query(CameraStoragePolicy)
+                            .filter(CameraStoragePolicy.device_id == device_id)
+                            .first()
+                        )
+                        if pol is None:
+                            pol = CameraStoragePolicy(device_id=device_id)
+
+                        pol.storage_targets = targets_str
+                        session_db.add(pol)
+                        session_db.commit()
+                        saved = True
+
+            else:
+                device_id_raw = request.form.get("device_id") or ""
+                mode = (request.form.get("mode") or "").strip().lower()
+                start_time = (request.form.get("start_time") or "").strip()
+                end_time = (request.form.get("end_time") or "").strip()
+
+                try:
+                    device_id = int(device_id_raw)
+                except ValueError:
+                    device_id = None
+
+                valid_modes = {
+                    "always",
+                    "scheduled",
+                    "motion_only",
+                    "scheduled_motion",
+                }
+                if mode not in valid_modes:
+                    mode = "always"
+
+                if device_id is not None:
+                    with Session(record_engine) as session_db:
+                        CameraRecordingSchedule.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        sched = (
+                            session_db.query(CameraRecordingSchedule)
+                            .filter(CameraRecordingSchedule.device_id == device_id)
+                            .first()
+                        )
+                        if sched is None:
+                            sched = CameraRecordingSchedule(device_id=device_id)
+
+                        sched.mode = mode
+                        sched.days_of_week = "*"
+                        if mode == "always":
+                            sched.start_time = None
+                            sched.end_time = None
+                        else:
+                            sched.start_time = start_time or None
+                            sched.end_time = end_time or None
+                        sched.updated_at = datetime.now(timezone.utc)
+
+                        session_db.add(sched)
+                        session_db.commit()
+                        saved = True
 
     modules: list[dict] = []
     if record_engine is not None:
@@ -1692,6 +1789,11 @@ def recording_settings():
             pol = policies_index.get(int(dev.id))
             sched = schedules_index.get(int(dev.id))
             storage_targets = getattr(pol, "storage_targets", None) or ""
+            selected_targets = {
+                name.strip()
+                for name in storage_targets.split(",")
+                if name.strip()
+            }
             retention_days = getattr(pol, "retention_days", None)
             mode = getattr(sched, "mode", None) or "always"
             start_time = getattr(sched, "start_time", None) or ""
@@ -1711,6 +1813,7 @@ def recording_settings():
                     "id": dev.id,
                     "name": dev.name,
                     "storage_targets": storage_targets,
+                    "selected_targets": selected_targets,
                     "retention_days": retention_days,
                     "mode": mode,
                     "start_time": start_time,
@@ -1725,6 +1828,7 @@ def recording_settings():
         saved=saved,
         modules=modules,
         cameras=camera_rows,
+        test_result=test_result,
         current_time_local=now_local,
         current_timezone=tz_name,
     )

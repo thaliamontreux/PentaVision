@@ -505,6 +505,20 @@ class CameraRecordingSchedule(RecordBase):
     )
 
 
+class CameraRecordingWindow(RecordBase):
+    __tablename__ = "camera_recording_windows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    schedule_id: Mapped[int] = mapped_column(Integer, index=True)
+    day_of_week: Mapped[int] = mapped_column(Integer, index=True)
+    start_time: Mapped[str] = mapped_column(String(8))
+    end_time: Mapped[str] = mapped_column(String(8))
+    mode: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class CameraPropertyLink(RecordBase):
     __tablename__ = "camera_property_links"
 
