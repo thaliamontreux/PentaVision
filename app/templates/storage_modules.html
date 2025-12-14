@@ -1,0 +1,632 @@
+{% extends 'base.html' %}
+
+{% block title %}Storage Modules · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section pv-storage-shell">
+    <div class="pv-storage-header">
+      <div>
+        <h1 style="margin: 0;">Storage Modules</h1>
+        <div class="pv-card-subtitle" style="margin-top: 0.35rem;">Manage where your RTSP camera recordings are stored.</div>
+      </div>
+      <button type="button" class="pv-storage-add" id="pv-storage-add-btn">+ Add Storage Provider</button>
+    </div>
+
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if module_test_result %}
+      <div class="pv-alert {% if module_test_result.ok %}pv-alert-success{% else %}pv-alert-error{% endif %}" role="status">
+        <p>Module <code>{{ module_test_result.module_name }}</code>: {{ module_test_result.message }}</p>
+      </div>
+    {% endif %}
+
+    <div class="pv-storage-grid">
+      <aside class="pv-storage-left">
+        <div class="pv-storage-left-inner">
+          {% if modules %}
+            {% for m in modules %}
+              <a class="pv-storage-provider {% if selected_module and selected_module.id == m.id %}is-selected{% endif %}" href="{{ url_for('main.storage_settings', edit_module=m.id) }}">
+                <div class="pv-storage-provider-icon" aria-hidden="true"></div>
+                <div class="pv-storage-provider-meta">
+                  <div class="pv-storage-provider-title">{{ m.label or m.name }}</div>
+                  <div class="pv-storage-provider-sub">
+                    <span class="pv-storage-dot {% if not m.is_enabled %}is-muted{% elif m.status == 'ok' %}is-ok{% else %}is-warn{% endif %}"></span>
+                    <span>{{ m.provider_type }}</span>
+                    {% if not m.is_enabled %}<span style="opacity: 0.8;">· Disabled</span>{% endif %}
+                  </div>
+                </div>
+              </a>
+            {% endfor %}
+          {% else %}
+            <div class="pv-card" style="margin-top: 0.5rem;">
+              <div class="pv-card-title" style="margin-bottom: 0.25rem;">No storage modules yet</div>
+              <div class="pv-card-subtitle">Click <strong>Add Storage Provider</strong> to create your first module.</div>
+            </div>
+          {% endif %}
+        </div>
+      </aside>
+
+      <section class="pv-storage-right">
+        <div class="pv-storage-panel">
+          <div class="pv-storage-tabs" role="tablist" aria-label="Storage module tabs">
+            <button type="button" class="pv-storage-tab is-active" data-tab="overview">Overview</button>
+            <button type="button" class="pv-storage-tab" data-tab="configuration">Configuration</button>
+            <button type="button" class="pv-storage-tab" data-tab="streams">Streams</button>
+            <button type="button" class="pv-storage-tab" data-tab="logs">Logs</button>
+            <button type="button" class="pv-storage-tab" data-tab="advanced">Advanced</button>
+          </div>
+
+          <div class="pv-storage-tabpanel is-active" data-panel="overview">
+            {% if selected_module %}
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                  <div>
+                    <div class="pv-card-title" style="margin-bottom: 0.15rem;">{{ selected_module.label or selected_module.name }}</div>
+                    <div class="pv-card-subtitle">Provider: <code>{{ selected_module.provider_type }}</code> · Name: <code>{{ selected_module.name }}</code></div>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <form method="post" class="pv-inline-form">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="module_test" />
+                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                      <button type="submit" class="pv-button-secondary">Test</button>
+                    </form>
+
+                    <form method="post" class="pv-inline-form">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="module_toggle" />
+                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                      <input type="hidden" name="enable" value="{% if selected_module.is_enabled %}0{% else %}1{% endif %}" />
+                      {% if selected_module.is_enabled and selected_metrics and selected_metrics.active_streams|int > 0 %}
+                        <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: #9ca3af; margin-right: 0.25rem;">
+                          <input type="checkbox" name="force_disable" value="1" />
+                          <span>Force disable</span>
+                        </label>
+                      {% endif %}
+                      <button type="submit" class="pv-button-secondary">{% if selected_module.is_enabled %}Disable{% else %}Enable{% endif %}</button>
+                    </form>
+
+                    <form method="post" class="pv-inline-form" onsubmit="return confirm('Clone this module? The clone will be created disabled.');">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="module_clone" />
+                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                      <input type="hidden" name="clone_name" value="{{ selected_module.name }}-copy" />
+                      <button type="submit" class="pv-button-secondary">Clone</button>
+                    </form>
+
+                    <form method="post" class="pv-inline-form" onsubmit="return confirm('Delete this module? This cannot be undone.');">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="module_delete" />
+                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                      <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: #9ca3af; margin-right: 0.25rem;">
+                        <input type="checkbox" name="force_delete" value="1" />
+                        <span>Force delete</span>
+                      </label>
+                      <button type="submit" class="pv-button-secondary">Delete</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pv-storage-overview-grid">
+                <div class="pv-storage-metric">
+                  <div class="pv-storage-metric-title">Health</div>
+                  <div class="pv-storage-metric-value">{% if not selected_module.is_enabled %}Disabled{% elif selected_module.status == 'ok' %}Healthy{% else %}{{ selected_module.status or 'Unknown' }}{% endif %}</div>
+                  <div class="pv-storage-metric-sub">{{ selected_module.status_message or 'No recent status.' }}</div>
+                </div>
+                <div class="pv-storage-metric">
+                  <div class="pv-storage-metric-title">Last write</div>
+                  <div class="pv-storage-metric-value">{{ selected_metrics.last_write_text if selected_metrics else 'n/a' }}</div>
+                  <div class="pv-storage-metric-sub">Provider: <code>{{ selected_module.name }}</code></div>
+                </div>
+                <div class="pv-storage-metric">
+                  <div class="pv-storage-metric-title">Active streams</div>
+                  <div class="pv-storage-metric-value">{{ selected_metrics.active_streams if selected_metrics else 0 }}</div>
+                  <div class="pv-storage-metric-sub">Based on recent segments.</div>
+                </div>
+              </div>
+            {% else %}
+              <div class="pv-storage-empty">
+                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Select a storage module</div>
+                <div class="pv-card-subtitle">Choose a provider on the left or add a new one.</div>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="pv-storage-tabpanel" data-panel="configuration">
+            {% set edit_module = selected_module %}
+            {% set edit_cfg = edit_module_config or {} %}
+
+            {% set cfg_readonly = (selected_module and selected_metrics and selected_metrics.active_streams|int > 0) %}
+            {% if cfg_readonly %}
+              <div class="pv-alert pv-alert-warn" role="status" style="margin-top: 0.75rem;">
+                <p>This module currently has active streams. Configuration is read-only until streams stop.</p>
+              </div>
+            {% endif %}
+
+            <form method="post" class="pv-storage-form" id="pv-storage-form">
+              <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+              <input type="hidden" name="action" id="pv-storage-action" value="{{ 'module_update' if edit_module else 'module_create' }}" />
+              {% if edit_module %}<input type="hidden" name="module_id" value="{{ edit_module.id }}" />{% endif %}
+
+              <div class="pv-storage-config-grid">
+                <div class="pv-field-group">
+                  <label for="module_name">Name</label>
+                  <input id="module_name" name="module_name" type="text" value="{{ edit_module.name if edit_module else '' }}" required {% if cfg_readonly %}disabled{% endif %} />
+                </div>
+                <div class="pv-field-group">
+                  <label for="module_label">Label</label>
+                  <input id="module_label" name="module_label" type="text" value="{{ edit_module.label if edit_module and edit_module.label else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                </div>
+                <div class="pv-field-group">
+                  <label for="module_provider">Provider</label>
+                  <select id="module_provider" name="module_provider" required {% if edit_module %}disabled{% endif %}>
+                    <option value="">Select provider…</option>
+                    <option value="local_fs" {% if edit_module and edit_module.provider_type == 'local_fs' %}selected{% endif %}>Local filesystem</option>
+                    <option value="s3" {% if edit_module and edit_module.provider_type == 's3' %}selected{% endif %}>S3-compatible</option>
+                    <option value="gcs" {% if edit_module and edit_module.provider_type == 'gcs' %}selected{% endif %}>Google Cloud Storage</option>
+                    <option value="azure_blob" {% if edit_module and edit_module.provider_type == 'azure_blob' %}selected{% endif %}>Azure Blob Storage</option>
+                    <option value="dropbox" {% if edit_module and edit_module.provider_type == 'dropbox' %}selected{% endif %}>Dropbox</option>
+                    <option value="webdav" {% if edit_module and edit_module.provider_type == 'webdav' %}selected{% endif %}>WebDAV</option>
+                    <option value="gdrive" {% if edit_module and edit_module.provider_type == 'gdrive' %}selected{% endif %}>Google Drive</option>
+                    <option value="onedrive" {% if edit_module and edit_module.provider_type == 'onedrive' %}selected{% endif %}>OneDrive</option>
+                    <option value="box" {% if edit_module and edit_module.provider_type == 'box' %}selected{% endif %}>Box</option>
+                    <option value="swift" {% if edit_module and edit_module.provider_type == 'swift' %}selected{% endif %}>Swift</option>
+                    <option value="pcloud" {% if edit_module and edit_module.provider_type == 'pcloud' %}selected{% endif %}>pCloud</option>
+                    <option value="mega" {% if edit_module and edit_module.provider_type == 'mega' %}selected{% endif %}>MEGA</option>
+                  </select>
+                  <div style="margin-top: 0.4rem; font-size: 0.85rem; color: #9ca3af;">
+                    <label style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                      <input type="checkbox" name="module_enabled" value="1" {% if not edit_module or edit_module.is_enabled %}checked{% endif %} {% if cfg_readonly %}disabled{% endif %} />
+                      <span>Enabled</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <div class="pv-module-config-group" data-provider="local_fs" style="display: none;">
+                    <label for="module_cfg_base_dir">Base directory</label>
+                    <input id="module_cfg_base_dir" name="module_cfg_base_dir" type="text" value="{{ edit_cfg.get('base_dir', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="s3" style="display: none;">
+                    <label for="module_cfg_s3_bucket">S3 bucket</label>
+                    <input id="module_cfg_s3_bucket" name="module_cfg_s3_bucket" type="text" value="{{ edit_cfg.get('bucket', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_s3_endpoint" style="margin-top: 0.35rem;">Endpoint</label>
+                    <input id="module_cfg_s3_endpoint" name="module_cfg_s3_endpoint" type="text" value="{{ edit_cfg.get('endpoint', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_s3_region" style="margin-top: 0.35rem;">Region</label>
+                    <input id="module_cfg_s3_region" name="module_cfg_s3_region" type="text" value="{{ edit_cfg.get('region', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_s3_access_key" style="margin-top: 0.35rem;">Access key ID</label>
+                    <input id="module_cfg_s3_access_key" name="module_cfg_s3_access_key" type="password" autocomplete="off" />
+                    <label for="module_cfg_s3_secret_key" style="margin-top: 0.35rem;">Secret access key</label>
+                    <input id="module_cfg_s3_secret_key" name="module_cfg_s3_secret_key" type="password" autocomplete="off" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="pv-storage-actions">
+                <button type="submit" class="pv-button-secondary" data-pv-submit-action="module_draft_test" {% if cfg_readonly %}disabled{% endif %}>Test Connection</button>
+                <button type="submit" class="pv-storage-save" data-pv-submit-action="{{ 'module_update' if edit_module else 'module_create' }}" {% if not module_test_ready or cfg_readonly %}disabled{% endif %}>Save</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="pv-storage-tabpanel" data-panel="streams">
+            {% if not selected_module %}
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Streams</div>
+                <div class="pv-card-subtitle">Select a storage module to view streams.</div>
+              </div>
+            {% else %}
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Recent recording segments</div>
+                <div class="pv-card-subtitle">Last 25 segments stored under <code>{{ selected_module.name }}</code>.</div>
+                {% if streams_rows %}
+                  <table class="pv-table" style="margin-top: 0.65rem;">
+                    <thead>
+                      <tr>
+                        <th>Created</th>
+                        <th>Device</th>
+                        <th>Key</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for r in streams_rows %}
+                        <tr>
+                          <td>{{ r.created_at }}</td>
+                          <td><code>{{ r.device_id }}</code></td>
+                          <td style="max-width: 520px; overflow: hidden; text-overflow: ellipsis;"><code>{{ r.storage_key }}</code></td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No segments yet for this module.</div>
+                {% endif %}
+              </div>
+
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Upload queue</div>
+                <div class="pv-card-subtitle">Pending or failed uploads targeting <code>{{ selected_module.name }}</code>.</div>
+                {% if upload_rows %}
+                  <table class="pv-table" style="margin-top: 0.65rem;">
+                    <thead>
+                      <tr>
+                        <th>Created</th>
+                        <th>Device</th>
+                        <th>Status</th>
+                        <th>Attempts</th>
+                        <th>Last error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for u in upload_rows %}
+                        <tr>
+                          <td>{{ u.created_at }}</td>
+                          <td><code>{{ u.device_id }}</code></td>
+                          <td><code>{{ u.status }}</code></td>
+                          <td>{{ u.attempts }}</td>
+                          <td style="max-width: 420px; overflow: hidden; text-overflow: ellipsis;">{{ u.last_error }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No queued uploads for this module.</div>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="pv-storage-tabpanel" data-panel="logs">
+            {% if not selected_module %}
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Logs</div>
+                <div class="pv-card-subtitle">Select a storage module to view logs.</div>
+              </div>
+            {% else %}
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Module events</div>
+                <div class="pv-card-subtitle">Last 50 events for <code>{{ selected_module.name }}</code>.</div>
+                {% if logs_rows %}
+                  <table class="pv-table" style="margin-top: 0.65rem;">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Level</th>
+                        <th>Type</th>
+                        <th>Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for e in logs_rows %}
+                        <tr>
+                          <td>{{ e.created_at }}</td>
+                          <td><code>{{ e.level }}</code></td>
+                          <td><code>{{ e.event_type }}</code></td>
+                          <td style="max-width: 560px; overflow: hidden; text-overflow: ellipsis;">{{ e.message }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No events recorded yet.</div>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="pv-storage-tabpanel" data-panel="advanced">
+            <div class="pv-card" style="margin-top: 0.75rem;">
+              <div class="pv-card-title" style="margin-bottom: 0.25rem;">Advanced</div>
+              <div class="pv-card-subtitle">Advanced settings will live here.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <details class="pv-storage-legacy" style="margin-top: 1.25rem;">
+      <summary>Legacy global storage settings (fallback)</summary>
+      <div class="pv-card" style="margin-top: 0.75rem;">
+        <form method="post" class="pv-form">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+          <div class="pv-field-group">
+            <label for="storage_targets">Active targets</label>
+            <input id="storage_targets" name="storage_targets" type="text" value="{{ form.storage_targets }}" />
+          </div>
+          <div class="pv-field-group">
+            <label for="local_storage_path">Local filesystem path</label>
+            <input id="local_storage_path" name="local_storage_path" type="text" value="{{ form.local_storage_path }}" />
+          </div>
+          <div class="pv-field-group">
+            <button type="submit" class="pv-button-primary">Save legacy settings</button>
+          </div>
+        </form>
+      </div>
+    </details>
+
+    <div class="pv-modal" id="pv-storage-wizard" role="dialog" aria-modal="true" aria-labelledby="pv-storage-wizard-title">
+      <div class="pv-modal-dialog" style="max-width: 760px; width: 92vw;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+          <div>
+            <div id="pv-storage-wizard-title" class="pv-card-title" style="margin: 0;">Add Storage Provider</div>
+            <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Select a provider, enter credentials, test, then save.</div>
+          </div>
+          <button type="button" class="pv-button pv-button-small" id="pv-storage-wizard-close">Close</button>
+        </div>
+
+        <div class="pv-storage-wizard-steps" style="margin-top: 0.75rem;">
+          <div class="pv-storage-step is-active" data-step="1">1. Provider</div>
+          <div class="pv-storage-step" data-step="2">2. Credentials</div>
+          <div class="pv-storage-step" data-step="3">3. Test</div>
+          <div class="pv-storage-step" data-step="4">4. Save</div>
+        </div>
+
+        <form method="post" id="pv-storage-wizard-form" style="margin-top: 0.9rem;">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+          <input type="hidden" name="action" id="pv-storage-wizard-action" value="module_create" />
+
+          <div class="pv-storage-wizard-panel is-active" data-panel-step="1">
+            <div class="pv-field-group">
+              <label for="pv-wiz-provider">Provider</label>
+              <select id="pv-wiz-provider" name="module_provider" required>
+                <option value="">Select provider…</option>
+                <option value="local_fs">Local filesystem</option>
+                <option value="s3">S3-compatible</option>
+                <option value="gcs">Google Cloud Storage</option>
+                <option value="azure_blob">Azure Blob Storage</option>
+                <option value="dropbox">Dropbox</option>
+                <option value="webdav">WebDAV</option>
+                <option value="gdrive">Google Drive</option>
+                <option value="onedrive">OneDrive</option>
+                <option value="box">Box</option>
+                <option value="swift">Swift</option>
+                <option value="pcloud">pCloud</option>
+                <option value="mega">MEGA</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="pv-storage-wizard-panel" data-panel-step="2">
+            <div class="pv-storage-config-grid">
+              <div class="pv-field-group">
+                <label for="pv-wiz-name">Name</label>
+                <input id="pv-wiz-name" name="module_name" type="text" placeholder="e.g. s3:primary" required />
+              </div>
+              <div class="pv-field-group">
+                <label for="pv-wiz-label">Label</label>
+                <input id="pv-wiz-label" name="module_label" type="text" placeholder="e.g. Primary archive" />
+              </div>
+              <div class="pv-field-group" style="grid-column: 1 / -1;">
+                <label style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                  <input type="checkbox" name="module_enabled" value="1" checked />
+                  <span>Enabled</span>
+                </label>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <div class="pv-module-config-group" data-provider="local_fs" style="display: none;">
+                  <label for="pv-wiz-base-dir">Base directory</label>
+                  <input id="pv-wiz-base-dir" name="module_cfg_base_dir" type="text" placeholder="/var/lib/pentavision/recordings" />
+                </div>
+                <div class="pv-module-config-group" data-provider="s3" style="display: none;">
+                  <label for="pv-wiz-s3-bucket">S3 bucket</label>
+                  <input id="pv-wiz-s3-bucket" name="module_cfg_s3_bucket" type="text" placeholder="my-recordings-bucket" />
+                  <label for="pv-wiz-s3-endpoint" style="margin-top: 0.35rem;">Endpoint</label>
+                  <input id="pv-wiz-s3-endpoint" name="module_cfg_s3_endpoint" type="text" placeholder="https://s3.amazonaws.com" />
+                  <label for="pv-wiz-s3-region" style="margin-top: 0.35rem;">Region</label>
+                  <input id="pv-wiz-s3-region" name="module_cfg_s3_region" type="text" placeholder="us-east-1" />
+                  <label for="pv-wiz-s3-ak" style="margin-top: 0.35rem;">Access key ID</label>
+                  <input id="pv-wiz-s3-ak" name="module_cfg_s3_access_key" type="password" autocomplete="off" />
+                  <label for="pv-wiz-s3-sk" style="margin-top: 0.35rem;">Secret access key</label>
+                  <input id="pv-wiz-s3-sk" name="module_cfg_s3_secret_key" type="password" autocomplete="off" />
+                </div>
+                <div class="pv-module-config-group" data-provider="gcs" style="display: none;">
+                  <label for="pv-wiz-gcs-bucket">GCS bucket</label>
+                  <input id="pv-wiz-gcs-bucket" name="module_cfg_gcs_bucket" type="text" />
+                </div>
+                <div class="pv-module-config-group" data-provider="azure_blob" style="display: none;">
+                  <label for="pv-wiz-az-container">Container</label>
+                  <input id="pv-wiz-az-container" name="module_cfg_azure_container" type="text" />
+                  <label for="pv-wiz-az-conn" style="margin-top: 0.35rem;">Connection string</label>
+                  <input id="pv-wiz-az-conn" name="module_cfg_azure_connection_string" type="password" autocomplete="off" />
+                </div>
+                <div class="pv-module-config-group" data-provider="dropbox" style="display: none;">
+                  <label for="pv-wiz-db-token">Access token</label>
+                  <input id="pv-wiz-db-token" name="module_cfg_dropbox_access_token" type="password" autocomplete="off" />
+                </div>
+                <div class="pv-module-config-group" data-provider="webdav" style="display: none;">
+                  <label for="pv-wiz-wd-url">Base URL</label>
+                  <input id="pv-wiz-wd-url" name="module_cfg_webdav_base_url" type="text" />
+                  <label for="pv-wiz-wd-user" style="margin-top: 0.35rem;">Username</label>
+                  <input id="pv-wiz-wd-user" name="module_cfg_webdav_username" type="text" />
+                  <label for="pv-wiz-wd-pass" style="margin-top: 0.35rem;">Password / app token</label>
+                  <input id="pv-wiz-wd-pass" name="module_cfg_webdav_password" type="password" autocomplete="off" />
+                </div>
+                <div class="pv-module-config-group" data-provider="mega" style="display: none;">
+                  <label for="pv-wiz-mega-email">MEGA account email</label>
+                  <input id="pv-wiz-mega-email" name="module_cfg_mega_email" type="email" />
+                  <label for="pv-wiz-mega-pass" style="margin-top: 0.35rem;">MEGA account password</label>
+                  <input id="pv-wiz-mega-pass" name="module_cfg_mega_password" type="password" autocomplete="off" />
+                  <label for="pv-wiz-mega-folder" style="margin-top: 0.35rem;">Folder name (optional)</label>
+                  <input id="pv-wiz-mega-folder" name="module_cfg_mega_folder_name" type="text" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pv-storage-wizard-panel" data-panel-step="3">
+            <div class="pv-card" style="margin-top: 0.25rem;">
+              <div class="pv-card-title" style="margin-bottom: 0.25rem;">Test Connection</div>
+              <div class="pv-card-subtitle">We will validate credentials and verify the provider is reachable.</div>
+            </div>
+          </div>
+
+          <div class="pv-storage-wizard-panel" data-panel-step="4">
+            <div class="pv-card" style="margin-top: 0.25rem;">
+              <div class="pv-card-title" style="margin-bottom: 0.25rem;">Save</div>
+              <div class="pv-card-subtitle">Save is only enabled after a successful test.</div>
+            </div>
+          </div>
+
+          <div class="pv-storage-actions" style="margin-top: 0.9rem; justify-content: space-between;">
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" class="pv-button-secondary" id="pv-wiz-back">Back</button>
+              <button type="button" class="pv-button-secondary" id="pv-wiz-next">Next</button>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="submit" class="pv-button-secondary" id="pv-wiz-test" data-pv-submit-action="module_draft_test">Test</button>
+              <button type="submit" class="pv-storage-save" id="pv-wiz-save" data-pv-submit-action="module_create" {% if not module_test_ready %}disabled{% endif %}>Save</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      var tabs = document.querySelectorAll('.pv-storage-tab');
+      var panels = document.querySelectorAll('.pv-storage-tabpanel');
+      function setTab(name) {
+        tabs.forEach(function (t) {
+          t.classList.toggle('is-active', (t.getAttribute('data-tab') || '') === name);
+        });
+        panels.forEach(function (p) {
+          p.classList.toggle('is-active', (p.getAttribute('data-panel') || '') === name);
+        });
+      }
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () {
+          setTab(t.getAttribute('data-tab') || 'overview');
+        });
+      });
+
+      var addBtn = document.getElementById('pv-storage-add-btn');
+      if (addBtn) {
+        addBtn.addEventListener('click', function () {
+          var modal = document.getElementById('pv-storage-wizard');
+          if (modal) {
+            modal.classList.add('is-visible');
+          }
+          setTab('overview');
+        });
+      }
+
+      var wiz = document.getElementById('pv-storage-wizard');
+      var wizClose = document.getElementById('pv-storage-wizard-close');
+      function closeWizard() {
+        if (wiz) wiz.classList.remove('is-visible');
+      }
+      if (wizClose) wizClose.addEventListener('click', closeWizard);
+      if (wiz) {
+        wiz.addEventListener('click', function (ev) {
+          if (ev.target === wiz) closeWizard();
+        });
+      }
+
+      var wizForm = document.getElementById('pv-storage-wizard-form');
+      var wizAction = document.getElementById('pv-storage-wizard-action');
+      var wizProvider = document.getElementById('pv-wiz-provider');
+      var wizSteps = document.querySelectorAll('.pv-storage-step');
+      var wizPanels = document.querySelectorAll('.pv-storage-wizard-panel');
+      var wizBack = document.getElementById('pv-wiz-back');
+      var wizNext = document.getElementById('pv-wiz-next');
+
+      var wizStep = 1;
+      function setWizardStep(step) {
+        wizStep = step;
+        wizSteps.forEach(function (el) {
+          el.classList.toggle('is-active', (el.getAttribute('data-step') || '') === String(step));
+        });
+        wizPanels.forEach(function (el) {
+          el.classList.toggle('is-active', (el.getAttribute('data-panel-step') || '') === String(step));
+        });
+        if (wizBack) wizBack.disabled = step <= 1;
+      }
+
+      function updateWizardProviderConfig() {
+        if (!wizProvider) return;
+        var value = wizProvider.value || '';
+        var groups = document.querySelectorAll('#pv-storage-wizard .pv-module-config-group');
+        groups.forEach(function (el) {
+          var target = (el.getAttribute('data-provider') || '').trim();
+          el.style.display = target && target === value ? '' : 'none';
+        });
+      }
+      if (wizProvider) {
+        wizProvider.addEventListener('change', function () {
+          updateWizardProviderConfig();
+        });
+      }
+
+      if (wizBack) {
+        wizBack.addEventListener('click', function () {
+          setWizardStep(Math.max(1, wizStep - 1));
+        });
+      }
+      if (wizNext) {
+        wizNext.addEventListener('click', function () {
+          if (wizStep === 1 && wizProvider && !wizProvider.value) {
+            return;
+          }
+          updateWizardProviderConfig();
+          setWizardStep(Math.min(4, wizStep + 1));
+        });
+      }
+
+      if (wizForm) {
+        wizForm.addEventListener('click', function (ev) {
+          var btn = ev.target;
+          if (!btn || !btn.getAttribute) return;
+          var action = btn.getAttribute('data-pv-submit-action');
+          if (!action) return;
+          if (wizAction) wizAction.value = action;
+        });
+        setWizardStep(1);
+        updateWizardProviderConfig();
+      }
+
+      {% if open_wizard %}
+        if (wiz) {
+          wiz.classList.add('is-visible');
+        }
+      {% endif %}
+
+      var select = document.getElementById('module_provider');
+      function updateModuleConfig() {
+        if (!select) return;
+        var value = select.value || '';
+        var groups = document.querySelectorAll('.pv-module-config-group');
+        groups.forEach(function (el) {
+          var target = (el.getAttribute('data-provider') || '').trim();
+          el.style.display = target && target === value ? '' : 'none';
+        });
+      }
+      if (select) {
+        select.addEventListener('change', updateModuleConfig);
+        updateModuleConfig();
+      }
+
+      var form = document.getElementById('pv-storage-form');
+      if (form) {
+        form.addEventListener('click', function (ev) {
+          var btn = ev.target;
+          if (!btn || !btn.getAttribute) return;
+          var action = btn.getAttribute('data-pv-submit-action');
+          if (!action) return;
+          var actionInput = document.getElementById('pv-storage-action');
+          if (actionInput) actionInput.value = action;
+        });
+      }
+    })();
+  </script>
+{% endblock %}

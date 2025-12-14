@@ -117,6 +117,150 @@
 - [x] MEGA (mega.nz) — developer libraries and APIs (client-side encryption model); community SDKs/docs.
 - [x] Nextcloud (self-hosted) — WebDAV + app APIs for file access; full developer WebDAV docs.
 
+## Storage Modules Manager — Full Product & UX Specification
+
+- [ ] Transform `/storage` into a split-view storage orchestration dashboard (providers list left, details panel right).
+- [ ] Treat each configured destination as a Storage Module Instance with:
+  - provider type
+  - credentials & configuration
+  - enable/disable
+  - connectivity + write test
+  - health signals, logs, metrics
+  - association to stream writes
+- [ ] Provider categories and targets:
+  - Object storage (S3-compatible and native)
+    - Amazon S3 (AWS)
+    - Google Cloud Storage (GCS)
+    - Microsoft Azure Blob Storage
+    - IBM Cloud Object Storage
+    - Oracle Cloud Object Storage
+    - Rackspace Cloud Files (OpenStack Swift)
+    - OVHcloud Object Storage
+    - Scaleway Object Storage
+    - Linode Object Storage
+    - DigitalOcean Spaces
+    - Wasabi
+    - Backblaze B2 (native + S3)
+    - Cloudflare R2 (S3-compatible)
+  - File sync / consumer cloud
+    - Dropbox
+    - Google Drive
+    - Microsoft OneDrive
+    - Box
+    - pCloud
+    - MEGA
+    - Nextcloud
+  - Network / protocol-based
+    - WebDAV
+    - FTP
+    - FTPS (explicit/implicit)
+    - SFTP
+    - SMB/CIFS
+    - NFS (advanced)
+    - SCP (advanced)
+  - Local / on-prem
+    - local filesystem paths
+    - mounted volumes (NAS/SAN)
+    - container-mounted persistent volumes
+- [ ] Providers list (left panel): implement row/cards with:
+  - icon/logo
+  - user-defined name
+  - provider type label
+  - status indicator (Healthy / Degraded / Failing / Disabled)
+  - active stream count
+  - last successful write timestamp
+  - overflow actions: Enable/Disable, Edit, Clone, Delete, View Logs
+- [ ] Provider details panel (right) with tabs:
+  - Overview
+  - Configuration
+  - Streams
+  - Logs
+  - Advanced
+- [ ] Overview tab (read-only) shows:
+  - current health status
+  - last connection test result
+  - last successful write
+  - error rate (last 24h)
+  - storage usage (GB/day, GB/month)
+  - active vs completed streams
+- [ ] Configuration tab:
+  - provider selection grouped by category (Object Storage / Cloud Drives / Network Protocols / Local)
+  - dynamic credential forms driven by provider schema (required/optional fields, types, validation)
+  - enforce Test -> Save flow:
+    - validate auth
+    - write temporary object/file
+    - verify read
+    - cleanup test artifact
+    - save disabled until test succeeds
+    - display success timing details or actionable failure errors
+- [ ] Streams tab:
+  - stream table with Stream ID, status (writing/completed/failed), file size, duration, last write time, retry count, action (view/inspect)
+- [ ] Logs tab:
+  - capture auth attempts, upload starts/stops, chunk retries, timeouts, permission errors, cleanup failures
+  - UX: severity filtering, search, copy/export, correlation by Stream ID
+- [ ] Advanced tab (power users):
+  - retention policies
+  - directory/object key templates (e.g. `/{provider}/{year}/{month}/{stream_id}.mp4`)
+  - chunk size tuning
+  - parallel upload limits
+  - encryption settings
+  - provider-specific flags
+  - bandwidth throttling
+- [ ] Global system features:
+  - storage priority ordering for enabled providers
+  - automatic failover on failure (health-based routing)
+  - safe disable/delete:
+    - warn if active streams exist
+    - offer "drain & disable"
+    - prevent accidental data loss
+  - read-only mode while streams are writing (block credential edits; require stop or provider clone)
+- [ ] Add Storage Provider wizard:
+  - select provider
+  - enter credentials
+  - test connection
+  - name & tag
+  - confirm & enable
+
+### Storage Modules Manager UI layout mockup graphic
+
+- [ ] Create a layout graphic for the Storage Modules Manager page matching the existing dark/electric-blue dashboard theme.
+- [ ] Keep an image-generation prompt saved/maintained for regenerating the layout mockup (DALL·E or equivalent).
+- [ ] Add UI reference screenshot (elegance/layout benchmark) at `docs/ui-references/storage-modules-manager-reference.png` and keep it linked here.
+
+![Storage Modules Manager UI reference](docs/ui-references/storage-modules-manager-reference.png)
+
+```
+A high-fidelity dark-themed web dashboard UI mockup for a "Storage Modules Manager" page.
+Color scheme: deep navy blue background, electric blue gradients, subtle glow accents, rounded cards, modern security camera dashboard aesthetic.
+
+Layout:
+- Top navigation bar with logo on the left, menu items centered, user profile on the right.
+- Page header reading "Storage Modules" with subtitle "Manage where your RTMP streams are stored".
+- Glowing "+ Add Storage Provider" button on the right.
+
+Main content is a split layout:
+LEFT PANEL:
+- Vertical list of storage provider cards.
+- Each card shows a provider icon (S3, Google Cloud, FTP), provider name, status indicator (green, yellow), active stream count.
+- Soft blue glow borders and hover effects.
+
+RIGHT PANEL:
+- Large detail panel with tabs: Overview, Configuration, Streams, Logs, Advanced.
+- Overview tab visible with health status badge, usage metrics placeholders, last write time, and active stream count.
+- Configuration section partially visible with provider dropdown, credential fields, "Test Connection" button, disabled "Save" button.
+
+Bottom status bar:
+- Displays Storage OK, Streams Writing, Errors, and System Health.
+
+Style:
+- Professional, enterprise-grade, modern, clean
+- No text clutter
+- High contrast white text
+- Rounded corners
+- Subtle glassmorphism
+- Looks like a real SaaS security platform UI
+```
+
 ## Logging, monitoring, and operations
 
 - [x] Define what to monitor (auth failures, unusual access patterns, storage errors, recognition errors).

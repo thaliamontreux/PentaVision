@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import base64
+import hashlib
 import io
 import json
 import pickle
@@ -1320,6 +1321,7 @@ def storage_settings():
     errors: list[str] = []
     saved = False
     module_test_result: dict | None = None
+    module_test_ready = False
 
     # Load any existing DB-backed storage settings so we can merge them with
     # environment defaults for the form and summaries.
@@ -1519,6 +1521,8 @@ def storage_settings():
                 "module_delete",
                 "module_toggle",
                 "module_test",
+                "module_draft_test",
+                "module_clone",
             }:
                 if record_engine is None:
                     errors.append("Record database is not configured.")
@@ -1528,6 +1532,21 @@ def storage_settings():
                         StorageModule.__table__.create(
                             bind=record_engine, checkfirst=True
                         )
+
+                        def _fingerprint_module_payload(
+                            provider_type: str,
+                            name: str,
+                            config: dict[str, object],
+                            module_id: int | None = None,
+                        ) -> str:
+                            payload = {
+                                "provider_type": (provider_type or "").strip().lower(),
+                                "name": (name or "").strip(),
+                                "module_id": int(module_id) if module_id is not None else None,
+                                "config": config,
+                            }
+                            raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+                            return hashlib.sha256(raw.encode("utf-8")).hexdigest()
                         def _build_module_config_from_form(
                             provider_type: str,
                         ) -> dict[str, object]:
@@ -1708,6 +1727,56 @@ def storage_settings():
                                     config["folder_name"] = folder_name
                             return config
 
+                        def _get_last_module_test() -> dict[str, object] | None:
+                            try:
+                                raw = session.get("storage_module_last_test")
+                            except Exception:  # noqa: BLE001
+                                raw = None
+                            if not isinstance(raw, dict):
+                                return None
+                            return raw
+
+                        def _set_last_module_test(
+                            fingerprint: str,
+                            ok: bool,
+                        ) -> None:
+                            try:
+                                session["storage_module_last_test"] = {
+                                    "fingerprint": fingerprint,
+                                    "ok": bool(ok),
+                                    "at": datetime.now(timezone.utc).isoformat(),
+                                }
+                            except Exception:  # noqa: BLE001
+                                return
+
+                        StorageModuleEvent.__table__.create(
+                            bind=record_engine, checkfirst=True
+                        )
+
+                        def _log_module_event(
+                            level: str,
+                            event_type: str,
+                            message: str,
+                            module_row: StorageModule | None = None,
+                            module_name: str | None = None,
+                        ) -> None:
+                            try:
+                                name_val = module_name or (
+                                    (module_row.name if module_row is not None else "")
+                                )
+                                mod_id = int(module_row.id) if module_row is not None else None
+                                session_db.add(
+                                    StorageModuleEvent(
+                                        module_id=mod_id,
+                                        module_name=str(name_val or ""),
+                                        level=str(level or "info"),
+                                        event_type=str(event_type or "event"),
+                                        message=str(message or "")[:1024],
+                                    )
+                                )
+                            except Exception:  # noqa: BLE001
+                                return
+
                         if action == "module_create":
                             name = (request.form.get("module_name") or "").strip()
                             label = (request.form.get("module_label") or "").strip()
@@ -1737,6 +1806,24 @@ def storage_settings():
 
                             if not errors:
                                 config = _build_module_config_from_form(provider_type)
+
+                                fp_expected = _fingerprint_module_payload(
+                                    provider_type,
+                                    name,
+                                    config,
+                                    None,
+                                )
+                                last_test = _get_last_module_test() or {}
+                                if not last_test or not last_test.get("ok"):
+                                    errors.append(
+                                        "Please test this storage provider successfully before saving."
+                                    )
+                                elif str(last_test.get("fingerprint") or "") != fp_expected:
+                                    errors.append(
+                                        "The storage provider configuration changed. Please test again before saving."
+                                    )
+
+                            if not errors:
                                 now_dt = datetime.now(timezone.utc)
                                 module = StorageModule(
                                     name=name,
@@ -1749,6 +1836,12 @@ def storage_settings():
                                 session_db.add(module)
                                 session_db.commit()
                                 saved = True
+                                _log_module_event(
+                                    "info",
+                                    "module_create",
+                                    f"Created storage module '{module.name}' ({module.provider_type}).",
+                                    module_row=module,
+                                )
 
                         elif action == "module_update":
                             module_id_raw = request.form.get("module_id") or ""
@@ -1811,6 +1904,23 @@ def storage_settings():
                                     merged_cfg = dict(current_cfg)
                                     merged_cfg.update(new_cfg)
 
+                                    fp_expected = _fingerprint_module_payload(
+                                        provider_type,
+                                        new_name,
+                                        merged_cfg,
+                                        int(module.id),
+                                    )
+                                    last_test = _get_last_module_test() or {}
+                                    if not last_test or not last_test.get("ok"):
+                                        errors.append(
+                                            "Please test this storage provider successfully before saving."
+                                        )
+                                    elif str(last_test.get("fingerprint") or "") != fp_expected:
+                                        errors.append(
+                                            "The storage provider configuration changed. Please test again before saving."
+                                        )
+
+                                if not errors:
                                     module.name = new_name
                                     module.label = new_label or None
                                     module.is_enabled = enabled_flag
@@ -1821,9 +1931,62 @@ def storage_settings():
                                     session_db.add(module)
                                     session_db.commit()
                                     saved = True
+                                    _log_module_event(
+                                        "info",
+                                        "module_update",
+                                        f"Updated storage module '{module.name}'.",
+                                        module_row=module,
+                                    )
+
+                        elif action == "module_clone":
+                            module_id_raw = request.form.get("module_id") or ""
+                            new_name = (request.form.get("clone_name") or "").strip()
+                            try:
+                                module_id = int(module_id_raw)
+                            except ValueError:
+                                module_id = None
+
+                            if module_id is None:
+                                errors.append("Invalid storage module id.")
+                            if not new_name:
+                                errors.append("Clone name is required.")
+
+                            src = session_db.get(StorageModule, module_id) if module_id is not None else None
+                            if src is None and not errors:
+                                errors.append("Storage module not found.")
+
+                            if not errors:
+                                existing = (
+                                    session_db.query(StorageModule)
+                                    .filter(StorageModule.name == new_name)
+                                    .first()
+                                )
+                                if existing is not None:
+                                    errors.append("A storage module with this name already exists.")
+
+                            if not errors and src is not None:
+                                now_dt = datetime.now(timezone.utc)
+                                clone_row = StorageModule(
+                                    name=new_name,
+                                    label=(src.label or None),
+                                    provider_type=str(src.provider_type or ""),
+                                    is_enabled=0,
+                                    config_json=src.config_json,
+                                    updated_at=now_dt,
+                                )
+                                session_db.add(clone_row)
+                                session_db.commit()
+                                saved = True
+                                _log_module_event(
+                                    "info",
+                                    "module_clone",
+                                    f"Cloned module '{src.name}' to '{clone_row.name}' (disabled by default).",
+                                    module_row=clone_row,
+                                )
 
                         elif action == "module_delete":
                             module_id_raw = request.form.get("module_id") or ""
+                            force_delete = (request.form.get("force_delete") or "").strip()
                             try:
                                 module_id = int(module_id_raw)
                             except ValueError:
@@ -1831,13 +1994,53 @@ def storage_settings():
                             if module_id is not None:
                                 module = session_db.get(StorageModule, module_id)
                                 if module is not None:
+                                    CameraRecording.__table__.create(
+                                        bind=record_engine, checkfirst=True
+                                    )
+                                    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                                    active_streams = (
+                                        session_db.query(
+                                            func.count(func.distinct(CameraRecording.device_id))
+                                        )
+                                        .filter(
+                                            CameraRecording.storage_provider == module.name,
+                                            CameraRecording.created_at >= cutoff,
+                                        )
+                                        .scalar()
+                                        or 0
+                                    )
+                                    any_segments = (
+                                        session_db.query(func.count(CameraRecording.id))
+                                        .filter(
+                                            CameraRecording.storage_provider == module.name
+                                        )
+                                        .scalar()
+                                        or 0
+                                    )
+                                    if (int(active_streams) > 0 or int(any_segments) > 0) and force_delete != "1":
+                                        errors.append(
+                                            "This module has existing recordings or active streams. Tick 'Force delete' and submit again to confirm."
+                                        )
+                                        module = None
+
+                                if module is not None:
+                                    deleted_name = module.name
+                                    deleted_id = module.id
                                     session_db.delete(module)
                                     session_db.commit()
                                     saved = True
+                                    _log_module_event(
+                                        "warn",
+                                        "module_delete",
+                                        f"Deleted storage module '{deleted_name}'.",
+                                        module_row=None,
+                                        module_name=str(deleted_name or f"#{deleted_id}"),
+                                    )
 
                         elif action == "module_toggle":
                             module_id_raw = request.form.get("module_id") or ""
                             enable_raw = request.form.get("enable") or ""
+                            force_disable = (request.form.get("force_disable") or "").strip()
                             try:
                                 module_id = int(module_id_raw)
                             except ValueError:
@@ -1846,11 +2049,46 @@ def storage_settings():
                             if module_id is not None:
                                 module = session_db.get(StorageModule, module_id)
                                 if module is not None:
+                                    if enable_flag == 0:
+                                        CameraRecording.__table__.create(
+                                            bind=record_engine, checkfirst=True
+                                        )
+                                        cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                                        active_streams = (
+                                            session_db.query(
+                                                func.count(
+                                                    func.distinct(CameraRecording.device_id)
+                                                )
+                                            )
+                                            .filter(
+                                                CameraRecording.storage_provider == module.name,
+                                                CameraRecording.created_at >= cutoff,
+                                            )
+                                            .scalar()
+                                            or 0
+                                        )
+                                        if int(active_streams) > 0 and force_disable != "1":
+                                            errors.append(
+                                                "This module has active streams. Tick 'Force disable' and submit again to confirm."
+                                            )
+                                            module = None
+
+                                if module is not None:
                                     module.is_enabled = enable_flag
                                     module.updated_at = datetime.now(timezone.utc)
                                     session_db.add(module)
                                     session_db.commit()
                                     saved = True
+                                    _log_module_event(
+                                        "info",
+                                        "module_toggle",
+                                        (
+                                            f"Enabled storage module '{module.name}'."
+                                            if enable_flag
+                                            else f"Disabled storage module '{module.name}'."
+                                        ),
+                                        module_row=module,
+                                    )
                         elif action == "module_test":
                             module_id_raw = request.form.get("module_id") or ""
                             try:
@@ -1896,6 +2134,110 @@ def storage_settings():
                                         "module_name": module.name,
                                         "message": str(message)[:300],
                                     }
+
+                        elif action == "module_draft_test":
+                            module_id_raw = (request.form.get("module_id") or "").strip()
+                            try:
+                                module_id = int(module_id_raw) if module_id_raw else None
+                            except ValueError:
+                                module_id = None
+
+                            name = (request.form.get("module_name") or "").strip()
+                            label = (request.form.get("module_label") or "").strip()
+                            provider_type = (
+                                request.form.get("module_provider") or ""
+                            ).strip().lower()
+
+                            existing_module: StorageModule | None = None
+                            if module_id is not None:
+                                existing_module = session_db.get(StorageModule, module_id)
+                                if existing_module is None:
+                                    errors.append("Storage module not found.")
+                                else:
+                                    provider_type = (
+                                        (existing_module.provider_type or "").strip().lower()
+                                    )
+                                    if not name:
+                                        name = existing_module.name
+                                    if not label:
+                                        label = existing_module.label or ""
+
+                            if not name:
+                                errors.append("Module name is required.")
+                            if not provider_type:
+                                errors.append("Provider type is required.")
+
+                            config = _build_module_config_from_form(provider_type)
+                            if existing_module is not None:
+                                try:
+                                    current_cfg = (
+                                        json.loads(existing_module.config_json)
+                                        if existing_module.config_json
+                                        else {}
+                                    )
+                                except Exception:  # noqa: BLE001
+                                    current_cfg = {}
+                                merged_cfg = dict(current_cfg)
+                                merged_cfg.update(config)
+                                config = merged_cfg
+
+                            if not errors:
+                                tmp_module = StorageModule(
+                                    name=name,
+                                    label=label or None,
+                                    provider_type=provider_type,
+                                    is_enabled=1,
+                                    config_json=None,
+                                )
+                                try:
+                                    from .storage_providers import (  # noqa: PLC0415
+                                        _LegacyProviderAdapter,
+                                        _build_provider_for_module,
+                                    )
+
+                                    provider = _build_provider_for_module(
+                                        current_app,
+                                        tmp_module,
+                                        config,
+                                    )
+                                    if provider is None:
+                                        raise StorageError("Failed to build provider")
+                                    provider.name = name
+                                    adapter = _LegacyProviderAdapter(provider)
+                                    status = adapter.health_check()
+                                except StorageError as exc:
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": name,
+                                        "message": str(exc)[:300],
+                                    }
+                                    _set_last_module_test("", False)
+                                except Exception as exc:  # noqa: BLE001
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": name,
+                                        "message": str(exc)[:300],
+                                    }
+                                    _set_last_module_test("", False)
+                                else:
+                                    status_text = str(status.get("status") or "ok")
+                                    ok = status_text == "ok"
+                                    message = status.get("message") or (
+                                        f"Health check status: {status_text}"
+                                    )
+                                    module_test_result = {
+                                        "ok": ok,
+                                        "module_name": name,
+                                        "message": str(message)[:300],
+                                    }
+                                    fp = _fingerprint_module_payload(
+                                        provider_type,
+                                        name,
+                                        config,
+                                        int(existing_module.id) if existing_module is not None else None,
+                                    )
+                                    _set_last_module_test(fp, ok)
+                                    module_test_ready = bool(ok)
 
     providers_raw = build_storage_providers(current_app)
     providers = []
@@ -2038,11 +2380,91 @@ def storage_settings():
                 }
             )
 
+    open_wizard = False
+    try:
+        open_wizard = bool(request.args.get("wizard"))
+    except Exception:  # noqa: BLE001
+        open_wizard = False
+    if request.method == "POST":
+        try:
+            if (request.form.get("action") or "").strip() == "module_draft_test" and edit_module is None:
+                open_wizard = True
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Metrics for split-view UI
+    selected_module = edit_module
+    selected_metrics = None
+    streams_rows = []
+    upload_rows = []
+    logs_rows = []
+    if selected_module is not None:
+        engine = get_record_engine()
+        if engine is not None:
+            CameraRecording.__table__.create(bind=engine, checkfirst=True)
+            UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
+            StorageModuleEvent.__table__.create(bind=engine, checkfirst=True)
+            with Session(engine) as session:
+                last_row = (
+                    session.query(CameraRecording)
+                    .filter(CameraRecording.storage_provider == selected_module.name)
+                    .order_by(CameraRecording.created_at.desc())
+                    .first()
+                )
+                last_write_text = "n/a"
+                if last_row is not None and getattr(last_row, "created_at", None):
+                    last_write_text = str(last_row.created_at)
+                cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                active_streams = (
+                    session.query(func.count(func.distinct(CameraRecording.device_id)))
+                    .filter(
+                        CameraRecording.storage_provider == selected_module.name,
+                        CameraRecording.created_at >= cutoff,
+                    )
+                    .scalar()
+                    or 0
+                )
+                selected_metrics = {
+                    "last_write_text": last_write_text,
+                    "active_streams": int(active_streams),
+                }
+                streams_rows = (
+                    session.query(CameraRecording)
+                    .filter(CameraRecording.storage_provider == selected_module.name)
+                    .order_by(CameraRecording.created_at.desc())
+                    .limit(25)
+                    .all()
+                )
+                upload_rows = (
+                    session.query(UploadQueueItem)
+                    .filter(UploadQueueItem.provider_name == selected_module.name)
+                    .order_by(UploadQueueItem.created_at.desc())
+                    .limit(25)
+                    .all()
+                )
+                logs_rows = (
+                    session.query(StorageModuleEvent)
+                    .filter(
+                        (StorageModuleEvent.module_id == int(selected_module.id))
+                        | (StorageModuleEvent.module_name == selected_module.name)
+                    )
+                    .order_by(StorageModuleEvent.created_at.desc())
+                    .limit(50)
+                    .all()
+                )
+
     return render_template(
-        "storage.html",
+        "storage_modules.html",
         providers=providers,
         modules=modules,
         module_test_result=module_test_result,
+        module_test_ready=module_test_ready,
+        open_wizard=open_wizard,
+        selected_module=selected_module,
+        selected_metrics=selected_metrics,
+        streams_rows=streams_rows,
+        upload_rows=upload_rows,
+        logs_rows=logs_rows,
         s3=s3_info,
         gcs=gcs_info,
         azure=azure_info,

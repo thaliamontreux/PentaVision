@@ -97,14 +97,14 @@ class User(UserBase):
     last_pin_use_context: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
     failed_logins: Mapped[int] = mapped_column(Integer, server_default="0")
     locked_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     totp_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class CameraRtmpOutput(RecordBase):
@@ -466,6 +466,52 @@ class CameraRecording(RecordBase):
     device_id: Mapped[int] = mapped_column(Integer, index=True)
     storage_provider: Mapped[str] = mapped_column(String(100))
     storage_key: Mapped[str] = mapped_column(String(512))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class StorageModuleHealthCheck(RecordBase):
+    __tablename__ = "storage_module_health_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    module_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    module_name: Mapped[str] = mapped_column(String(160), index=True)
+    provider_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    ok: Mapped[int] = mapped_column(Integer, server_default="0")
+    message: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class StorageModuleEvent(RecordBase):
+    __tablename__ = "storage_module_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    module_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    module_name: Mapped[str] = mapped_column(String(160), index=True)
+    level: Mapped[str] = mapped_column(String(16), server_default="info")
+    event_type: Mapped[str] = mapped_column(String(64), server_default="event")
+    message: Mapped[str] = mapped_column(String(1024))
+    stream_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class StorageModuleWriteStat(RecordBase):
+    __tablename__ = "storage_module_write_stats"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    module_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    module_name: Mapped[str] = mapped_column(String(160), index=True)
+    device_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    bytes_written: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ok: Mapped[int] = mapped_column(Integer, server_default="1")
+    error: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
