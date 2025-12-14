@@ -13,6 +13,7 @@ import time
 from app import create_app
 from app.recording_service import start_recording_service
 from app.stream_service import start_stream_service
+from app.rtmp_service import start_rtmp_service
 
 
 class _StderrFilter:
@@ -62,6 +63,7 @@ def main() -> None:
     # Start long-running background services (each manages its own threads).
     start_recording_service(app)
     start_stream_service(app)
+    start_rtmp_service(app)
 
     try:
         while True:

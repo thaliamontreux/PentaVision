@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 import base64
 import io
+import json
 import pickle
 
 from flask import (
@@ -62,6 +63,7 @@ from .security import (
 )
 from .stream_service import get_stream_manager
 from .storage_providers import build_storage_providers, _load_storage_settings
+from .storage_csal import get_storage_router, StorageError
 from .net_utils import get_ipv4_interfaces
 
 
@@ -409,6 +411,7 @@ def profile():
     engine = get_user_engine()
     errors: list[str] = []
     saved = False
+    test_result: dict | None = None
     test_result: dict | None = None
 
     if engine is None:
@@ -1316,6 +1319,7 @@ def storage_settings():
     cfg = current_app.config
     errors: list[str] = []
     saved = False
+    module_test_result: dict | None = None
 
     # Load any existing DB-backed storage settings so we can merge them with
     # environment defaults for the form and summaries.
@@ -1361,108 +1365,444 @@ def storage_settings():
     record_engine = get_record_engine()
 
     if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+
         if not validate_global_csrf_token(request.form.get("csrf_token")):
             errors.append("Invalid or missing CSRF token.")
+        else:
+            # Legacy global StorageSettings update when no explicit action is
+            # provided (for backwards compatibility) or when the action is
+            # save_legacy.
+            if not action or action == "save_legacy":
+                # Update form values from submitted data so we can re-render on
+                # error.
+                for key in form.keys():
+                    form[key] = (request.form.get(key) or "").strip()
 
-        # Update form values from submitted data so we can re-render on error.
-        for key in form.keys():
-            form[key] = (request.form.get(key) or "").strip()
+                if not form["storage_targets"]:
+                    form["storage_targets"] = "local_fs"
 
-        if not form["storage_targets"]:
-            form["storage_targets"] = "local_fs"
+                if record_engine is None:
+                    errors.append("Record database is not configured.")
 
-        if record_engine is None:
-            errors.append("Record database is not configured.")
+                if not errors and record_engine is not None:
+                    with Session(record_engine) as session_db:
+                        StorageSettings.__table__.create(
+                            bind=record_engine, checkfirst=True
+                        )
+                        settings = (
+                            session_db.query(StorageSettings)
+                            .order_by(StorageSettings.id)
+                            .first()
+                        )
+                        if settings is None:
+                            settings = StorageSettings()
+                            session_db.add(settings)
 
-        if not errors and record_engine is not None:
-            with Session(record_engine) as session_db:
-                StorageSettings.__table__.create(bind=record_engine, checkfirst=True)
-                settings = (
-                    session_db.query(StorageSettings)
-                    .order_by(StorageSettings.id)
-                    .first()
-                )
-                if settings is None:
-                    settings = StorageSettings()
-                    session_db.add(settings)
+                        settings.storage_targets = form["storage_targets"] or None
+                        settings.local_storage_path = (
+                            form["local_storage_path"] or None
+                        )
+                        settings.recording_base_dir = (
+                            form["recording_base_dir"] or None
+                        )
+                        settings.s3_bucket = form["s3_bucket"] or None
+                        settings.s3_endpoint = form["s3_endpoint"] or None
+                        settings.s3_region = form["s3_region"] or None
+                        # Secret fields: only update when a non-empty value is
+                        # provided, so leaving the field blank keeps the
+                        # existing secret or environment-backed value.
+                        if form["s3_access_key"]:
+                            settings.s3_access_key = form["s3_access_key"]
+                        if form["s3_secret_key"]:
+                            settings.s3_secret_key = form["s3_secret_key"]
+                        settings.gcs_bucket = form["gcs_bucket"] or None
+                        if form["azure_blob_connection_string"]:
+                            settings.azure_blob_connection_string = form[
+                                "azure_blob_connection_string"
+                            ]
+                        settings.azure_blob_container = (
+                            form["azure_blob_container"] or None
+                        )
+                        if form["dropbox_access_token"]:
+                            settings.dropbox_access_token = form[
+                                "dropbox_access_token"
+                            ]
+                        settings.webdav_base_url = (
+                            form["webdav_base_url"] or None
+                        )
+                        settings.webdav_username = (
+                            form["webdav_username"] or None
+                        )
+                        if form["webdav_password"]:
+                            settings.webdav_password = form["webdav_password"]
+                        settings.updated_at = datetime.now(timezone.utc)
 
-                settings.storage_targets = form["storage_targets"] or None
-                settings.local_storage_path = form["local_storage_path"] or None
-                settings.recording_base_dir = form["recording_base_dir"] or None
-                settings.s3_bucket = form["s3_bucket"] or None
-                settings.s3_endpoint = form["s3_endpoint"] or None
-                settings.s3_region = form["s3_region"] or None
-                # Secret fields: only update when a non-empty value is provided,
-                # so leaving the field blank keeps the existing secret or
-                # environment-backed value.
-                if form["s3_access_key"]:
-                    settings.s3_access_key = form["s3_access_key"]
-                if form["s3_secret_key"]:
-                    settings.s3_secret_key = form["s3_secret_key"]
-                settings.gcs_bucket = form["gcs_bucket"] or None
-                if form["azure_blob_connection_string"]:
-                    settings.azure_blob_connection_string = form[
-                        "azure_blob_connection_string"
-                    ]
-                settings.azure_blob_container = (
-                    form["azure_blob_container"] or None
-                )
-                if form["dropbox_access_token"]:
-                    settings.dropbox_access_token = form["dropbox_access_token"]
-                settings.webdav_base_url = form["webdav_base_url"] or None
-                settings.webdav_username = form["webdav_username"] or None
-                if form["webdav_password"]:
-                    settings.webdav_password = form["webdav_password"]
-                settings.updated_at = datetime.now(timezone.utc)
+                        session_db.add(settings)
+                        session_db.commit()
 
-                session_db.add(settings)
-                session_db.commit()
+                    saved = True
+                    # Reload DB settings so the provider summary reflects the
+                    # new configuration.
+                    db_settings = _load_storage_settings() or {}
 
-            saved = True
-            # Reload DB settings so the provider summary reflects the new
-            # configuration.
-            db_settings = _load_storage_settings() or {}
+                    raw_targets = db_settings.get("storage_targets") or str(
+                        cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
+                    )
+                    form["storage_targets"] = raw_targets
+                    form["local_storage_path"] = db_settings.get(
+                        "local_storage_path"
+                    ) or str(
+                        cfg.get("LOCAL_STORAGE_PATH")
+                        or cfg.get("RECORDING_BASE_DIR")
+                        or ""
+                    )
+                    form["recording_base_dir"] = db_settings.get(
+                        "recording_base_dir"
+                    ) or str(cfg.get("RECORDING_BASE_DIR") or "")
+                    form["s3_bucket"] = db_settings.get("s3_bucket") or str(
+                        cfg.get("S3_BUCKET") or ""
+                    )
+                    form["s3_endpoint"] = db_settings.get("s3_endpoint") or str(
+                        cfg.get("S3_ENDPOINT") or ""
+                    )
+                    form["s3_region"] = db_settings.get("s3_region") or str(
+                        cfg.get("S3_REGION") or ""
+                    )
+                    form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
+                        cfg.get("GCS_BUCKET") or ""
+                    )
+                    form["azure_blob_container"] = db_settings.get(
+                        "azure_blob_container"
+                    ) or str(cfg.get("AZURE_BLOB_CONTAINER") or "")
+                    form["webdav_base_url"] = db_settings.get(
+                        "webdav_base_url"
+                    ) or str(cfg.get("WEBDAV_BASE_URL") or "")
+                    form["webdav_username"] = db_settings.get(
+                        "webdav_username"
+                    ) or str(cfg.get("WEBDAV_USERNAME") or "")
+                    # Secret fields remain blank after save so that we never
+                    # echo sensitive values back to the browser.
+                    form["s3_access_key"] = ""
+                    form["s3_secret_key"] = ""
+                    form["azure_blob_connection_string"] = ""
+                    form["dropbox_access_token"] = ""
+                    form["webdav_password"] = ""
 
-            raw_targets = db_settings.get("storage_targets") or str(
-                cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
-            )
-            form["storage_targets"] = raw_targets
-            form["local_storage_path"] = db_settings.get("local_storage_path") or str(
-                cfg.get("LOCAL_STORAGE_PATH")
-                or cfg.get("RECORDING_BASE_DIR")
-                or ""
-            )
-            form["recording_base_dir"] = db_settings.get("recording_base_dir") or str(
-                cfg.get("RECORDING_BASE_DIR") or ""
-            )
-            form["s3_bucket"] = db_settings.get("s3_bucket") or str(
-                cfg.get("S3_BUCKET") or ""
-            )
-            form["s3_endpoint"] = db_settings.get("s3_endpoint") or str(
-                cfg.get("S3_ENDPOINT") or ""
-            )
-            form["s3_region"] = db_settings.get("s3_region") or str(
-                cfg.get("S3_REGION") or ""
-            )
-            form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
-                cfg.get("GCS_BUCKET") or ""
-            )
-            form["azure_blob_container"] = db_settings.get(
-                "azure_blob_container"
-            ) or str(cfg.get("AZURE_BLOB_CONTAINER") or "")
-            form["webdav_base_url"] = db_settings.get("webdav_base_url") or str(
-                cfg.get("WEBDAV_BASE_URL") or ""
-            )
-            form["webdav_username"] = db_settings.get("webdav_username") or str(
-                cfg.get("WEBDAV_USERNAME") or ""
-            )
-            # Secret fields remain blank after save so that we never echo
-            # sensitive values back to the browser.
-            form["s3_access_key"] = ""
-            form["s3_secret_key"] = ""
-            form["azure_blob_connection_string"] = ""
-            form["dropbox_access_token"] = ""
-            form["webdav_password"] = ""
+            # New path: module management actions for StorageModule rows.
+            elif action in {"module_create", "module_delete", "module_toggle", "module_test"}:
+                if record_engine is None:
+                    errors.append("Record database is not configured.")
+
+                if not errors and record_engine is not None:
+                    with Session(record_engine) as session_db:
+                        StorageModule.__table__.create(
+                            bind=record_engine, checkfirst=True
+                        )
+
+                        if action == "module_create":
+                            name = (request.form.get("module_name") or "").strip()
+                            label = (request.form.get("module_label") or "").strip()
+                            provider_type = (
+                                request.form.get("module_provider") or ""
+                            ).strip().lower()
+                            enabled_flag = (
+                                1 if request.form.get("module_enabled") == "1" else 0
+                            )
+
+                            if not name:
+                                errors.append("Module name is required.")
+                            if not provider_type:
+                                errors.append("Provider type is required.")
+
+                            existing = None
+                            if not errors:
+                                existing = (
+                                    session_db.query(StorageModule)
+                                    .filter(StorageModule.name == name)
+                                    .first()
+                                )
+                                if existing is not None:
+                                    errors.append(
+                                        "A storage module with this name already exists."
+                                    )
+
+                            if not errors:
+                                config: dict[str, object] = {}
+                                if provider_type == "local_fs":
+                                    base_dir = (
+                                        request.form.get("module_cfg_base_dir")
+                                        or ""
+                                    ).strip()
+                                    if base_dir:
+                                        config["base_dir"] = base_dir
+                                elif provider_type == "s3":
+                                    bucket = (
+                                        request.form.get("module_cfg_s3_bucket")
+                                        or ""
+                                    ).strip()
+                                    endpoint = (
+                                        request.form.get("module_cfg_s3_endpoint")
+                                        or ""
+                                    ).strip()
+                                    region = (
+                                        request.form.get("module_cfg_s3_region")
+                                        or ""
+                                    ).strip()
+                                    access_key = (
+                                        request.form.get("module_cfg_s3_access_key")
+                                        or ""
+                                    ).strip()
+                                    secret_key = (
+                                        request.form.get("module_cfg_s3_secret_key")
+                                        or ""
+                                    ).strip()
+                                    if bucket:
+                                        config["bucket"] = bucket
+                                    if endpoint:
+                                        config["endpoint"] = endpoint
+                                    if region:
+                                        config["region"] = region
+                                    if access_key:
+                                        config["access_key"] = access_key
+                                    if secret_key:
+                                        config["secret_key"] = secret_key
+                                elif provider_type == "gcs":
+                                    bucket = (
+                                        request.form.get("module_cfg_gcs_bucket")
+                                        or ""
+                                    ).strip()
+                                    if bucket:
+                                        config["bucket"] = bucket
+                                elif provider_type == "azure_blob":
+                                    conn = (
+                                        request.form.get(
+                                            "module_cfg_azure_connection_string"
+                                        )
+                                        or ""
+                                    ).strip()
+                                    container = (
+                                        request.form.get("module_cfg_azure_container")
+                                        or ""
+                                    ).strip()
+                                    if conn:
+                                        config["connection_string"] = conn
+                                    if container:
+                                        config["container"] = container
+                                elif provider_type == "dropbox":
+                                    token = (
+                                        request.form.get(
+                                            "module_cfg_dropbox_access_token"
+                                        )
+                                        or ""
+                                    ).strip()
+                                    if token:
+                                        config["access_token"] = token
+                                elif provider_type == "webdav":
+                                    base_url = (
+                                        request.form.get("module_cfg_webdav_base_url")
+                                        or ""
+                                    ).strip()
+                                    username = (
+                                        request.form.get(
+                                            "module_cfg_webdav_username"
+                                        )
+                                        or ""
+                                    ).strip()
+                                    password = (
+                                        request.form.get(
+                                            "module_cfg_webdav_password"
+                                        )
+                                        or ""
+                                    ).strip()
+                                    if base_url:
+                                        config["base_url"] = base_url
+                                    if username:
+                                        config["username"] = username
+                                    if password:
+                                        config["password"] = password
+                                elif provider_type == "gdrive":
+                                    access_token = (
+                                        request.form.get(
+                                            "module_cfg_gdrive_access_token"
+                                        )
+                                        or ""
+                                    ).strip()
+                                    folder_id = (
+                                        request.form.get("module_cfg_gdrive_folder_id")
+                                        or ""
+                                    ).strip()
+                                    if access_token:
+                                        config["access_token"] = access_token
+                                    if folder_id:
+                                        config["folder_id"] = folder_id
+                                elif provider_type == "onedrive":
+                                    access_token = (
+                                        request.form.get(
+                                            "module_cfg_onedrive_access_token"
+                                        )
+                                        or ""
+                                    ).strip()
+                                    root_path = (
+                                        request.form.get("module_cfg_onedrive_root_path")
+                                        or ""
+                                    ).strip()
+                                    if access_token:
+                                        config["access_token"] = access_token
+                                    if root_path:
+                                        config["root_path"] = root_path
+                                elif provider_type == "box":
+                                    access_token = (
+                                        request.form.get("module_cfg_box_access_token")
+                                        or ""
+                                    ).strip()
+                                    folder_id = (
+                                        request.form.get("module_cfg_box_folder_id")
+                                        or ""
+                                    ).strip()
+                                    if access_token:
+                                        config["access_token"] = access_token
+                                    if folder_id:
+                                        config["folder_id"] = folder_id
+                                elif provider_type == "swift":
+                                    storage_url = (
+                                        request.form.get("module_cfg_swift_storage_url")
+                                        or ""
+                                    ).strip()
+                                    auth_token = (
+                                        request.form.get("module_cfg_swift_auth_token")
+                                        or ""
+                                    ).strip()
+                                    container = (
+                                        request.form.get("module_cfg_swift_container")
+                                        or ""
+                                    ).strip()
+                                    if storage_url:
+                                        config["storage_url"] = storage_url
+                                    if auth_token:
+                                        config["auth_token"] = auth_token
+                                    if container:
+                                        config["container"] = container
+                                elif provider_type == "pcloud":
+                                    access_token = (
+                                        request.form.get("module_cfg_pcloud_access_token")
+                                        or ""
+                                    ).strip()
+                                    path = (
+                                        request.form.get("module_cfg_pcloud_path")
+                                        or ""
+                                    ).strip()
+                                    if access_token:
+                                        config["access_token"] = access_token
+                                    if path:
+                                        config["path"] = path
+                                elif provider_type == "mega":
+                                    email_val = (
+                                        request.form.get("module_cfg_mega_email")
+                                        or ""
+                                    ).strip()
+                                    password_val = (
+                                        request.form.get("module_cfg_mega_password")
+                                        or ""
+                                    ).strip()
+                                    folder_name = (
+                                        request.form.get("module_cfg_mega_folder_name")
+                                        or ""
+                                    ).strip()
+                                    if email_val:
+                                        config["email"] = email_val
+                                    if password_val:
+                                        config["password"] = password_val
+                                    if folder_name:
+                                        config["folder_name"] = folder_name
+
+                                now_dt = datetime.now(timezone.utc)
+                                module = StorageModule(
+                                    name=name,
+                                    label=label or None,
+                                    provider_type=provider_type,
+                                    is_enabled=enabled_flag,
+                                    config_json=json.dumps(config) if config else None,
+                                    updated_at=now_dt,
+                                )
+                                session_db.add(module)
+                                session_db.commit()
+                                saved = True
+
+                        elif action == "module_delete":
+                            module_id_raw = request.form.get("module_id") or ""
+                            try:
+                                module_id = int(module_id_raw)
+                            except ValueError:
+                                module_id = None
+                            if module_id is not None:
+                                module = session_db.get(StorageModule, module_id)
+                                if module is not None:
+                                    session_db.delete(module)
+                                    session_db.commit()
+                                    saved = True
+
+                        elif action == "module_toggle":
+                            module_id_raw = request.form.get("module_id") or ""
+                            enable_raw = request.form.get("enable") or ""
+                            try:
+                                module_id = int(module_id_raw)
+                            except ValueError:
+                                module_id = None
+                            enable_flag = 1 if str(enable_raw) == "1" else 0
+                            if module_id is not None:
+                                module = session_db.get(StorageModule, module_id)
+                                if module is not None:
+                                    module.is_enabled = enable_flag
+                                    module.updated_at = datetime.now(timezone.utc)
+                                    session_db.add(module)
+                                    session_db.commit()
+                                    saved = True
+                        elif action == "module_test":
+                            module_id_raw = request.form.get("module_id") or ""
+                            try:
+                                module_id = int(module_id_raw)
+                            except ValueError:
+                                module_id = None
+
+                            if module_id is not None:
+                                module = session_db.get(StorageModule, module_id)
+                            else:
+                                module = None
+
+                            if module is None:
+                                module_test_result = {
+                                    "ok": False,
+                                    "module_name": f"#{module_id_raw}",
+                                    "message": "Storage module not found.",
+                                }
+                            else:
+                                router = get_storage_router(current_app)
+                                instance_key = str(module.id)
+                                try:
+                                    status = router.health_check(instance_key)
+                                except StorageError as exc:  # pragma: no cover - error path
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": module.name,
+                                        "message": str(exc)[:300],
+                                    }
+                                except Exception as exc:  # noqa: BLE001
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": module.name,
+                                        "message": str(exc)[:300],
+                                    }
+                                else:
+                                    status_text = str(status.get("status") or "ok")
+                                    message = status.get("message") or (
+                                        f"Health check status: {status_text}"
+                                    )
+                                    module_test_result = {
+                                        "ok": status_text == "ok",
+                                        "module_name": module.name,
+                                        "message": str(message)[:300],
+                                    }
 
     providers_raw = build_storage_providers(current_app)
     providers = []
@@ -1566,9 +1906,50 @@ def storage_settings():
         "password_masked": _mask(webdav_password_effective),
     }
 
+    # CSAL storage modules: logical storage instances backed by StorageModule.
+    modules: list[dict] = []
+    if record_engine is not None:
+        with Session(record_engine) as session_db:
+            StorageModule.__table__.create(bind=record_engine, checkfirst=True)
+            module_rows = (
+                session_db.query(StorageModule)
+                .order_by(StorageModule.id)
+                .all()
+            )
+        router = get_storage_router(current_app)
+        for m in module_rows:
+            is_enabled = bool(getattr(m, "is_enabled", 0))
+            status_text = "disabled" if not is_enabled else "unknown"
+            status_message = ""
+            if is_enabled:
+                try:
+                    status = router.health_check(str(m.id))
+                    status_text = str(status.get("status") or "ok")
+                    status_message = str(status.get("message") or "").strip()
+                except StorageError as exc:  # pragma: no cover - error path
+                    status_text = "error"
+                    status_message = str(exc)[:300]
+                except Exception:  # noqa: BLE001
+                    status_text = "error"
+                    status_message = "Unexpected error during health check."
+
+            modules.append(
+                {
+                    "id": m.id,
+                    "name": m.name,
+                    "label": m.label or "",
+                    "provider_type": m.provider_type,
+                    "is_enabled": is_enabled,
+                    "status": status_text,
+                    "status_message": status_message,
+                }
+            )
+
     return render_template(
         "storage.html",
         providers=providers,
+        modules=modules,
+        module_test_result=module_test_result,
         s3=s3_info,
         gcs=gcs_info,
         azure=azure_info,
@@ -1630,42 +2011,30 @@ def recording_settings():
                             "message": "Storage module not found.",
                         }
                     else:
-                        providers = build_storage_providers(current_app)
-                        provider = None
-                        for item in providers:
-                            if getattr(item, "name", "") == module.name:
-                                provider = item
-                                break
-                        if provider is None:
+                        router = get_storage_router(current_app)
+                        instance_key = str(module.id)
+                        try:
+                            status = router.health_check(instance_key)
+                        except StorageError as exc:  # pragma: no cover - error path
                             test_result = {
                                 "ok": False,
                                 "module_name": module.name,
-                                "message": "Module is not active. Check that it is enabled and configured.",
+                                "message": str(exc)[:300],
+                            }
+                        except Exception as exc:  # noqa: BLE001
+                            test_result = {
+                                "ok": False,
+                                "module_name": module.name,
+                                "message": str(exc)[:300],
                             }
                         else:
-                            data = b"PentaVision storage test"
-                            timestamp_hint = datetime.now(timezone.utc).strftime(
-                                "%Y%m%d%H%M%S"
-                            )
-                            key_hint = f"pv_test_{timestamp_hint}"
-                            try:
-                                storage_key = provider.upload(data, key_hint)
-                                try:
-                                    provider.delete(storage_key)
-                                except Exception:  # noqa: BLE001
-                                    pass
-                            except Exception as exc:  # noqa: BLE001
-                                test_result = {
-                                    "ok": False,
-                                    "module_name": module.name,
-                                    "message": str(exc)[:300],
-                                }
-                            else:
-                                test_result = {
-                                    "ok": True,
-                                    "module_name": module.name,
-                                    "message": "Test upload succeeded.",
-                                }
+                            status_text = str(status.get("status") or "ok")
+                            message = status.get("message") or f"Health check status: {status_text}"
+                            test_result = {
+                                "ok": status_text == "ok",
+                                "module_name": module.name,
+                                "message": str(message)[:300],
+                            }
 
             elif action == "update_storage":
                 device_id_raw = request.form.get("device_id") or ""
@@ -1733,6 +2102,10 @@ def recording_settings():
 
                         sched.mode = mode
                         sched.days_of_week = "*"
+                        # Persist the schedule timezone so evaluation in
+                        # _should_record_now can use it directly. We use the
+                        # user's effective timezone from the current view.
+                        sched.timezone = tz_name
                         if mode == "always":
                             sched.start_time = None
                             sched.end_time = None

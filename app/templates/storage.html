@@ -271,6 +271,481 @@
     </form>
 
     <div class="pv-card">
+      <h2>Storage modules (CSAL)</h2>
+      <p class="pv-card-subtitle">
+        Logical storage instances backed by the recordings database. Each
+        module represents a configured provider instance that the recording
+        engine and per-camera policies can target by name.
+      </p>
+
+      {% if module_test_result %}
+        <div
+          class="pv-alert {% if module_test_result.ok %}pv-alert-success{% else %}pv-alert-error{% endif %}"
+          role="status"
+          style="margin-bottom: 0.75rem;"
+        >
+          <p>
+            Module <code>{{ module_test_result.module_name }}</code>:
+            {{ module_test_result.message }}
+          </p>
+        </div>
+      {% endif %}
+
+      <form
+        method="post"
+        class="pv-form-grid"
+        style="margin: 1rem 0 1.25rem 0; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap: 0.75rem;"
+      >
+        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+        <input type="hidden" name="action" value="module_create" />
+
+        <div>
+          <label for="module_name">Module name</label>
+          <input
+            id="module_name"
+            name="module_name"
+            type="text"
+            placeholder="e.g. s3:primary-archive"
+            required
+          />
+          <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
+            Unique key used by workers and per-camera policies. Use a stable,
+            descriptive name; it must be unique.
+          </p>
+        </div>
+
+        <div>
+          <label for="module_label">Label</label>
+          <input
+            id="module_label"
+            name="module_label"
+            type="text"
+            placeholder="e.g. Primary S3 archive"
+          />
+          <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
+            Optional human-friendly label shown in the UI.
+          </p>
+        </div>
+
+        <div>
+          <label for="module_provider">Provider</label>
+          <select id="module_provider" name="module_provider" required>
+            <option value="">Select provider…</option>
+            <option value="local_fs">Local filesystem</option>
+            <option value="s3">S3-compatible</option>
+            <option value="gcs">Google Cloud Storage</option>
+            <option value="azure_blob">Azure Blob Storage</option>
+            <option value="dropbox">Dropbox</option>
+            <option value="webdav">WebDAV / Nextcloud</option>
+            <option value="gdrive">Google Drive</option>
+            <option value="onedrive">Microsoft OneDrive / Graph</option>
+            <option value="box">Box</option>
+            <option value="swift">OpenStack Swift / Rackspace Cloud Files</option>
+            <option value="pcloud">pCloud</option>
+            <option value="mega">MEGA (mega.nz)</option>
+          </select>
+          <div style="margin-top: 0.4rem; font-size: 0.8rem; color: #6b7280;">
+            <label style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <input type="checkbox" name="module_enabled" value="1" checked />
+              <span>Enabled</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <div
+            class="pv-module-config-group"
+            data-provider="local_fs"
+            style="display: none;"
+          >
+            <label for="module_cfg_base_dir">Base directory</label>
+            <input
+              id="module_cfg_base_dir"
+              name="module_cfg_base_dir"
+              type="text"
+              placeholder="/var/lib/pentavision/recordings"
+            />
+            <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
+              Optional override for the <code>local_fs</code> base directory.
+            </p>
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="s3"
+            style="display: none;"
+          >
+            <label for="module_cfg_s3_bucket">S3 bucket</label>
+            <input
+              id="module_cfg_s3_bucket"
+              name="module_cfg_s3_bucket"
+              type="text"
+              placeholder="my-recordings-bucket"
+            />
+            <label for="module_cfg_s3_endpoint" style="margin-top: 0.35rem;">Endpoint</label>
+            <input
+              id="module_cfg_s3_endpoint"
+              name="module_cfg_s3_endpoint"
+              type="text"
+              placeholder="https://s3.amazonaws.com or custom endpoint"
+            />
+            <label for="module_cfg_s3_region" style="margin-top: 0.35rem;">Region</label>
+            <input
+              id="module_cfg_s3_region"
+              name="module_cfg_s3_region"
+              type="text"
+              placeholder="us-east-1"
+            />
+            <label for="module_cfg_s3_access_key" style="margin-top: 0.35rem;">Access key ID</label>
+            <input
+              id="module_cfg_s3_access_key"
+              name="module_cfg_s3_access_key"
+              type="password"
+              autocomplete="off"
+            />
+            <label for="module_cfg_s3_secret_key" style="margin-top: 0.35rem;">Secret access key</label>
+            <input
+              id="module_cfg_s3_secret_key"
+              name="module_cfg_s3_secret_key"
+              type="password"
+              autocomplete="off"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="gcs"
+            style="display: none;"
+          >
+            <label for="module_cfg_gcs_bucket">GCS bucket</label>
+            <input
+              id="module_cfg_gcs_bucket"
+              name="module_cfg_gcs_bucket"
+              type="text"
+              placeholder="my-gcs-recordings"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="azure_blob"
+            style="display: none;"
+          >
+            <label for="module_cfg_azure_container">Container</label>
+            <input
+              id="module_cfg_azure_container"
+              name="module_cfg_azure_container"
+              type="text"
+            />
+            <label
+              for="module_cfg_azure_connection_string"
+              style="margin-top: 0.35rem;"
+            >Connection string</label>
+            <input
+              id="module_cfg_azure_connection_string"
+              name="module_cfg_azure_connection_string"
+              type="password"
+              autocomplete="off"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="dropbox"
+            style="display: none;"
+          >
+            <label for="module_cfg_dropbox_access_token">Access token</label>
+            <input
+              id="module_cfg_dropbox_access_token"
+              name="module_cfg_dropbox_access_token"
+              type="password"
+              autocomplete="off"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="webdav"
+            style="display: none;"
+          >
+            <label for="module_cfg_webdav_base_url">Base URL</label>
+            <input
+              id="module_cfg_webdav_base_url"
+              name="module_cfg_webdav_base_url"
+              type="text"
+              placeholder="https://example.com/remote.php/dav/files/user"
+            />
+            <label for="module_cfg_webdav_username" style="margin-top: 0.35rem;">Username</label>
+            <input
+              id="module_cfg_webdav_username"
+              name="module_cfg_webdav_username"
+              type="text"
+            />
+            <label for="module_cfg_webdav_password" style="margin-top: 0.35rem;">Password / app token</label>
+            <input
+              id="module_cfg_webdav_password"
+              name="module_cfg_webdav_password"
+              type="password"
+              autocomplete="off"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="gdrive"
+            style="display: none;"
+          >
+            <label for="module_cfg_gdrive_access_token">Access token</label>
+            <input
+              id="module_cfg_gdrive_access_token"
+              name="module_cfg_gdrive_access_token"
+              type="password"
+              autocomplete="off"
+            />
+            <label for="module_cfg_gdrive_folder_id" style="margin-top: 0.35rem;">Folder ID (optional)</label>
+            <input
+              id="module_cfg_gdrive_folder_id"
+              name="module_cfg_gdrive_folder_id"
+              type="text"
+              placeholder="Drive folder ID"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="onedrive"
+            style="display: none;"
+          >
+            <label for="module_cfg_onedrive_access_token">Access token</label>
+            <input
+              id="module_cfg_onedrive_access_token"
+              name="module_cfg_onedrive_access_token"
+              type="password"
+              autocomplete="off"
+            />
+            <label for="module_cfg_onedrive_root_path" style="margin-top: 0.35rem;">Root path (optional)</label>
+            <input
+              id="module_cfg_onedrive_root_path"
+              name="module_cfg_onedrive_root_path"
+              type="text"
+              placeholder="e.g. Recordings/PentaVision"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="box"
+            style="display: none;"
+          >
+            <label for="module_cfg_box_access_token">Access token</label>
+            <input
+              id="module_cfg_box_access_token"
+              name="module_cfg_box_access_token"
+              type="password"
+              autocomplete="off"
+            />
+            <label for="module_cfg_box_folder_id" style="margin-top: 0.35rem;">Folder ID</label>
+            <input
+              id="module_cfg_box_folder_id"
+              name="module_cfg_box_folder_id"
+              type="text"
+              placeholder="0 for root, or a folder id"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="swift"
+            style="display: none;"
+          >
+            <label for="module_cfg_swift_storage_url">Storage URL</label>
+            <input
+              id="module_cfg_swift_storage_url"
+              name="module_cfg_swift_storage_url"
+              type="text"
+              placeholder="https://auth.example.com/v1/AUTH_account"
+            />
+            <label for="module_cfg_swift_auth_token" style="margin-top: 0.35rem;">Auth token</label>
+            <input
+              id="module_cfg_swift_auth_token"
+              name="module_cfg_swift_auth_token"
+              type="password"
+              autocomplete="off"
+            />
+            <label for="module_cfg_swift_container" style="margin-top: 0.35rem;">Container</label>
+            <input
+              id="module_cfg_swift_container"
+              name="module_cfg_swift_container"
+              type="text"
+              placeholder="recordings"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="pcloud"
+            style="display: none;"
+          >
+            <label for="module_cfg_pcloud_access_token">Access token</label>
+            <input
+              id="module_cfg_pcloud_access_token"
+              name="module_cfg_pcloud_access_token"
+              type="password"
+              autocomplete="off"
+            />
+            <label for="module_cfg_pcloud_path" style="margin-top: 0.35rem;">Folder path</label>
+            <input
+              id="module_cfg_pcloud_path"
+              name="module_cfg_pcloud_path"
+              type="text"
+              placeholder="/PentaVision/Recordings"
+            />
+          </div>
+
+          <div
+            class="pv-module-config-group"
+            data-provider="mega"
+            style="display: none;"
+          >
+            <label for="module_cfg_mega_email">MEGA account email</label>
+            <input
+              id="module_cfg_mega_email"
+              name="module_cfg_mega_email"
+              type="email"
+            />
+            <label for="module_cfg_mega_password" style="margin-top: 0.35rem;">MEGA account password</label>
+            <input
+              id="module_cfg_mega_password"
+              name="module_cfg_mega_password"
+              type="password"
+              autocomplete="off"
+            />
+            <label for="module_cfg_mega_folder_name" style="margin-top: 0.35rem;">Folder name (optional)</label>
+            <input
+              id="module_cfg_mega_folder_name"
+              name="module_cfg_mega_folder_name"
+              type="text"
+              placeholder="e.g. PentaVisionRecordings"
+            />
+          </div>
+        </div>
+
+        <div style="grid-column: 1 / -1; text-align: right; margin-top: 0.25rem;">
+          <button type="submit" class="pv-button-primary">Add module</button>
+        </div>
+      </form>
+
+      {% if modules %}
+        <table class="pv-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Label</th>
+              <th>Provider</th>
+              <th>Enabled</th>
+              <th>Status</th>
+              <th style="width: 1%; white-space: nowrap;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in modules %}
+              <tr>
+                <td><code>{{ m.name }}</code></td>
+                <td>{{ m.label }}</td>
+                <td><code>{{ m.provider_type }}</code></td>
+                <td>
+                  {% if m.is_enabled %}
+                    Enabled
+                  {% else %}
+                    Disabled
+                  {% endif %}
+                </td>
+                <td>
+                  {{ m.status or 'n/a' }}
+                  {% if m.status_message %}
+                    <div
+                      style="font-size: 0.8rem; color: #9ca3af; margin-top: 0.15rem;"
+                    >
+                      {{ m.status_message }}
+                    </div>
+                  {% endif %}
+                </td>
+                <td style="white-space: nowrap;">
+                  <form
+                    method="post"
+                    class="pv-inline-form"
+                    style="margin-bottom: 0.2rem;"
+                  >
+                    <input
+                      type="hidden"
+                      name="csrf_token"
+                      value="{{ global_csrf_token }}"
+                    />
+                    <input type="hidden" name="action" value="module_test" />
+                    <input type="hidden" name="module_id" value="{{ m.id }}" />
+                    <button
+                      type="submit"
+                      class="pv-button-secondary"
+                      style="padding: 0.15rem 0.6rem; font-size: 0.8rem;"
+                    >
+                      Test
+                    </button>
+                  </form>
+                  <form
+                    method="post"
+                    class="pv-inline-form"
+                    style="margin-bottom: 0.2rem;"
+                  >
+                    <input
+                      type="hidden"
+                      name="csrf_token"
+                      value="{{ global_csrf_token }}"
+                    />
+                    <input type="hidden" name="action" value="module_toggle" />
+                    <input type="hidden" name="module_id" value="{{ m.id }}" />
+                    <input
+                      type="hidden"
+                      name="enable"
+                      value="{% if m.is_enabled %}0{% else %}1{% endif %}"
+                    />
+                    <button
+                      type="submit"
+                      class="pv-button-secondary"
+                      style="padding: 0.15rem 0.6rem; font-size: 0.8rem;"
+                    >
+                      {% if m.is_enabled %}Disable{% else %}Enable{% endif %}
+                    </button>
+                  </form>
+                  <form method="post" class="pv-inline-form">
+                    <input
+                      type="hidden"
+                      name="csrf_token"
+                      value="{{ global_csrf_token }}"
+                    />
+                    <input type="hidden" name="action" value="module_delete" />
+                    <input type="hidden" name="module_id" value="{{ m.id }}" />
+                    <button
+                      type="submit"
+                      class="pv-button-secondary"
+                      style="padding: 0.15rem 0.6rem; font-size: 0.8rem; margin-left: 0.15rem;"
+                    >
+                      Delete
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p style="font-size: 0.9rem; color: #9ca3af;">
+          No storage modules are defined yet. Use the form above to add a
+          module for each storage destination you want to target.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.5rem;">
       <h2>Active providers</h2>
       {% if providers %}
         <table class="pv-table">
@@ -374,4 +849,21 @@ Password: {{ webdav.password_masked or 'not set' }}
       </pre>
     </div>
   </section>
+
+  <script>
+    (function () {
+      var select = document.getElementById('module_provider');
+      if (!select) return;
+      function updateModuleConfig() {
+        var value = select.value || '';
+        var groups = document.querySelectorAll('.pv-module-config-group');
+        groups.forEach(function (el) {
+          var target = (el.getAttribute('data-provider') || '').trim();
+          el.style.display = target && target === value ? '' : 'none';
+        });
+      }
+      select.addEventListener('change', updateModuleConfig);
+      updateModuleConfig();
+    })();
+  </script>
 {% endblock %}

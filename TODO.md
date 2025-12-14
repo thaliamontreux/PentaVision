@@ -2,17 +2,17 @@
 
 ## Active feature work
 
-- [ ] Design and implement RTMP streaming feature to send camera video from memory to a remote RTMP endpoint. (in progress)
+- [x] Design and implement RTMP streaming feature to send camera video from memory to a remote RTMP endpoint.
 - [x] Analyze current recording and motion-detection implementation (models, recording_service, existing recording UI).
 - [x] Design modular storage provider architecture supporting multiple instances per provider (e.g., multiple Google Drives, S3 buckets).
-- [ ] Implement storage provider models and detailed but simple configuration admin UI for each provider type. (in progress)
-- [ ] Extend RecordingManager/recording_service to support multiple storage modules, per-camera destinations, and enable/disable logic. (in progress)
-- [ ] Implement recording schedules (per timezone) and show current time in recording settings UI, per user/site timezone. (in progress)
+- [x] Implement storage provider models and detailed but simple configuration admin UI for each provider type.
+- [x] Extend RecordingManager/recording_service to support multiple storage modules, per-camera destinations, and enable/disable logic.
+- [x] Implement recording schedules (per timezone) and show current time in recording settings UI, per user/site timezone.
 - [ ] Integrate motion detection triggers with recording start/stop policies. (planned)
 - [x] Add IP lockout exemption for subnet 192.168.250.0/24 so it bypasses too-many-failed-logins lockout.
 - [x] Add Admin Block/Allow menu with IP exemption list, IP/network blocklist, and country-based access policy UI and enforcement.
-- [ ] Enhance Block/Allow: preload private LAN ranges (10.0.0.0/8, 172.16.0.0/12, etc.) and add a one-click "Exempt this IP" helper on the access-control page.
- - [ ] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
+- [x] Enhance Block/Allow: preload private LAN ranges (10.0.0.0/8, 172.16.0.0/12, etc.) and add a one-click "Exempt this IP" helper on the access-control page.
+- [x] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
 
 ## System setup & security
 
@@ -93,6 +93,29 @@
 - [x] Implement provider configuration UI and credential handling via environment variables (securely scoped to the service process, with secrets masked in the UI).
 - [x] Ensure uploads are resilient (upload queue with retries) and store returned IDs/keys in RecordDB, with download support via local files, direct DB reads, or provider URLs/signed URLs.
 - [x] Allow admins to choose default provider and per-camera/provider overrides via `STORAGE_TARGETS` and per-camera `CameraStoragePolicy.storage_targets`.
+
+### CSAL pluggable storage modules to implement
+
+- [x] Amazon S3 (AWS) — industry-standard object storage, full REST/S3 API and SDKs.
+- [x] Google Cloud Storage (GCS) — JSON & XML REST APIs, client libraries and quickstarts.
+- [x] Microsoft Azure Blob Storage — Blob REST API, SAS tokens, and detailed protocol docs.
+- [x] Dropbox (Dropbox API v2) — file-level APIs, OAuth flows, SDKs and an API Explorer.
+- [x] Google Drive (Drive API) — Drive REST endpoints for files/permissions/changes with guides.
+- [x] Microsoft OneDrive / Microsoft Graph (OneDrive API) — file APIs via Microsoft Graph; auth + samples.
+- [x] Box — enterprise file storage API, SDKs, and developer guides for integrations.
+- [x] Backblaze B2 — native B2 API plus S3-compatible API; clear quickstarts and examples.
+- [x] DigitalOcean Spaces — S3-compatible Spaces API with docs and SDK guidance.
+- [x] Wasabi — S3-bit-compatible object storage with an S3-style API reference.
+- [x] Linode Object Storage — S3-compatible object storage endpoints and API guidance.
+- [x] IBM Cloud Object Storage — REST/S3-compatible APIs, IAM integration and SDKs.
+- [x] Oracle Cloud Object Storage — OCI Object Storage API and SDK references.
+- [x] Rackspace Cloud Files / OpenStack Swift — Swift-compatible object API with developer docs.
+- [x] OVHcloud Object Storage — S3/Swift-compatible object storage with getting-started docs.
+- [x] Scaleway Object Storage — S3-compatible API, quickstarts and multipart upload guides.
+- [x] Cloudflare R2 — S3-compatible object API and R2-specific developer guides (Workers bindings, examples).
+- [x] pCloud — REST-style public API for files/folders with method reference and examples.
+- [x] MEGA (mega.nz) — developer libraries and APIs (client-side encryption model); community SDKs/docs.
+- [x] Nextcloud (self-hosted) — WebDAV + app APIs for file access; full developer WebDAV docs.
 
 ## Logging, monitoring, and operations
 

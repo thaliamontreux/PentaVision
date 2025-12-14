@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import signal
 import subprocess
 import threading
@@ -26,6 +27,7 @@ from .models import (
     UploadQueueItem,
 )
 from .storage_providers import StorageProvider, build_storage_providers
+from .storage_csal import get_storage_router
 from .camera_utils import build_camera_url
 
 
@@ -290,17 +292,32 @@ class CameraWorker(threading.Thread):
             raise RuntimeError("recording command failed")
         data = temp_path.read_bytes()
         key_hint = f"camera{self.config.device_id}_{timestamp}"
+        router = get_storage_router(self.app)
         for provider in self.providers:
-            try:
-                storage_key = provider.upload(data, key_hint)
-            except Exception as exc:  # noqa: BLE001
-                self._enqueue_upload_failure(
-                    provider.name,
-                    key_hint,
-                    data,
-                    str(exc),
-                )
-                continue
+            storage_key: Optional[str] = None
+            instance_key = getattr(provider, "name", "") or ""
+            # Primary path: route through CSAL when an instance exists.
+            if instance_key:
+                try:
+                    stream = io.BytesIO(data)
+                    result = router.write(instance_key, stream, {"key_hint": key_hint})
+                    storage_key = str(result.get("object_id") or "")
+                except Exception:  # noqa: BLE001
+                    storage_key = None
+
+            # Fallback path: call the legacy provider directly if CSAL write failed.
+            if not storage_key:
+                try:
+                    storage_key = provider.upload(data, key_hint)
+                except Exception as exc:  # noqa: BLE001
+                    self._enqueue_upload_failure(
+                        provider.name,
+                        key_hint,
+                        data,
+                        str(exc),
+                    )
+                    continue
+
             self._create_camera_recording(provider.name, storage_key)
         temp_path.unlink(missing_ok=True)
 
@@ -568,6 +585,7 @@ class UploadQueueWorker(threading.Thread):
                 return
             providers = build_storage_providers(self.app)
             providers_index = {provider.name: provider for provider in providers}
+            router = get_storage_router(self.app)
             for item in items:
                 provider = providers_index.get(item.provider_name)
                 if provider is None:
@@ -577,16 +595,36 @@ class UploadQueueWorker(threading.Thread):
                     session.add(item)
                     session.commit()
                     continue
-                try:
-                    storage_key = provider.upload(item.payload, item.key_hint)
-                except Exception as exc:  # noqa: BLE001
-                    item.attempts = (item.attempts or 0) + 1
-                    item.last_error = str(exc)[:512]
-                    if item.attempts >= self.max_attempts:
-                        item.status = "failed"
-                    session.add(item)
-                    session.commit()
-                    continue
+
+                storage_key: Optional[str] = None
+                instance_key = item.provider_name or ""
+
+                # Primary path: CSAL write using the provider name as instance key.
+                if instance_key:
+                    try:
+                        stream = io.BytesIO(item.payload)
+                        result = router.write(
+                            instance_key,
+                            stream,
+                            {"key_hint": item.key_hint},
+                        )
+                        storage_key = str(result.get("object_id") or "")
+                    except Exception:  # noqa: BLE001
+                        storage_key = None
+
+                # Fallback path: legacy provider upload.
+                if not storage_key:
+                    try:
+                        storage_key = provider.upload(item.payload, item.key_hint)
+                    except Exception as exc:  # noqa: BLE001
+                        item.attempts = (item.attempts or 0) + 1
+                        item.last_error = str(exc)[:512]
+                        if item.attempts >= self.max_attempts:
+                            item.status = "failed"
+                        session.add(item)
+                        session.commit()
+                        continue
+
                 recording = CameraRecording(
                     device_id=item.device_id,
                     storage_provider=item.provider_name,
@@ -623,6 +661,7 @@ class RetentionWorker(threading.Thread):
         now = datetime.now(timezone.utc)
         providers = build_storage_providers(self.app)
         providers_index = {p.name: p for p in providers}
+        router = get_storage_router(self.app)
         with Session(engine) as session:
             CameraRecording.__table__.create(bind=engine, checkfirst=True)
             CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
@@ -647,11 +686,25 @@ class RetentionWorker(threading.Thread):
                     continue
                 for rec in old_records:
                     provider = providers_index.get(rec.storage_provider)
-                    if provider is not None:
+                    storage_key = rec.storage_key or ""
+                    # Prefer CSAL-based delete when an instance is available.
+                    deleted_via_csal = False
+                    instance_key = rec.storage_provider or ""
+                    if instance_key:
                         try:
-                            provider.delete(rec.storage_key or "")
+                            instance = router.get_instance(instance_key)
+                            if instance is not None:
+                                instance.impl.delete(storage_key)
+                                deleted_via_csal = True
+                        except Exception:  # noqa: BLE001
+                            deleted_via_csal = False
+
+                    if not deleted_via_csal and provider is not None:
+                        try:
+                            provider.delete(storage_key)
                         except Exception:  # noqa: BLE001
                             pass
+
                     session.delete(rec)
                 session.commit()
 

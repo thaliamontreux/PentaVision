@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import io
 import json
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, BinaryIO, Dict, List, Optional
 
 import boto3
 from flask import Flask
@@ -16,6 +18,13 @@ import requests
 
 from .db import get_record_engine
 from .models import RecordingData, StorageModule, StorageSettings
+from .storage_csal import (
+    StorageError,
+    StorageModuleBase,
+    StoragePermanentError,
+    StorageRouter,
+    StorageTransientError,
+)
 
 
 class StorageProvider:
@@ -352,6 +361,467 @@ class GoogleDriveStorageProvider(StorageProvider):
             return
 
 
+class OneDriveStorageProvider(StorageProvider):
+    def __init__(self, access_token: str, root_path: Optional[str] = None) -> None:
+        self.name = "onedrive"
+        self._access_token = access_token
+        self._root_path = (root_path or "").strip("/")
+        self._base_url = "https://graph.microsoft.com/v1.0"
+
+    def _headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self._access_token}",
+            "Content-Type": "application/octet-stream",
+        }
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        filename = f"recording_{now}_{safe_hint}.mp4"
+        if self._root_path:
+            rel_path = f"{self._root_path}/{filename}"
+        else:
+            rel_path = filename
+        url = f"{self._base_url}/me/drive/root:/{rel_path}:/content"
+        response = requests.put(url, headers=self._headers(), data=data)
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"OneDrive upload failed with status {response.status_code}: "
+                f"{response.text[:512]}"
+            )
+        try:
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("OneDrive upload returned invalid JSON") from exc
+        file_id = payload.get("id")
+        if not file_id:
+            raise RuntimeError("OneDrive upload response missing file id")
+        return str(file_id)
+
+    def delete(self, storage_key: str) -> None:
+        try:
+            url = f"{self._base_url}/me/drive/items/{storage_key}"
+            response = requests.delete(url, headers={
+                "Authorization": f"Bearer {self._access_token}",
+            })
+            if response.status_code >= 400:
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+
+class BoxStorageProvider(StorageProvider):
+    def __init__(self, access_token: str, folder_id: Optional[str] = None) -> None:
+        self.name = "box"
+        self._access_token = access_token
+        self._folder_id = (folder_id or "0").strip() or "0"
+        self._upload_url = "https://upload.box.com/api/2.0/files/content"
+        self._api_base = "https://api.box.com/2.0"
+
+    def _headers(self) -> Dict[str, str]:
+        return {"Authorization": f"Bearer {self._access_token}"}
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        filename = f"recording_{now}_{safe_hint}.mp4"
+        attributes = {
+            "name": filename,
+            "parent": {"id": self._folder_id},
+        }
+        files = {
+            "attributes": (None, json.dumps(attributes), "application/json"),
+            "file": (filename, data, "video/mp4"),
+        }
+        response = requests.post(self._upload_url, headers=self._headers(), files=files)
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Box upload failed with status {response.status_code}: "
+                f"{response.text[:512]}"
+            )
+        try:
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Box upload returned invalid JSON") from exc
+        entries = payload.get("entries") or []
+        if not entries:
+            raise RuntimeError("Box upload response missing entries")
+        file_id = entries[0].get("id")
+        if not file_id:
+            raise RuntimeError("Box upload response missing file id")
+        return str(file_id)
+
+    def delete(self, storage_key: str) -> None:
+        try:
+            url = f"{self._api_base}/files/{storage_key}"
+            response = requests.delete(url, headers=self._headers())
+            if response.status_code >= 400:
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+
+class SwiftStorageProvider(StorageProvider):
+    def __init__(
+        self,
+        storage_url: str,
+        auth_token: str,
+        container: str,
+    ) -> None:
+        self.name = "swift"
+        self._storage_url = storage_url.rstrip("/")
+        self._auth_token = auth_token
+        self._container = container.strip("/")
+
+    def _headers(self) -> Dict[str, str]:
+        return {"X-Auth-Token": self._auth_token, "Content-Type": "application/octet-stream"}
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        key = f"recordings/{now}_{safe_hint}.mp4"
+        url = f"{self._storage_url}/{self._container}/{key}"
+        response = requests.put(url, headers=self._headers(), data=data)
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Swift upload failed with status {response.status_code}: "
+                f"{response.text[:512]}"
+            )
+        return key
+
+    def delete(self, storage_key: str) -> None:
+        url = f"{self._storage_url}/{self._container}/{storage_key}"
+        try:
+            response = requests.delete(url, headers={"X-Auth-Token": self._auth_token})
+            if response.status_code >= 400:
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+
+class PCloudStorageProvider(StorageProvider):
+    def __init__(self, access_token: str, path: Optional[str] = None) -> None:
+        self.name = "pcloud"
+        self._access_token = access_token
+        self._path = path or "/"
+        self._api_base = "https://api.pcloud.com"
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        filename = f"recording_{now}_{safe_hint}.mp4"
+        url = f"{self._api_base}/uploadfile"
+        params = {
+            "access_token": self._access_token,
+            "path": self._path,
+        }
+        files = {"file": (filename, data, "video/mp4")}
+        response = requests.post(url, params=params, files=files)
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"pCloud upload failed with status {response.status_code}: "
+                f"{response.text[:512]}"
+            )
+        try:
+            payload = response.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("pCloud upload returned invalid JSON") from exc
+        if int(payload.get("result", 0)) != 0:
+            raise RuntimeError(f"pCloud upload error: {payload}")
+        metadata = payload.get("metadata")
+        file_id = None
+        if isinstance(metadata, list) and metadata:
+            file_id = metadata[0].get("fileid") or metadata[0].get("id")
+        elif isinstance(metadata, dict):
+            file_id = metadata.get("fileid") or metadata.get("id")
+        if not file_id:
+            raise RuntimeError("pCloud upload response missing file id")
+        return str(file_id)
+
+    def delete(self, storage_key: str) -> None:
+        url = f"{self._api_base}/deletefile"
+        params = {
+            "access_token": self._access_token,
+            "fileid": storage_key,
+        }
+        try:
+            response = requests.get(url, params=params)
+            if response.status_code >= 400:
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+
+class MegaStorageProvider(StorageProvider):
+    def __init__(
+        self,
+        email: str,
+        password: str,
+        folder_name: Optional[str] = None,
+    ) -> None:
+        self.name = "mega"
+        self._email = email
+        self._password = password
+        self._folder_name = folder_name or None
+        self._client = None
+
+    def _ensure_client(self):
+        if self._client is not None:
+            return
+        try:
+            from mega import Mega  # type: ignore[import]
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                "Mega storage provider requires the optional mega.py package"
+            ) from exc
+        mega = Mega()
+        self._client = mega.login(self._email, self._password)
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        self._ensure_client()
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        filename = f"recording_{now}_{safe_hint}.mp4"
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        try:
+            if self._folder_name:
+                folder = self._client.find(self._folder_name)
+                file_node = self._client.upload(
+                    tmp_path,
+                    dest=folder,
+                    dest_filename=filename,
+                )
+            else:
+                file_node = self._client.upload(
+                    tmp_path,
+                    dest_filename=filename,
+                )
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:  # noqa: BLE001
+                pass
+
+        file_id = None
+        if isinstance(file_node, dict):
+            file_id = file_node.get("h") or file_node.get("id")
+        if not file_id:
+            file_id = str(file_node)
+        return str(file_id)
+
+    def delete(self, storage_key: str) -> None:
+        self._ensure_client()
+        try:
+            node = self._client.find(storage_key)
+            if node is None:
+                return
+            self._client.destroy(node)
+        except Exception:  # noqa: BLE001
+            return
+
+
+class _LegacyProviderAdapter(StorageModuleBase):
+    """Adapter that wraps an existing StorageProvider in the CSAL interface.
+
+    This allows the new Core Storage Abstraction Layer to route requests
+    through logical StorageModule instances while reusing the existing
+    StorageProvider implementations. Over time, providers can be migrated to
+    native CSAL modules without changing callers.
+    """
+
+    def __init__(self, provider: StorageProvider) -> None:
+        self._provider = provider
+
+    def initialize(self, config: Dict[str, Any]) -> None:  # pragma: no cover
+        # Legacy providers do all initialization in __init__.
+        return
+
+    def authenticate(self, credentials: Dict[str, Any]) -> None:  # pragma: no cover
+        # Legacy providers typically rely on static credentials passed at
+        # construction time or via environment variables.
+        return
+
+    def validate(self) -> None:  # pragma: no cover
+        # Basic smoke test: attempt to write and then delete a tiny object
+        # when the underlying provider supports deletion.
+        stream = io.BytesIO(b"csal-test")
+        result = self.write(stream, {"key_hint": "csal_test"})
+        object_id = str(result.get("object_id") or "")
+        if not object_id:
+            return
+        try:
+            self.delete(object_id)
+        except StorageError:
+            # Validation failures are surfaced to callers; other errors are
+            # treated as non-fatal for now.
+            raise
+        except Exception:
+            return
+
+    def write(
+        self,
+        stream: BinaryIO,
+        metadata: Dict[str, Any],
+    ) -> Dict[str, Any]:  # pragma: no cover
+        try:
+            data = stream.read()
+        except Exception as exc:  # noqa: BLE001
+            raise StorageTransientError(f"failed to read stream: {exc}") from exc
+
+        key_hint = str(metadata.get("key_hint") or "segment")
+        try:
+            object_id = self._provider.upload(data, key_hint)
+        except Exception as exc:  # noqa: BLE001
+            raise StorageTransientError(str(exc)) from exc
+
+        return {
+            "object_id": object_id,
+            "provider_name": self._provider.name,
+        }
+
+    def read(
+        self,
+        object_id: str,
+        byte_range: Optional[tuple[int, int]] = None,
+    ) -> BinaryIO:  # pragma: no cover
+        raise StoragePermanentError(
+            "read is not implemented for legacy storage providers",
+        )
+
+    def delete(self, object_id: str) -> None:  # pragma: no cover
+        try:
+            self._provider.delete(object_id)
+        except NotImplementedError:
+            raise StoragePermanentError(
+                "delete is not supported for this provider",
+            ) from None
+        except Exception as exc:  # noqa: BLE001
+            raise StorageTransientError(str(exc)) from exc
+
+    def list(
+        self,
+        path: str,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:  # pragma: no cover
+        raise StoragePermanentError(
+            "list is not implemented for legacy storage providers",
+        )
+
+    def stat(self, object_id: str) -> Dict[str, Any]:  # pragma: no cover
+        raise StoragePermanentError(
+            "stat is not implemented for legacy storage providers",
+        )
+
+    def health_check(self) -> Dict[str, Any]:  # pragma: no cover
+        self.validate()
+        return {"status": "ok"}
+
+    def shutdown(self) -> None:  # pragma: no cover
+        return
+
+
+def _build_provider_for_module(
+    app: Flask,
+    module: StorageModule,
+    cfg: Optional[Dict[str, Any]] = None,
+) -> Optional[StorageProvider]:
+    """Construct a legacy StorageProvider for a StorageModule row.
+
+    This is used both by the legacy build_storage_providers helper and by the
+    CSAL adapter factory so that provider construction logic is centralized.
+    """
+
+    raw_config = getattr(module, "config_json", None) or ""
+    if cfg is None:
+        try:
+            cfg = json.loads(raw_config) if raw_config else {}
+        except Exception:  # noqa: BLE001
+            cfg = {}
+
+    ptype = (module.provider_type or "").strip().lower()
+    provider: Optional[StorageProvider] = None
+
+    if ptype == "local_fs":
+        base_dir = (
+            str(cfg.get("base_dir") or "").strip()
+            or app.config.get("LOCAL_STORAGE_PATH")
+            or app.config.get("RECORDING_BASE_DIR")
+            or os.path.join(app.instance_path, "recordings")
+        )
+        provider = LocalFilesystemStorageProvider(str(base_dir))
+    elif ptype == "db":
+        provider = DatabaseStorageProvider()
+    elif ptype == "s3":
+        bucket = str(cfg.get("bucket") or "").strip()
+        access_key = str(cfg.get("access_key") or "").strip()
+        secret_key = str(cfg.get("secret_key") or "").strip()
+        if bucket and access_key and secret_key:
+            endpoint = str(cfg.get("endpoint") or "").strip() or None
+            region = str(cfg.get("region") or "").strip() or None
+            provider = S3StorageProvider(
+                endpoint,
+                region,
+                bucket,
+                access_key,
+                secret_key,
+            )
+    elif ptype == "gcs":
+        bucket = str(cfg.get("bucket") or "").strip()
+        if bucket:
+            provider = GCSStorageProvider(bucket)
+    elif ptype == "azure_blob":
+        conn = str(cfg.get("connection_string") or "").strip()
+        container = str(cfg.get("container") or "").strip()
+        if conn and container:
+            provider = AzureBlobStorageProvider(conn, container)
+    elif ptype == "dropbox":
+        token = str(cfg.get("access_token") or "").strip()
+        if token:
+            provider = DropboxStorageProvider(token)
+    elif ptype == "webdav":
+        base_url = str(cfg.get("base_url") or "").strip()
+        username = str(cfg.get("username") or "").strip() or None
+        password = str(cfg.get("password") or "").strip() or None
+        if base_url:
+            provider = WebDAVStorageProvider(base_url, username, password)
+    elif ptype == "gdrive":
+        access_token = str(cfg.get("access_token") or "").strip()
+        folder_id = str(cfg.get("folder_id") or "").strip() or None
+        if access_token:
+            provider = GoogleDriveStorageProvider(access_token, folder_id)
+    elif ptype == "onedrive":
+        access_token = str(cfg.get("access_token") or "").strip()
+        root_path = str(cfg.get("root_path") or "").strip() or None
+        if access_token:
+            provider = OneDriveStorageProvider(access_token, root_path)
+    elif ptype == "box":
+        access_token = str(cfg.get("access_token") or "").strip()
+        folder_id = str(cfg.get("folder_id") or "").strip() or None
+        if access_token:
+            provider = BoxStorageProvider(access_token, folder_id)
+    elif ptype == "swift":
+        storage_url = str(cfg.get("storage_url") or "").strip()
+        auth_token = str(cfg.get("auth_token") or "").strip()
+        container = str(cfg.get("container") or "").strip()
+        if storage_url and auth_token and container:
+            provider = SwiftStorageProvider(storage_url, auth_token, container)
+    elif ptype == "pcloud":
+        access_token = str(cfg.get("access_token") or "").strip()
+        path = str(cfg.get("path") or "").strip() or "/"
+        if access_token:
+            provider = PCloudStorageProvider(access_token, path)
+    elif ptype == "mega":
+        email = str(cfg.get("email") or "").strip()
+        password = str(cfg.get("password") or "").strip()
+        folder_name = str(cfg.get("folder_name") or "").strip() or None
+        if email and password:
+            provider = MegaStorageProvider(email, password, folder_name)
+
+    return provider
+
+
 def _load_storage_modules() -> list[StorageModule]:
     """Load named storage modules from the recordings database, if present.
 
@@ -429,68 +899,7 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
         for module in modules:
             if not getattr(module, "is_enabled", 0):
                 continue
-            raw_config = getattr(module, "config_json", None) or ""
-            try:
-                cfg = json.loads(raw_config) if raw_config else {}
-            except Exception:  # noqa: BLE001
-                cfg = {}
-
-            provider: Optional[StorageProvider] = None
-            ptype = (module.provider_type or "").strip().lower()
-
-            if ptype == "local_fs":
-                base_dir = (
-                    str(cfg.get("base_dir") or "").strip()
-                    or app.config.get("LOCAL_STORAGE_PATH")
-                    or app.config.get("RECORDING_BASE_DIR")
-                    or os.path.join(app.instance_path, "recordings")
-                )
-                provider = LocalFilesystemStorageProvider(str(base_dir))
-            elif ptype == "db":
-                provider = DatabaseStorageProvider()
-            elif ptype == "s3":
-                bucket = str(cfg.get("bucket") or "").strip()
-                access_key = str(cfg.get("access_key") or "").strip()
-                secret_key = str(cfg.get("secret_key") or "").strip()
-                if bucket and access_key and secret_key:
-                    endpoint = str(cfg.get("endpoint") or "").strip() or None
-                    region = str(cfg.get("region") or "").strip() or None
-                    provider = S3StorageProvider(
-                        endpoint,
-                        region,
-                        bucket,
-                        access_key,
-                        secret_key,
-                    )
-            elif ptype == "gcs":
-                bucket = str(cfg.get("bucket") or "").strip()
-                if bucket:
-                    provider = GCSStorageProvider(bucket)
-            elif ptype == "azure_blob":
-                conn = str(cfg.get("connection_string") or "").strip()
-                container = str(cfg.get("container") or "").strip()
-                if conn and container:
-                    provider = AzureBlobStorageProvider(conn, container)
-            elif ptype == "dropbox":
-                token = str(cfg.get("access_token") or "").strip()
-                if token:
-                    provider = DropboxStorageProvider(token)
-            elif ptype == "webdav":
-                base_url = str(cfg.get("base_url") or "").strip()
-                username = (
-                    str(cfg.get("username") or "").strip() or None
-                )
-                password = (
-                    str(cfg.get("password") or "").strip() or None
-                )
-                if base_url:
-                    provider = WebDAVStorageProvider(base_url, username, password)
-            elif ptype == "gdrive":
-                access_token = str(cfg.get("access_token") or "").strip()
-                folder_id = str(cfg.get("folder_id") or "").strip() or None
-                if access_token:
-                    provider = GoogleDriveStorageProvider(access_token, folder_id)
-
+            provider = _build_provider_for_module(app, module)
             if provider is None:
                 continue
 
@@ -608,3 +1017,44 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
             providers.append(WebDAVStorageProvider(base_url, username, password))
 
     return providers
+
+
+def _csal_factory_from_storage_module(
+    app: Flask,
+    module_row: StorageModule,
+    config: Dict[str, Any],
+) -> StorageModuleBase:
+    """CSAL factory for existing StorageModule rows.
+
+    This factory delegates provider construction to the legacy helpers and then
+    wraps the result in a CSAL adapter so that the new StorageRouter can route
+    writes and health checks through the same implementations used by the
+    recording service today.
+    """
+
+    provider = _build_provider_for_module(app, module_row, config)
+    if provider is None:
+        raise StoragePermanentError(
+            f"failed to build storage provider for module {module_row.name}",
+        )
+    provider.name = module_row.name
+    return _LegacyProviderAdapter(provider)
+
+
+for _ptype in (
+    "local_fs",
+    "db",
+    "s3",
+    "gcs",
+    "azure_blob",
+    "dropbox",
+    "webdav",
+    "gdrive",
+    "onedrive",
+    "box",
+    "swift",
+    "pcloud",
+    "mega",
+):
+    StorageRouter.register_factory(_ptype, _csal_factory_from_storage_module)
+

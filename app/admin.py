@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_user_engine
-from .logging_utils import log_event
+from .logging_utils import log_event, _client_ip
 from .models import (
     CountryAccessPolicy,
     IpAllowlist,
@@ -102,6 +102,8 @@ def access_control():
     ip_block: List[IpBlocklist] = []
     policy = None
     csrf_token = _ensure_csrf_token()
+    current_ip = _client_ip()
+    current_ip_is_allowlisted = False
 
     if engine is None:
         errors.append("User database is not configured.")
@@ -110,6 +112,22 @@ def access_control():
             IpAllowlist.__table__.create(bind=engine, checkfirst=True)
             IpBlocklist.__table__.create(bind=engine, checkfirst=True)
             CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
+
+            # On first use, preload common private LAN ranges into the
+            # allowlist so that typical RFC1918 networks are exempted by
+            # default. If any allowlist entries already exist, we assume an
+            # administrator has configured the list and do not modify it.
+            allow_count = db.query(IpAllowlist).count()
+            if allow_count == 0:
+                defaults = (
+                    ("10.0.0.0/8", "Private LAN (RFC1918 10.0.0.0/8)"),
+                    ("172.16.0.0/12", "Private LAN (RFC1918 172.16.0.0/12)"),
+                    ("192.168.0.0/16", "Private LAN (RFC1918 192.168.0.0/16)"),
+                )
+                for cidr, description in defaults:
+                    entry = IpAllowlist(cidr=cidr, description=description)
+                    db.add(entry)
+                db.commit()
 
             if request.method == "POST":
                 if not _validate_csrf_token(request.form.get("csrf_token")):
@@ -139,6 +157,32 @@ def access_control():
                                     details=f"cidr={cidr}",
                                 )
                                 messages.append("IP exemption added.")
+                    elif action == "exempt_ip":
+                        ip = (current_ip or "").strip()
+                        if not ip:
+                            messages.append("Could not determine client IP address.")
+                        else:
+                            existing = (
+                                db.query(IpAllowlist)
+                                .filter(IpAllowlist.cidr == ip)
+                                .first()
+                            )
+                            if existing is None:
+                                entry = IpAllowlist(
+                                    cidr=ip,
+                                    description="Exempted via access-control helper",
+                                )
+                                db.add(entry)
+                                db.commit()
+                                actor = get_current_user()
+                                log_event(
+                                    "ADMIN_IP_ALLOWLIST_EXEMPT_SELF",
+                                    user_id=actor.id if actor else None,
+                                    details=f"ip={ip}",
+                                )
+                                messages.append("Current IP has been exempted.")
+                            else:
+                                messages.append("Current IP is already exempted.")
                     elif action == "delete_allow":
                         entry_id = request.form.get("id")
                         try:
@@ -250,6 +294,11 @@ def access_control():
                     .first()
                 )
 
+            if current_ip:
+                current_ip_is_allowlisted = any(
+                    entry.cidr == current_ip for entry in ip_allow
+                )
+
     return render_template(
         "admin/access_control.html",
         errors=errors,
@@ -258,6 +307,8 @@ def access_control():
         ip_allow=ip_allow,
         ip_block=ip_block,
         policy=policy,
+        current_ip=current_ip,
+        current_ip_is_allowlisted=current_ip_is_allowlisted,
         country_choices=COUNTRY_CHOICES,
     )
 
