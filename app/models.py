@@ -150,6 +150,36 @@ class IpAllowlist(UserBase):
     )
 
 
+class IpBlocklist(UserBase):
+    __tablename__ = "ip_blocklist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cidr: Mapped[str] = mapped_column(String(64), unique=True)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class CountryAccessPolicy(UserBase):
+    __tablename__ = "country_access_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    mode: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    allowed_countries: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True
+    )
+    blocked_countries: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class StorageSettings(RecordBase):
     __tablename__ = "storage_settings"
 

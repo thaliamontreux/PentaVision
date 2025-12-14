@@ -17,7 +17,16 @@ from sqlalchemy.orm import Session
 
 from .db import get_user_engine
 from .logging_utils import log_event
-from .models import Property, Role, User, UserProperty, UserRole
+from .models import (
+    CountryAccessPolicy,
+    IpAllowlist,
+    IpBlocklist,
+    Property,
+    Role,
+    User,
+    UserProperty,
+    UserRole,
+)
 from .security import get_current_user, user_has_role
 
 
@@ -82,6 +91,175 @@ def recording_settings_alias():
 def audit_alias():
     """Admin-scoped alias for the main audit log view."""
     return redirect(url_for("main.audit_events"))
+
+
+@bp.route("/access-control", methods=["GET", "POST"])
+def access_control():
+    engine = get_user_engine()
+    errors: List[str] = []
+    messages: List[str] = []
+    ip_allow: List[IpAllowlist] = []
+    ip_block: List[IpBlocklist] = []
+    policy = None
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("User database is not configured.")
+    else:
+        with Session(engine) as db:
+            IpAllowlist.__table__.create(bind=engine, checkfirst=True)
+            IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+            CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
+
+            if request.method == "POST":
+                if not _validate_csrf_token(request.form.get("csrf_token")):
+                    errors.append("Invalid or missing CSRF token.")
+                else:
+                    action = (request.form.get("action") or "").strip()
+                    if action == "add_allow":
+                        cidr = (request.form.get("cidr") or "").strip()
+                        description = (request.form.get("description") or "").strip()
+                        if cidr:
+                            existing = (
+                                db.query(IpAllowlist)
+                                .filter(IpAllowlist.cidr == cidr)
+                                .first()
+                            )
+                            if existing is None:
+                                entry = IpAllowlist(
+                                    cidr=cidr,
+                                    description=description or None,
+                                )
+                                db.add(entry)
+                                db.commit()
+                                actor = get_current_user()
+                                log_event(
+                                    "ADMIN_IP_ALLOWLIST_ADD",
+                                    user_id=actor.id if actor else None,
+                                    details=f"cidr={cidr}",
+                                )
+                                messages.append("IP exemption added.")
+                    elif action == "delete_allow":
+                        entry_id = request.form.get("id")
+                        try:
+                            entry_id_int = int(entry_id or "")
+                        except ValueError:
+                            entry_id_int = None
+                        if entry_id_int is not None:
+                            db.query(IpAllowlist).filter(
+                                IpAllowlist.id == entry_id_int
+                            ).delete(synchronize_session=False)
+                            db.commit()
+                            actor = get_current_user()
+                            log_event(
+                                "ADMIN_IP_ALLOWLIST_DELETE",
+                                user_id=actor.id if actor else None,
+                                details=f"id={entry_id_int}",
+                            )
+                            messages.append("IP exemption removed.")
+                    elif action == "add_block":
+                        cidr = (request.form.get("cidr") or "").strip()
+                        description = (request.form.get("description") or "").strip()
+                        if cidr:
+                            existing = (
+                                db.query(IpBlocklist)
+                                .filter(IpBlocklist.cidr == cidr)
+                                .first()
+                            )
+                            if existing is None:
+                                entry = IpBlocklist(
+                                    cidr=cidr,
+                                    description=description or None,
+                                )
+                                db.add(entry)
+                                db.commit()
+                                actor = get_current_user()
+                                log_event(
+                                    "ADMIN_IP_BLOCKLIST_ADD",
+                                    user_id=actor.id if actor else None,
+                                    details=f"cidr={cidr}",
+                                )
+                                messages.append("IP/network block added.")
+                    elif action == "delete_block":
+                        entry_id = request.form.get("id")
+                        try:
+                            entry_id_int = int(entry_id or "")
+                        except ValueError:
+                            entry_id_int = None
+                        if entry_id_int is not None:
+                            db.query(IpBlocklist).filter(
+                                IpBlocklist.id == entry_id_int
+                            ).delete(synchronize_session=False)
+                            db.commit()
+                            actor = get_current_user()
+                            log_event(
+                                "ADMIN_IP_BLOCKLIST_DELETE",
+                                user_id=actor.id if actor else None,
+                                details=f"id={entry_id_int}",
+                            )
+                            messages.append("IP/network block removed.")
+                    elif action == "update_country":
+                        mode = (request.form.get("mode") or "").strip()
+                        allowed_codes = request.form.getlist("allowed_countries")
+                        blocked_codes = request.form.getlist("blocked_countries")
+                        allowed_str = ",".join(
+                            sorted(
+                                {
+                                    c.strip().upper()
+                                    for c in allowed_codes
+                                    if c.strip()
+                                }
+                            )
+                        )
+                        blocked_str = ",".join(
+                            sorted(
+                                {
+                                    c.strip().upper()
+                                    for c in blocked_codes
+                                    if c.strip()
+                                }
+                            )
+                        )
+                        policy = (
+                            db.query(CountryAccessPolicy)
+                            .order_by(CountryAccessPolicy.id.asc())
+                            .first()
+                        )
+                        if policy is None:
+                            policy = CountryAccessPolicy()
+                            db.add(policy)
+                        policy.mode = mode or None
+                        policy.allowed_countries = allowed_str or None
+                        policy.blocked_countries = blocked_str or None
+                        db.add(policy)
+                        db.commit()
+                        actor = get_current_user()
+                        log_event(
+                            "ADMIN_COUNTRY_POLICY_UPDATE",
+                            user_id=actor.id if actor else None,
+                            details=f"mode={mode}",
+                        )
+                        messages.append("Country access policy updated.")
+
+            ip_allow = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            ip_block = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
+            if policy is None:
+                policy = (
+                    db.query(CountryAccessPolicy)
+                    .order_by(CountryAccessPolicy.id.asc())
+                    .first()
+                )
+
+    return render_template(
+        "admin/access_control.html",
+        errors=errors,
+        messages=messages,
+        csrf_token=csrf_token,
+        ip_allow=ip_allow,
+        ip_block=ip_block,
+        policy=policy,
+        country_choices=COUNTRY_CHOICES,
+    )
 
 
 @bp.get("/users")
@@ -291,6 +469,60 @@ TIMEZONE_OPTIONS: Sequence[str] = (
     "Pacific/Auckland",
     "Pacific/Fiji",
     "Pacific/Honolulu",
+)
+
+
+COUNTRY_CHOICES: Sequence[tuple[str, str]] = (
+    ("US", "United States"),
+    ("CA", "Canada"),
+    ("MX", "Mexico"),
+    ("BR", "Brazil"),
+    ("AR", "Argentina"),
+    ("GB", "United Kingdom"),
+    ("IE", "Ireland"),
+    ("FR", "France"),
+    ("DE", "Germany"),
+    ("ES", "Spain"),
+    ("PT", "Portugal"),
+    ("IT", "Italy"),
+    ("NL", "Netherlands"),
+    ("BE", "Belgium"),
+    ("CH", "Switzerland"),
+    ("AT", "Austria"),
+    ("SE", "Sweden"),
+    ("NO", "Norway"),
+    ("DK", "Denmark"),
+    ("FI", "Finland"),
+    ("PL", "Poland"),
+    ("CZ", "Czechia"),
+    ("SK", "Slovakia"),
+    ("HU", "Hungary"),
+    ("RO", "Romania"),
+    ("BG", "Bulgaria"),
+    ("GR", "Greece"),
+    ("TR", "Turkey"),
+    ("RU", "Russia"),
+    ("UA", "Ukraine"),
+    ("CN", "China"),
+    ("JP", "Japan"),
+    ("KR", "South Korea"),
+    ("TW", "Taiwan"),
+    ("HK", "Hong Kong"),
+    ("SG", "Singapore"),
+    ("IN", "India"),
+    ("PK", "Pakistan"),
+    ("BD", "Bangladesh"),
+    ("VN", "Vietnam"),
+    ("TH", "Thailand"),
+    ("PH", "Philippines"),
+    ("ID", "Indonesia"),
+    ("MY", "Malaysia"),
+    ("AU", "Australia"),
+    ("NZ", "New Zealand"),
+    ("ZA", "South Africa"),
+    ("NG", "Nigeria"),
+    ("KE", "Kenya"),
+    ("EG", "Egypt"),
 )
 
 

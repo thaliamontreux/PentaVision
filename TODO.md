@@ -1,5 +1,19 @@
 # Project TODO
 
+## Active feature work
+
+- [ ] Design and implement RTMP streaming feature to send camera video from memory to a remote RTMP endpoint. (in progress)
+- [x] Analyze current recording and motion-detection implementation (models, recording_service, existing recording UI).
+- [x] Design modular storage provider architecture supporting multiple instances per provider (e.g., multiple Google Drives, S3 buckets).
+- [ ] Implement storage provider models and detailed but simple configuration admin UI for each provider type. (in progress)
+- [ ] Extend RecordingManager/recording_service to support multiple storage modules, per-camera destinations, and enable/disable logic. (in progress)
+- [ ] Implement recording schedules (per timezone) and show current time in recording settings UI, per user/site timezone. (in progress)
+- [ ] Integrate motion detection triggers with recording start/stop policies. (planned)
+- [x] Add IP lockout exemption for subnet 192.168.250.0/24 so it bypasses too-many-failed-logins lockout.
+- [x] Add Admin Block/Allow menu with IP exemption list, IP/network blocklist, and country-based access policy UI and enforcement.
+- [ ] Enhance Block/Allow: preload private LAN ranges (10.0.0.0/8, 172.16.0.0/12, etc.) and add a one-click "Exempt this IP" helper on the access-control page.
+ - [ ] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
+
 ## System setup & security
 
 - [x] Provision Ubuntu 24.04 minimal server (see `deploy/install_ubuntu_24.sh` for automated setup steps).

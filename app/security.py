@@ -3,11 +3,12 @@ from __future__ import annotations
 from functools import wraps
 from typing import Callable, Iterable, Optional, Set
 
-from flask import abort, g, redirect, request, session, url_for
+from flask import abort, g, jsonify, redirect, request, session, url_for
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_user_engine
+from .logging_utils import evaluate_ip_access_policies
 from .models import Property, Role, User, UserProperty, UserRole
 
 
@@ -178,6 +179,23 @@ def require_roles(roles: Iterable[str]) -> Callable:
 
 
 def init_security(app) -> None:
+    @app.before_request
+    def _enforce_ip_access_policies():
+        allowed, reason = evaluate_ip_access_policies()
+        if not allowed:
+            accept_json = (
+                request.accept_mimetypes["application/json"]
+                >= request.accept_mimetypes["text/html"]
+            )
+            if request.path.startswith("/auth/") or request.path.startswith(
+                "/api/"
+            ) or accept_json:
+                return (
+                    jsonify({"error": "access from this IP or country is blocked"}),
+                    403,
+                )
+            return "Access from this IP or country is blocked.", 403
+
     @app.before_request
     def _load_current_user() -> None:  # pragma: no cover - request wiring
         get_current_user()

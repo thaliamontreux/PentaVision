@@ -3,12 +3,16 @@ from __future__ import annotations
 from typing import Optional
 from ipaddress import ip_address, ip_network
 
-from flask import Request, has_request_context, request
+from flask import Request, has_request_context, request, current_app
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .db import get_user_engine
-from .models import AuditEvent, IpAllowlist
+from .models import AuditEvent, CountryAccessPolicy, IpAllowlist, IpBlocklist
+
+
+_geoip_reader = None
+_geoip_init_attempted = False
 
 
 def _client_ip() -> Optional[str]:
@@ -187,3 +191,131 @@ def update_ip_lockout_after_failure(threshold: int = 3) -> None:
     except Exception:  # noqa: BLE001
         # Never raise from IP lockout bookkeeping.
         return
+
+
+def _get_geoip_reader():
+    global _geoip_reader, _geoip_init_attempted
+    if _geoip_reader or _geoip_init_attempted:
+        return _geoip_reader
+    _geoip_init_attempted = True
+    if not has_request_context():
+        return None
+    app = current_app._get_current_object()
+    path = app.config.get("GEOIP2_DB_PATH")
+    if not path:
+        return None
+    try:  # type: ignore[import]
+        import geoip2.database
+
+        _geoip_reader = geoip2.database.Reader(path)
+    except Exception:  # noqa: BLE001
+        _geoip_reader = None
+    return _geoip_reader
+
+
+def _lookup_country_code(ip: str) -> Optional[str]:
+    try:
+        ip_address(ip)
+    except ValueError:
+        return None
+    reader = _get_geoip_reader()
+    if reader is None:
+        return None
+    try:
+        response = reader.country(ip)
+    except Exception:  # noqa: BLE001
+        return None
+    country = getattr(response, "country", None)
+    code = getattr(country, "iso_code", None) if country is not None else None
+    if not code:
+        return None
+    return str(code).upper()
+
+
+def evaluate_ip_access_policies() -> tuple[bool, Optional[str]]:
+    engine = get_user_engine()
+    if engine is None:
+        return True, None
+
+    ip = _client_ip()
+    if not ip:
+        return True, None
+
+    if _ip_is_allowlisted(ip):
+        return True, None
+
+    try:
+        addr = ip_address(ip)
+    except ValueError:
+        return True, None
+
+    try:
+        with Session(engine) as session:
+            IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+            entries = session.query(IpBlocklist.cidr).all()
+        for (cidr,) in entries:
+            try:
+                net = ip_network(str(cidr), strict=False)
+            except ValueError:
+                continue
+            if addr in net:
+                log_event("SECURITY_IP_BLOCKED", details=f"ip={ip}, cidr={cidr}")
+                return False, "ip_blocklist"
+    except Exception:  # noqa: BLE001
+        pass
+
+    policy = None
+    try:
+        with Session(engine) as session:
+            CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
+            policy = (
+                session.query(CountryAccessPolicy)
+                .order_by(CountryAccessPolicy.id.asc())
+                .first()
+            )
+    except Exception:  # noqa: BLE001
+        policy = None
+
+    if policy is None or not getattr(policy, "mode", None):
+        return True, None
+
+    mode = (policy.mode or "").strip().lower()
+    if not mode or mode == "disabled":
+        return True, None
+
+    country = _lookup_country_code(ip)
+    if not country:
+        return True, None
+
+    def _codes(raw: Optional[str]) -> set[str]:
+        if not raw:
+            return set()
+        parts = [c.strip().upper() for c in str(raw).split(",")]
+        return {c for c in parts if c}
+
+    allowed = _codes(getattr(policy, "allowed_countries", None))
+    blocked = _codes(getattr(policy, "blocked_countries", None))
+
+    if mode == "allow_list":
+        if allowed and country not in allowed:
+            log_event(
+                "SECURITY_COUNTRY_BLOCKED",
+                details=f"ip={ip}, country={country}, mode=allow_list",
+            )
+            return False, "country_allow_list"
+    elif mode == "block_list":
+        if blocked and country in blocked:
+            log_event(
+                "SECURITY_COUNTRY_BLOCKED",
+                details=f"ip={ip}, country={country}, mode=block_list",
+            )
+            return False, "country_block_list"
+    elif mode == "allow_all_except_blocked":
+        if blocked and country in blocked:
+            log_event(
+                "SECURITY_COUNTRY_BLOCKED",
+                details=f"ip={ip}, country={country}, mode=allow_all_except_blocked",
+            )
+            return False, "country_block_except"
+
+    return True, None
