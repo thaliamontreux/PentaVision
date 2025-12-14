@@ -90,7 +90,11 @@ def _parse_time_str(value: str) -> Optional[int]:
     return hour * 60 + minute
 
 
-def _is_time_in_window(now_minutes: int, start_minutes: int, end_minutes: int) -> bool:
+def _is_time_in_window(
+    now_minutes: int,
+    start_minutes: int,
+    end_minutes: int,
+) -> bool:
     if start_minutes == end_minutes:
         return False
     if start_minutes < end_minutes:
@@ -198,6 +202,93 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
     return _is_time_in_window(now_minutes, start_minutes, end_minutes)
 
 
+def _get_schedule_mode(app: Flask, device_id: int) -> str:
+    engine = get_record_engine()
+    if engine is None:
+        return "always"
+    with Session(engine) as session:
+        CameraRecordingSchedule.__table__.create(bind=engine, checkfirst=True)
+        schedule = (
+            session.query(CameraRecordingSchedule)
+            .filter(CameraRecordingSchedule.device_id == device_id)
+            .first()
+        )
+        if schedule is None:
+            return "always"
+        raw_mode = getattr(schedule, "mode", None) or "always"
+        mode = str(raw_mode).strip().lower()
+        if not mode:
+            mode = "always"
+    return mode
+
+
+def _should_record_based_on_motion(app: Flask, device_id: int, url: str) -> bool:
+    mode = _get_schedule_mode(app, device_id)
+    if mode not in {"motion_only", "scheduled_motion"}:
+        return True
+
+    try:
+        import cv2  # type: ignore[import]
+    except Exception:  # noqa: BLE001
+        return True
+
+    try:
+        threshold = float(
+            app.config.get("RECORD_MOTION_THRESHOLD", 0.01) or 0.01
+        )
+    except (TypeError, ValueError):
+        threshold = 0.01
+    if threshold <= 0:
+        threshold = 0.01
+
+    try:
+        max_frames = int(app.config.get("RECORD_MOTION_FRAMES", 10) or 10)
+    except (TypeError, ValueError):
+        max_frames = 10
+    if max_frames <= 0:
+        max_frames = 10
+
+    cap = cv2.VideoCapture(url)
+    if not cap.isOpened():
+        cap.release()
+        return False
+
+    ret, prev_frame = cap.read()
+    if not ret:
+        cap.release()
+        return False
+
+    try:
+        prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+    except Exception:  # noqa: BLE001
+        cap.release()
+        return False
+
+    frames_checked = 0
+    while frames_checked < max_frames:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            diff = cv2.absdiff(prev_gray, gray)
+            _, thresh_img = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+            non_zero = cv2.countNonZero(thresh_img)
+            total = thresh_img.shape[0] * thresh_img.shape[1]
+            if total > 0:
+                ratio = float(non_zero) / float(total)
+                if ratio >= threshold:
+                    cap.release()
+                    return True
+            prev_gray = gray
+        except Exception:  # noqa: BLE001
+            break
+        frames_checked += 1
+
+    cap.release()
+    return False
+
+
 class CameraWorker(threading.Thread):
     def __init__(
         self,
@@ -225,6 +316,13 @@ class CameraWorker(threading.Thread):
         if not _should_record_now(self.app, self.config.device_id):
             sleep_seconds = max(5, min(self.segment_seconds, 60))
             time.sleep(sleep_seconds)
+            return
+        if not _should_record_based_on_motion(
+            self.app,
+            self.config.device_id,
+            self.config.url,
+        ):
+            time.sleep(5)
             return
         use_gst = bool(self.app.config.get("USE_GSTREAMER_RECORDING"))
         if use_gst:

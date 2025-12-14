@@ -8,7 +8,7 @@
 - [x] Implement storage provider models and detailed but simple configuration admin UI for each provider type.
 - [x] Extend RecordingManager/recording_service to support multiple storage modules, per-camera destinations, and enable/disable logic.
 - [x] Implement recording schedules (per timezone) and show current time in recording settings UI, per user/site timezone.
-- [ ] Integrate motion detection triggers with recording start/stop policies. (planned)
+- [x] Integrate motion detection triggers with recording start/stop policies. (planned)
 - [x] Add IP lockout exemption for subnet 192.168.250.0/24 so it bypasses too-many-failed-logins lockout.
 - [x] Add Admin Block/Allow menu with IP exemption list, IP/network blocklist, and country-based access policy UI and enforcement.
 - [x] Enhance Block/Allow: preload private LAN ranges (10.0.0.0/8, 172.16.0.0/12, etc.) and add a one-click "Exempt this IP" helper on the access-control page.

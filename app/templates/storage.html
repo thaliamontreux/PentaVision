@@ -7,10 +7,11 @@
     <h1>Storage providers</h1>
     {% include 'admin/_nav.html' %}
     <p style="margin-bottom: 1rem; color: #9ca3af; font-size: 0.9rem;">
-      These providers are used for storing camera recordings. Configuration is
-      stored in the <code>storage_settings</code> table and can be edited here.
-      Environment variables still provide sensible defaults when no value has
-      been saved yet.
+      Define and manage storage providers for camera recordings. The
+      recommended way is to use the dynamic modules in the
+      <strong>Our storage providers</strong> section below. The legacy global
+      configuration form is kept for backwards compatibility and as a
+      fallback when no modules are defined.
     </p>
 
     {% if errors %}
@@ -33,7 +34,7 @@
       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
 
       <div class="pv-card">
-        <h2>Global storage configuration</h2>
+        <h2>Legacy global storage configuration</h2>
         <p class="pv-card-subtitle">
           Choose which providers are active and where local recordings are written
           before upload.
@@ -271,12 +272,18 @@
     </form>
 
     <div class="pv-card">
-      <h2>Storage modules (CSAL)</h2>
+      <h2>Our storage providers</h2>
       <p class="pv-card-subtitle">
-        Logical storage instances backed by the recordings database. Each
-        module represents a configured provider instance that the recording
-        engine and per-camera policies can target by name.
+        Add one module for each storage destination you want to use. You can
+        create multiple instances of the same provider type and target them by
+        name from recording policies.
       </p>
+      {% if edit_module %}
+        <p class="pv-card-subtitle" style="margin-top: 0.25rem; color: #f97316;">
+          Editing module <code>{{ edit_module.name }}</code>. Changes will apply
+          to any cameras or policies that reference this module name.
+        </p>
+      {% endif %}
 
       {% if module_test_result %}
         <div
@@ -291,13 +298,22 @@
         </div>
       {% endif %}
 
+      {% set edit_cfg = edit_module_config or {} %}
+
       <form
         method="post"
         class="pv-form-grid"
         style="margin: 1rem 0 1.25rem 0; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap: 0.75rem;"
       >
         <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-        <input type="hidden" name="action" value="module_create" />
+        <input
+          type="hidden"
+          name="action"
+          value="{{ 'module_update' if edit_module else 'module_create' }}"
+        />
+        {% if edit_module %}
+          <input type="hidden" name="module_id" value="{{ edit_module.id }}" />
+        {% endif %}
 
         <div>
           <label for="module_name">Module name</label>
@@ -306,6 +322,7 @@
             name="module_name"
             type="text"
             placeholder="e.g. s3:primary-archive"
+            value="{{ edit_module.name if edit_module else '' }}"
             required
           />
           <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
@@ -321,6 +338,7 @@
             name="module_label"
             type="text"
             placeholder="e.g. Primary S3 archive"
+            value="{{ edit_module.label if edit_module and edit_module.label else '' }}"
           />
           <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
             Optional human-friendly label shown in the UI.
@@ -329,309 +347,152 @@
 
         <div>
           <label for="module_provider">Provider</label>
-          <select id="module_provider" name="module_provider" required>
+          <select id="module_provider" name="module_provider" required {% if edit_module %}disabled{% endif %}>
             <option value="">Select provider…</option>
-            <option value="local_fs">Local filesystem</option>
-            <option value="s3">S3-compatible</option>
-            <option value="gcs">Google Cloud Storage</option>
-            <option value="azure_blob">Azure Blob Storage</option>
-            <option value="dropbox">Dropbox</option>
-            <option value="webdav">WebDAV / Nextcloud</option>
-            <option value="gdrive">Google Drive</option>
-            <option value="onedrive">Microsoft OneDrive / Graph</option>
-            <option value="box">Box</option>
-            <option value="swift">OpenStack Swift / Rackspace Cloud Files</option>
-            <option value="pcloud">pCloud</option>
-            <option value="mega">MEGA (mega.nz)</option>
+            <option value="local_fs" {% if edit_module and edit_module.provider_type == 'local_fs' %}selected{% endif %}>
+              Local filesystem
+            </option>
+            <option value="s3" {% if edit_module and edit_module.provider_type == 's3' %}selected{% endif %}>
+              S3-compatible
+            </option>
+            <option value="gcs" {% if edit_module and edit_module.provider_type == 'gcs' %}selected{% endif %}>
+              Google Cloud Storage
+            </option>
+            <option value="azure_blob" {% if edit_module and edit_module.provider_type == 'azure_blob' %}selected{% endif %}>
+              Azure Blob Storage
+            </option>
+            <option value="dropbox" {% if edit_module and edit_module.provider_type == 'dropbox' %}selected{% endif %}>
+              Dropbox
+            </option>
+            <option value="webdav" {% if edit_module and edit_module.provider_type == 'webdav' %}selected{% endif %}>
+              WebDAV / Nextcloud
+            </option>
+            <option value="gdrive" {% if edit_module and edit_module.provider_type == 'gdrive' %}selected{% endif %}>
+              Google Drive
+            </option>
+            <option value="onedrive" {% if edit_module and edit_module.provider_type == 'onedrive' %}selected{% endif %}>
+              Microsoft OneDrive / Graph
+            </option>
+            <option value="box" {% if edit_module and edit_module.provider_type == 'box' %}selected{% endif %}>
+              Box
+            </option>
+            <option value="swift" {% if edit_module and edit_module.provider_type == 'swift' %}selected{% endif %}>
+              OpenStack Swift / Rackspace Cloud Files
+            </option>
+            <option value="pcloud" {% if edit_module and edit_module.provider_type == 'pcloud' %}selected{% endif %}>
+              pCloud
+            </option>
+            <option value="mega" {% if edit_module and edit_module.provider_type == 'mega' %}selected{% endif %}>
+              MEGA (mega.nz)
+            </option>
           </select>
           <div style="margin-top: 0.4rem; font-size: 0.8rem; color: #6b7280;">
             <label style="display: inline-flex; align-items: center; gap: 0.35rem;">
-              <input type="checkbox" name="module_enabled" value="1" checked />
+              <input type="checkbox" name="module_enabled" value="1" {% if not edit_module or edit_module.is_enabled %}checked{% endif %} />
               <span>Enabled</span>
             </label>
           </div>
         </div>
 
         <div>
-          <div
-            class="pv-module-config-group"
-            data-provider="local_fs"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="local_fs" style="display: none;">
             <label for="module_cfg_base_dir">Base directory</label>
-            <input
-              id="module_cfg_base_dir"
-              name="module_cfg_base_dir"
-              type="text"
-              placeholder="/var/lib/pentavision/recordings"
-            />
+            <input id="module_cfg_base_dir" name="module_cfg_base_dir" type="text" placeholder="/var/lib/pentavision/recordings" value="{{ edit_cfg.get('base_dir', '') if edit_module else '' }}"/>
             <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
               Optional override for the <code>local_fs</code> base directory.
             </p>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="s3"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="s3" style="display: none;">
             <label for="module_cfg_s3_bucket">S3 bucket</label>
-            <input
-              id="module_cfg_s3_bucket"
-              name="module_cfg_s3_bucket"
-              type="text"
-              placeholder="my-recordings-bucket"
-            />
+            <input id="module_cfg_s3_bucket" name="module_cfg_s3_bucket" type="text" placeholder="my-recordings-bucket" value="{{ edit_cfg.get('bucket', '') if edit_module else '' }}"/>
             <label for="module_cfg_s3_endpoint" style="margin-top: 0.35rem;">Endpoint</label>
-            <input
-              id="module_cfg_s3_endpoint"
-              name="module_cfg_s3_endpoint"
-              type="text"
-              placeholder="https://s3.amazonaws.com or custom endpoint"
-            />
+            <input id="module_cfg_s3_endpoint" name="module_cfg_s3_endpoint" type="text" placeholder="https://s3.amazonaws.com or custom endpoint" value="{{ edit_cfg.get('endpoint', '') if edit_module else '' }}"/>
             <label for="module_cfg_s3_region" style="margin-top: 0.35rem;">Region</label>
-            <input
-              id="module_cfg_s3_region"
-              name="module_cfg_s3_region"
-              type="text"
-              placeholder="us-east-1"
-            />
+            <input id="module_cfg_s3_region" name="module_cfg_s3_region" type="text" placeholder="us-east-1" value="{{ edit_cfg.get('region', '') if edit_module else '' }}"/>
             <label for="module_cfg_s3_access_key" style="margin-top: 0.35rem;">Access key ID</label>
-            <input
-              id="module_cfg_s3_access_key"
-              name="module_cfg_s3_access_key"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_s3_access_key" name="module_cfg_s3_access_key" type="password" autocomplete="off"/>
             <label for="module_cfg_s3_secret_key" style="margin-top: 0.35rem;">Secret access key</label>
-            <input
-              id="module_cfg_s3_secret_key"
-              name="module_cfg_s3_secret_key"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_s3_secret_key" name="module_cfg_s3_secret_key" type="password" autocomplete="off"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="gcs"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="gcs" style="display: none;">
             <label for="module_cfg_gcs_bucket">GCS bucket</label>
-            <input
-              id="module_cfg_gcs_bucket"
-              name="module_cfg_gcs_bucket"
-              type="text"
-              placeholder="my-gcs-recordings"
-            />
+            <input id="module_cfg_gcs_bucket" name="module_cfg_gcs_bucket" type="text" placeholder="my-gcs-recordings" value="{{ edit_cfg.get('bucket', '') if edit_module else '' }}"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="azure_blob"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="azure_blob" style="display: none;">
             <label for="module_cfg_azure_container">Container</label>
-            <input
-              id="module_cfg_azure_container"
-              name="module_cfg_azure_container"
-              type="text"
-            />
-            <label
-              for="module_cfg_azure_connection_string"
-              style="margin-top: 0.35rem;"
-            >Connection string</label>
-            <input
-              id="module_cfg_azure_connection_string"
-              name="module_cfg_azure_connection_string"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_azure_container" name="module_cfg_azure_container" type="text" value="{{ edit_cfg.get('container', '') if edit_module else '' }}"/>
+            <label for="module_cfg_azure_connection_string" style="margin-top: 0.35rem;">Connection string</label>
+            <input id="module_cfg_azure_connection_string" name="module_cfg_azure_connection_string" type="password" autocomplete="off"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="dropbox"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="dropbox" style="display: none;">
             <label for="module_cfg_dropbox_access_token">Access token</label>
-            <input
-              id="module_cfg_dropbox_access_token"
-              name="module_cfg_dropbox_access_token"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_dropbox_access_token" name="module_cfg_dropbox_access_token" type="password" autocomplete="off"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="webdav"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="webdav" style="display: none;">
             <label for="module_cfg_webdav_base_url">Base URL</label>
-            <input
-              id="module_cfg_webdav_base_url"
-              name="module_cfg_webdav_base_url"
-              type="text"
-              placeholder="https://example.com/remote.php/dav/files/user"
-            />
+            <input id="module_cfg_webdav_base_url" name="module_cfg_webdav_base_url" type="text" placeholder="https://example.com/remote.php/dav/files/user" value="{{ edit_cfg.get('base_url', '') if edit_module else '' }}"/>
             <label for="module_cfg_webdav_username" style="margin-top: 0.35rem;">Username</label>
-            <input
-              id="module_cfg_webdav_username"
-              name="module_cfg_webdav_username"
-              type="text"
-            />
+            <input id="module_cfg_webdav_username" name="module_cfg_webdav_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}"/>
             <label for="module_cfg_webdav_password" style="margin-top: 0.35rem;">Password / app token</label>
-            <input
-              id="module_cfg_webdav_password"
-              name="module_cfg_webdav_password"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_webdav_password" name="module_cfg_webdav_password" type="password" autocomplete="off"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="gdrive"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="gdrive" style="display: none;">
             <label for="module_cfg_gdrive_access_token">Access token</label>
-            <input
-              id="module_cfg_gdrive_access_token"
-              name="module_cfg_gdrive_access_token"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_gdrive_access_token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off"/>
             <label for="module_cfg_gdrive_folder_id" style="margin-top: 0.35rem;">Folder ID (optional)</label>
-            <input
-              id="module_cfg_gdrive_folder_id"
-              name="module_cfg_gdrive_folder_id"
-              type="text"
-              placeholder="Drive folder ID"
-            />
+            <input id="module_cfg_gdrive_folder_id" name="module_cfg_gdrive_folder_id" type="text" placeholder="Drive folder ID" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="onedrive"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="onedrive" style="display: none;">
             <label for="module_cfg_onedrive_access_token">Access token</label>
-            <input
-              id="module_cfg_onedrive_access_token"
-              name="module_cfg_onedrive_access_token"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_onedrive_access_token" name="module_cfg_onedrive_access_token" type="password" autocomplete="off"/>
             <label for="module_cfg_onedrive_root_path" style="margin-top: 0.35rem;">Root path (optional)</label>
-            <input
-              id="module_cfg_onedrive_root_path"
-              name="module_cfg_onedrive_root_path"
-              type="text"
-              placeholder="e.g. Recordings/PentaVision"
-            />
+            <input id="module_cfg_onedrive_root_path" name="module_cfg_onedrive_root_path" type="text" placeholder="e.g. Recordings/PentaVision" value="{{ edit_cfg.get('root_path', '') if edit_module else '' }}"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="box"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="box" style="display: none;">
             <label for="module_cfg_box_access_token">Access token</label>
-            <input
-              id="module_cfg_box_access_token"
-              name="module_cfg_box_access_token"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_box_access_token" name="module_cfg_box_access_token" type="password" autocomplete="off"/>
             <label for="module_cfg_box_folder_id" style="margin-top: 0.35rem;">Folder ID</label>
-            <input
-              id="module_cfg_box_folder_id"
-              name="module_cfg_box_folder_id"
-              type="text"
-              placeholder="0 for root, or a folder id"
-            />
+            <input id="module_cfg_box_folder_id" name="module_cfg_box_folder_id" type="text" placeholder="0 for root, or a folder id" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="swift"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="swift" style="display: none;">
             <label for="module_cfg_swift_storage_url">Storage URL</label>
-            <input
-              id="module_cfg_swift_storage_url"
-              name="module_cfg_swift_storage_url"
-              type="text"
-              placeholder="https://auth.example.com/v1/AUTH_account"
-            />
+            <input id="module_cfg_swift_storage_url" name="module_cfg_swift_storage_url" type="text" placeholder="https://auth.example.com/v1/AUTH_account" value="{{ edit_cfg.get('storage_url', '') if edit_module else '' }}"/>
             <label for="module_cfg_swift_auth_token" style="margin-top: 0.35rem;">Auth token</label>
-            <input
-              id="module_cfg_swift_auth_token"
-              name="module_cfg_swift_auth_token"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_swift_auth_token" name="module_cfg_swift_auth_token" type="password" autocomplete="off"/>
             <label for="module_cfg_swift_container" style="margin-top: 0.35rem;">Container</label>
-            <input
-              id="module_cfg_swift_container"
-              name="module_cfg_swift_container"
-              type="text"
-              placeholder="recordings"
-            />
+            <input id="module_cfg_swift_container" name="module_cfg_swift_container" type="text" placeholder="recordings" value="{{ edit_cfg.get('container', '') if edit_module else '' }}"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="pcloud"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="pcloud" style="display: none;">
             <label for="module_cfg_pcloud_access_token">Access token</label>
-            <input
-              id="module_cfg_pcloud_access_token"
-              name="module_cfg_pcloud_access_token"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_pcloud_access_token" name="module_cfg_pcloud_access_token" type="password" autocomplete="off"/>
             <label for="module_cfg_pcloud_path" style="margin-top: 0.35rem;">Folder path</label>
-            <input
-              id="module_cfg_pcloud_path"
-              name="module_cfg_pcloud_path"
-              type="text"
-              placeholder="/PentaVision/Recordings"
-            />
+            <input id="module_cfg_pcloud_path" name="module_cfg_pcloud_path" type="text" placeholder="/PentaVision/Recordings" value="{{ edit_cfg.get('path', '') if edit_module else '' }}"/>
           </div>
 
-          <div
-            class="pv-module-config-group"
-            data-provider="mega"
-            style="display: none;"
-          >
+          <div class="pv-module-config-group" data-provider="mega" style="display: none;">
             <label for="module_cfg_mega_email">MEGA account email</label>
-            <input
-              id="module_cfg_mega_email"
-              name="module_cfg_mega_email"
-              type="email"
-            />
+            <input id="module_cfg_mega_email" name="module_cfg_mega_email" type="email" value="{{ edit_cfg.get('email', '') if edit_module else '' }}"/>
             <label for="module_cfg_mega_password" style="margin-top: 0.35rem;">MEGA account password</label>
-            <input
-              id="module_cfg_mega_password"
-              name="module_cfg_mega_password"
-              type="password"
-              autocomplete="off"
-            />
+            <input id="module_cfg_mega_password" name="module_cfg_mega_password" type="password" autocomplete="off"/>
             <label for="module_cfg_mega_folder_name" style="margin-top: 0.35rem;">Folder name (optional)</label>
-            <input
-              id="module_cfg_mega_folder_name"
-              name="module_cfg_mega_folder_name"
-              type="text"
-              placeholder="e.g. PentaVisionRecordings"
-            />
+            <input id="module_cfg_mega_folder_name" name="module_cfg_mega_folder_name" type="text" placeholder="e.g. PentaVisionRecordings" value="{{ edit_cfg.get('folder_name', '') if edit_module else '' }}"/>
           </div>
         </div>
 
         <div style="grid-column: 1 / -1; text-align: right; margin-top: 0.25rem;">
-          <button type="submit" class="pv-button-primary">Add module</button>
+          <button type="submit" class="pv-button-primary">
+            {% if edit_module %}Save changes{% else %}Add module{% endif %}
+          </button>
         </div>
       </form>
 
@@ -716,6 +577,13 @@
                       {% if m.is_enabled %}Disable{% else %}Enable{% endif %}
                     </button>
                   </form>
+                  <a
+                    href="{{ url_for('main.storage_settings', edit_module=m.id) }}"
+                    class="pv-button-secondary"
+                    style="padding: 0.15rem 0.6rem; font-size: 0.8rem; margin-left: 0.15rem;"
+                  >
+                    Edit
+                  </a>
                   <form method="post" class="pv-inline-form">
                     <input
                       type="hidden"
