@@ -1,0 +1,6 @@
+{
+  "provider_type": "db",
+  "display_name": "Database (RecordDB)",
+  "category": "Local / on-prem",
+  "fields": []
+}

@@ -4,6 +4,7 @@ import io
 import json
 import os
 import tempfile
+import ftplib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
@@ -15,6 +16,8 @@ from google.cloud import storage as gcs_storage
 from azure.storage.blob import BlobServiceClient
 import dropbox
 import requests
+import paramiko
+from scp import SCPClient
 
 from .db import get_record_engine
 from .models import RecordingData, StorageModule, StorageSettings
@@ -282,6 +285,274 @@ class WebDAVStorageProvider(StorageProvider):
             requests.delete(url, auth=self._auth())
         except Exception:  # noqa: BLE001
             return
+
+
+class FTPStorageProvider(StorageProvider):
+    def __init__(
+        self,
+        host: str,
+        port: int = 21,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        base_dir: str = "/",
+        use_tls: bool = False,
+        passive: bool = True,
+    ) -> None:
+        self.name = "ftp"
+        self.host = host
+        self.port = int(port or 21)
+        self.username = username or ""
+        self.password = password or ""
+        self.base_dir = (base_dir or "/").rstrip("/") or "/"
+        self.use_tls = bool(use_tls)
+        self.passive = bool(passive)
+
+    def _connect(self):
+        if self.use_tls:
+            ftp = ftplib.FTP_TLS()
+        else:
+            ftp = ftplib.FTP()
+        ftp.connect(self.host, self.port, timeout=20)
+        ftp.login(self.username, self.password)
+        try:
+            ftp.set_pasv(self.passive)
+        except Exception:  # noqa: BLE001
+            pass
+        if self.use_tls and isinstance(ftp, ftplib.FTP_TLS):
+            try:
+                ftp.prot_p()
+            except Exception:  # noqa: BLE001
+                pass
+        return ftp
+
+    def _ensure_dirs(self, ftp, path: str) -> None:
+        # Best-effort recursive mkdir.
+        parts = [p for p in path.split("/") if p]
+        if not parts:
+            return
+        cur = ""
+        for part in parts:
+            cur = f"{cur}/{part}" if cur else f"/{part}"
+            try:
+                ftp.mkd(cur)
+            except Exception:  # noqa: BLE001
+                continue
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        rel_key = f"recordings/{now}_{safe_hint}.mp4"
+        remote_key = f"{self.base_dir}/{rel_key}" if self.base_dir != "/" else f"/{rel_key}"
+        remote_dir = os.path.dirname(remote_key)
+        ftp = self._connect()
+        try:
+            self._ensure_dirs(ftp, remote_dir)
+            ftp.storbinary(f"STOR {remote_key}", io.BytesIO(data))
+        finally:
+            try:
+                ftp.quit()
+            except Exception:  # noqa: BLE001
+                try:
+                    ftp.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        return remote_key
+
+    def delete(self, storage_key: str) -> None:
+        ftp = self._connect()
+        try:
+            ftp.delete(storage_key)
+        except Exception:  # noqa: BLE001
+            return
+        finally:
+            try:
+                ftp.quit()
+            except Exception:  # noqa: BLE001
+                try:
+                    ftp.close()
+                except Exception:  # noqa: BLE001
+                    pass
+
+
+class SFTPStorageProvider(StorageProvider):
+    def __init__(
+        self,
+        host: str,
+        port: int = 22,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        base_dir: str = "/",
+    ) -> None:
+        self.name = "sftp"
+        self.host = host
+        self.port = int(port or 22)
+        self.username = (username or "").strip()
+        self.password = password or None
+        self.private_key = private_key or None
+        self.base_dir = (base_dir or "/").rstrip("/") or "/"
+
+    def _connect(self):
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        pkey = None
+        if self.private_key:
+            try:
+                pkey = paramiko.RSAKey.from_private_key(io.StringIO(self.private_key))
+            except Exception:  # noqa: BLE001
+                pkey = None
+        client.connect(
+            hostname=self.host,
+            port=self.port,
+            username=self.username or None,
+            password=self.password,
+            pkey=pkey,
+            timeout=20,
+            banner_timeout=20,
+            auth_timeout=20,
+        )
+        return client
+
+    def _ensure_dirs(self, sftp, path: str) -> None:
+        parts = [p for p in path.split("/") if p]
+        cur = ""
+        for part in parts:
+            cur = f"{cur}/{part}" if cur else f"/{part}"
+            try:
+                sftp.stat(cur)
+            except Exception:  # noqa: BLE001
+                try:
+                    sftp.mkdir(cur)
+                except Exception:  # noqa: BLE001
+                    continue
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        rel_key = f"recordings/{now}_{safe_hint}.mp4"
+        remote_key = f"{self.base_dir}/{rel_key}" if self.base_dir != "/" else f"/{rel_key}"
+        remote_dir = os.path.dirname(remote_key)
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                self._ensure_dirs(sftp, remote_dir)
+                with sftp.open(remote_key, "wb") as f:
+                    f.write(data)
+            finally:
+                try:
+                    sftp.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        finally:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return remote_key
+
+    def delete(self, storage_key: str) -> None:
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                sftp.remove(storage_key)
+            finally:
+                try:
+                    sftp.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001
+            return
+        finally:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+class SCPStorageProvider(StorageProvider):
+    def __init__(
+        self,
+        host: str,
+        port: int = 22,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        base_dir: str = "/",
+    ) -> None:
+        self.name = "scp"
+        self.host = host
+        self.port = int(port or 22)
+        self.username = (username or "").strip()
+        self.password = password or None
+        self.private_key = private_key or None
+        self.base_dir = (base_dir or "/").rstrip("/") or "/"
+
+    def _connect(self):
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        pkey = None
+        if self.private_key:
+            try:
+                pkey = paramiko.RSAKey.from_private_key(io.StringIO(self.private_key))
+            except Exception:  # noqa: BLE001
+                pkey = None
+        client.connect(
+            hostname=self.host,
+            port=self.port,
+            username=self.username or None,
+            password=self.password,
+            pkey=pkey,
+            timeout=20,
+            banner_timeout=20,
+            auth_timeout=20,
+        )
+        return client
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
+        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        filename = f"{now}_{safe_hint}.mp4"
+        remote_dir = f"{self.base_dir}/recordings" if self.base_dir != "/" else "/recordings"
+        remote_path = f"{remote_dir}/{filename}"
+        client = self._connect()
+        tmp_path = None
+        try:
+            try:
+                # Ensure remote directory exists.
+                client.exec_command(f"mkdir -p '{remote_dir}'")
+            except Exception:  # noqa: BLE001
+                pass
+
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                tmp.write(data)
+                tmp_path = tmp.name
+            with SCPClient(client.get_transport()) as scp:
+                scp.put(tmp_path, remote_path)
+        finally:
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return remote_path
+
+    def delete(self, storage_key: str) -> None:
+        client = self._connect()
+        try:
+            client.exec_command(f"rm -f '{storage_key}'")
+        except Exception:  # noqa: BLE001
+            return
+        finally:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 class GoogleDriveStorageProvider(StorageProvider):
@@ -743,7 +1014,7 @@ def _build_provider_for_module(
     ptype = (module.provider_type or "").strip().lower()
     provider: Optional[StorageProvider] = None
 
-    if ptype == "local_fs":
+    if ptype in {"local_fs", "local_drive"}:
         base_dir = (
             str(cfg.get("base_dir") or "").strip()
             or app.config.get("LOCAL_STORAGE_PATH")
@@ -786,6 +1057,34 @@ def _build_provider_for_module(
         password = str(cfg.get("password") or "").strip() or None
         if base_url:
             provider = WebDAVStorageProvider(base_url, username, password)
+    elif ptype == "ftp":
+        host = str(cfg.get("host") or "").strip()
+        port = int(cfg.get("port") or 21)
+        username = str(cfg.get("username") or "").strip() or None
+        password = str(cfg.get("password") or "").strip() or None
+        base_dir = str(cfg.get("base_dir") or "/").strip() or "/"
+        use_tls = bool(cfg.get("use_tls") or False)
+        passive = bool(cfg.get("passive") if "passive" in cfg else True)
+        if host:
+            provider = FTPStorageProvider(host, port, username, password, base_dir, use_tls, passive)
+    elif ptype == "sftp":
+        host = str(cfg.get("host") or "").strip()
+        port = int(cfg.get("port") or 22)
+        username = str(cfg.get("username") or "").strip() or None
+        password = str(cfg.get("password") or "").strip() or None
+        private_key = str(cfg.get("private_key") or "").strip() or None
+        base_dir = str(cfg.get("base_dir") or "/").strip() or "/"
+        if host:
+            provider = SFTPStorageProvider(host, port, username, password, private_key, base_dir)
+    elif ptype == "scp":
+        host = str(cfg.get("host") or "").strip()
+        port = int(cfg.get("port") or 22)
+        username = str(cfg.get("username") or "").strip() or None
+        password = str(cfg.get("password") or "").strip() or None
+        private_key = str(cfg.get("private_key") or "").strip() or None
+        base_dir = str(cfg.get("base_dir") or "/").strip() or "/"
+        if host:
+            provider = SCPStorageProvider(host, port, username, password, private_key, base_dir)
     elif ptype == "gdrive":
         access_token = str(cfg.get("access_token") or "").strip()
         folder_id = str(cfg.get("folder_id") or "").strip() or None
@@ -838,7 +1137,7 @@ def _load_storage_modules() -> list[StorageModule]:
     with Session(engine) as session:
         rows = (
             session.query(StorageModule)
-            .order_by(StorageModule.id)
+            .order_by(getattr(StorageModule, "priority", StorageModule.id), StorageModule.id)
             .all()
         )
     return list(rows)
@@ -907,6 +1206,14 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
             # RecordingManager and policies so multiple instances of the same
             # provider type can coexist.
             provider.name = module.name
+            try:
+                provider.module_id = int(module.id)
+            except Exception:  # noqa: BLE001
+                provider.module_id = None
+            try:
+                provider.priority = int(getattr(module, "priority", 100) or 100)
+            except Exception:  # noqa: BLE001
+                provider.priority = 100
             providers.append(provider)
 
         return providers
@@ -1043,12 +1350,16 @@ def _csal_factory_from_storage_module(
 
 for _ptype in (
     "local_fs",
+    "local_drive",
     "db",
     "s3",
     "gcs",
     "azure_blob",
     "dropbox",
     "webdav",
+    "ftp",
+    "sftp",
+    "scp",
     "gdrive",
     "onedrive",
     "box",

@@ -1,0 +1,21 @@
+<div class="pv-module-config-group" data-provider="ftp" style="display: none;">
+  <div class="pv-help" style="margin-bottom: 0.35rem;">FTP/FTPS server details from your hosting provider or admin.</div>
+  <label for="pv-wiz-ftp-host">Host</label>
+  <input id="pv-wiz-ftp-host" name="module_cfg_ftp_host" type="text" />
+  <label for="pv-wiz-ftp-port" style="margin-top: 0.35rem;">Port</label>
+  <input id="pv-wiz-ftp-port" name="module_cfg_ftp_port" type="number" min="1" max="65535" value="21" />
+  <label for="pv-wiz-ftp-base" style="margin-top: 0.35rem;">Base directory</label>
+  <input id="pv-wiz-ftp-base" name="module_cfg_ftp_base_dir" type="text" value="/" />
+  <label for="pv-wiz-ftp-user" style="margin-top: 0.35rem;">Username</label>
+  <input id="pv-wiz-ftp-user" name="module_cfg_ftp_username" type="text" />
+  <label for="pv-wiz-ftp-pass" style="margin-top: 0.35rem;">Password</label>
+  <input id="pv-wiz-ftp-pass" name="module_cfg_ftp_password" type="password" autocomplete="off" />
+  <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem;">
+    <input type="checkbox" name="module_cfg_ftp_use_tls" value="1" />
+    <span>Use TLS (FTPS)</span>
+  </label>
+  <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem;">
+    <input type="checkbox" name="module_cfg_ftp_passive" value="1" checked />
+    <span>Passive mode</span>
+  </label>
+</div>

@@ -1,0 +1,21 @@
+<div class="pv-module-config-group" data-provider="s3" style="display: none;">
+  <label for="module_cfg_s3_bucket">S3 bucket</label>
+  <input id="module_cfg_s3_bucket" name="module_cfg_s3_bucket" type="text" value="{{ edit_cfg.get('bucket', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Bucket name where recordings will be stored. <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/creating-bucket.html" target="_blank" rel="noopener">Create an S3 bucket</a></div>
+
+  <label for="module_cfg_s3_endpoint" style="margin-top: 0.35rem;">Endpoint</label>
+  <input id="module_cfg_s3_endpoint" name="module_cfg_s3_endpoint" type="text" value="{{ edit_cfg.get('endpoint', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Leave blank for AWS, or set the URL for S3-compatible providers (e.g. MinIO/Wasabi). <a href="https://docs.aws.amazon.com/general/latest/gr/s3.html" target="_blank" rel="noopener">AWS S3 endpoints</a></div>
+
+  <label for="module_cfg_s3_region" style="margin-top: 0.35rem;">Region</label>
+  <input id="module_cfg_s3_region" name="module_cfg_s3_region" type="text" value="{{ edit_cfg.get('region', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">AWS region for the bucket (e.g. <code>us-east-1</code>). <a href="https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints" target="_blank" rel="noopener">AWS regions</a></div>
+
+  <label for="module_cfg_s3_access_key" style="margin-top: 0.35rem;">Access key ID</label>
+  <input id="module_cfg_s3_access_key" name="module_cfg_s3_access_key" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">From an IAM user or access key. <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html" target="_blank" rel="noopener">Find/Create access keys</a></div>
+
+  <label for="module_cfg_s3_secret_key" style="margin-top: 0.35rem;">Secret access key</label>
+  <input id="module_cfg_s3_secret_key" name="module_cfg_s3_secret_key" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Shown only once when you create the key. Store it securely. <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html" target="_blank" rel="noopener">AWS access key docs</a></div>
+</div>

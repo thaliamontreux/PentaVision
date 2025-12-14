@@ -1,0 +1,13 @@
+<div class="pv-module-config-group" data-provider="swift" style="display: none;">
+  <label for="module_cfg_swift_storage_url">Storage URL</label>
+  <input id="module_cfg_swift_storage_url" name="module_cfg_swift_storage_url" type="text" value="{{ edit_cfg.get('storage_url', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Swift endpoint URL from your provider (OpenStack/Rackspace/OVH). <a href="https://docs.openstack.org/api-ref/object-store/" target="_blank" rel="noopener">OpenStack Swift API reference</a></div>
+
+  <label for="module_cfg_swift_auth_token" style="margin-top: 0.35rem;">Auth token</label>
+  <input id="module_cfg_swift_auth_token" name="module_cfg_swift_auth_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Your provider’s auth token (often issued by Keystone). Ask your provider/admin how to obtain it.</div>
+
+  <label for="module_cfg_swift_container" style="margin-top: 0.35rem;">Container</label>
+  <input id="module_cfg_swift_container" name="module_cfg_swift_container" type="text" value="{{ edit_cfg.get('container', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Container (bucket-equivalent) for recordings.</div>
+</div>

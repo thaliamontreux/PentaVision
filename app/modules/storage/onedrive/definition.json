@@ -1,0 +1,22 @@
+{
+  "provider_type": "onedrive",
+  "display_name": "OneDrive",
+  "category": "File sync / consumer cloud",
+  "fields": [
+    {
+      "key": "access_token",
+      "label": "OneDrive access token",
+      "type": "password",
+      "required": true,
+      "help": "OAuth token for Microsoft Graph.",
+      "link": "https://learn.microsoft.com/graph/auth/"
+    },
+    {
+      "key": "root_path",
+      "label": "Root path (optional)",
+      "type": "text",
+      "required": false,
+      "help": "Optional subfolder path inside your drive (e.g. Recordings)."
+    }
+  ]
+}

@@ -18,3 +18,5 @@ requests
 gunicorn
 psutil
 mega.py
+paramiko
+scp

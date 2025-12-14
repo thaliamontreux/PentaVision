@@ -1,0 +1,14 @@
+{
+  "provider_type": "local_drive",
+  "display_name": "Local drive path",
+  "category": "Local / on-prem",
+  "fields": [
+    {
+      "key": "base_dir",
+      "label": "Local drive path",
+      "type": "text",
+      "required": true,
+      "help": "Path on the server machine (Windows/Linux). Examples: D:\\Recordings, E:\\PentaVision\\Archive, /mnt/storage/recordings."
+    }
+  ]
+}

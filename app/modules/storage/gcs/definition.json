@@ -1,0 +1,15 @@
+{
+  "provider_type": "gcs",
+  "display_name": "Google Cloud Storage",
+  "category": "Object storage",
+  "fields": [
+    {
+      "key": "bucket",
+      "label": "GCS bucket",
+      "type": "text",
+      "required": true,
+      "help": "Bucket name for recordings. Authentication typically uses Application Default Credentials (ADC).",
+      "link": "https://cloud.google.com/docs/authentication/provide-credentials-adc"
+    }
+  ]
+}

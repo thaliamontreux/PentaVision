@@ -184,7 +184,7 @@ class StorageRouter:
         with Session(engine) as session:
             rows = (
                 session.query(StorageModule)
-                .order_by(StorageModule.id)
+                .order_by(getattr(StorageModule, "priority", StorageModule.id), StorageModule.id)
                 .all()
             )
 

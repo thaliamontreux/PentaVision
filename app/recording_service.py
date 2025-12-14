@@ -394,7 +394,14 @@ class CameraWorker(threading.Thread):
         data = temp_path.read_bytes()
         key_hint = f"camera{self.config.device_id}_{timestamp}"
         router = get_storage_router(self.app)
-        for provider in self.providers:
+        providers_sorted = sorted(
+            self.providers,
+            key=lambda p: (
+                int(getattr(p, "priority", 100) or 100),
+                str(getattr(p, "name", "") or ""),
+            ),
+        )
+        for provider in providers_sorted:
             storage_key: Optional[str] = None
             instance_key = getattr(provider, "name", "") or ""
             # Primary path: route through CSAL when an instance exists.
@@ -434,6 +441,7 @@ class CameraWorker(threading.Thread):
                 True,
                 None,
             )
+            break
         temp_path.unlink(missing_ok=True)
 
     def _record_segment_gstreamer(self) -> None:
@@ -510,7 +518,14 @@ class CameraWorker(threading.Thread):
             raise RuntimeError("recording command failed")
         data = temp_path.read_bytes()
         key_hint = f"camera{self.config.device_id}_{timestamp}"
-        for provider in self.providers:
+        providers_sorted = sorted(
+            self.providers,
+            key=lambda p: (
+                int(getattr(p, "priority", 100) or 100),
+                str(getattr(p, "name", "") or ""),
+            ),
+        )
+        for provider in providers_sorted:
             try:
                 storage_key = provider.upload(data, key_hint)
             except Exception as exc:  # noqa: BLE001
@@ -536,6 +551,7 @@ class CameraWorker(threading.Thread):
                 True,
                 None,
             )
+            break
         temp_path.unlink(missing_ok=True)
 
     def _segment_temp_dir(self) -> Path:

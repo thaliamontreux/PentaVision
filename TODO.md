@@ -160,6 +160,7 @@
     - SCP (advanced)
   - Local / on-prem
     - local filesystem paths
+    - local drive paths (Windows/Linux server path)
     - mounted volumes (NAS/SAN)
     - container-mounted persistent volumes
 - [ ] Providers list (left panel): implement row/cards with:
@@ -193,6 +194,7 @@
     - cleanup test artifact
     - save disabled until test succeeds
     - display success timing details or actionable failure errors
+  - add inline help text + "where to find this" links for every provider field (official vendor docs only)
 - [ ] Streams tab:
   - stream table with Stream ID, status (writing/completed/failed), file size, duration, last write time, retry count, action (view/inspect)
 - [ ] Logs tab:
@@ -220,6 +222,13 @@
   - test connection
   - name & tag
   - confirm & enable
+
+- [ ] Modular provider plugin architecture:
+  - each provider lives under `app/modules/storage/<provider>/`
+  - include a `definition.json` (fields/help/links/capabilities) and `template.html` (form snippet)
+  - provider folder can optionally ship `module.py` to register its backend factory
+  - registry loads providers so users can add custom modules by dropping in a folder
+  - [x] RecordDB tracks installed providers by scanning module folders on startup
 
 ### Storage Modules Manager UI layout mockup graphic
 

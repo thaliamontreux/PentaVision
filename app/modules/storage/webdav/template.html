@@ -1,0 +1,13 @@
+<div class="pv-module-config-group" data-provider="webdav" style="display: none;">
+  <label for="module_cfg_webdav_base_url">Base URL</label>
+  <input id="module_cfg_webdav_base_url" name="module_cfg_webdav_base_url" type="text" value="{{ edit_cfg.get('base_url', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Example: <code>https://example.com/dav</code>. <a href="https://en.wikipedia.org/wiki/WebDAV" target="_blank" rel="noopener">What is WebDAV?</a></div>
+
+  <label for="module_cfg_webdav_username" style="margin-top: 0.35rem;">Username</label>
+  <input id="module_cfg_webdav_username" name="module_cfg_webdav_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Often your WebDAV account username (sometimes an email address).</div>
+
+  <label for="module_cfg_webdav_password" style="margin-top: 0.35rem;">Password / app token</label>
+  <input id="module_cfg_webdav_password" name="module_cfg_webdav_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Use an app password/token if your provider supports it.</div>
+</div>

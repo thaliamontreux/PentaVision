@@ -1,0 +1,14 @@
+{
+  "provider_type": "local_fs",
+  "display_name": "Local filesystem",
+  "category": "Local / on-prem",
+  "fields": [
+    {
+      "key": "base_dir",
+      "label": "Base directory",
+      "type": "text",
+      "required": true,
+      "help": "Choose a folder on the server where recordings will be written. Make sure the service has write permissions."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "provider_type": "scp",
+  "display_name": "SCP",
+  "category": "Network / protocol-based",
+  "fields": [
+    {"key": "host", "label": "Host", "type": "text", "required": true},
+    {"key": "port", "label": "Port", "type": "number", "required": false, "help": "Default: 22"},
+    {"key": "base_dir", "label": "Base directory", "type": "text", "required": false},
+    {"key": "username", "label": "Username", "type": "text", "required": true},
+    {"key": "password", "label": "Password (optional)", "type": "password", "required": false},
+    {"key": "private_key", "label": "Private key (optional)", "type": "textarea", "required": false, "link": "https://www.ssh.com/academy/ssh/keygen"}
+  ]
+}

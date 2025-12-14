@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, date
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Integer, LargeBinary, String, func
+from sqlalchemy import Date, DateTime, Integer, LargeBinary, String, func, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -180,6 +180,28 @@ class CountryAccessPolicy(UserBase):
     )
 
 
+class StorageProviderModule(RecordBase):
+    __tablename__ = "storage_provider_modules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider_type: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    definition_json: Mapped[Optional[str]] = mapped_column(String(8192), nullable=True)
+    template_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    wizard_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    is_installed: Mapped[int] = mapped_column(Integer, server_default="1")
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class StorageSettings(RecordBase):
     __tablename__ = "storage_settings"
 
@@ -241,6 +263,8 @@ class StorageModule(RecordBase):
     # When disabled, this module is ignored by build_storage_providers and never
     # instantiated by the recording workers.
     is_enabled: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Global ordering for primary + failover routing (lower number = higher priority).
+    priority: Mapped[int] = mapped_column(Integer, server_default="100")
     # Provider-specific configuration stored as a JSON-encoded object. This keeps
     # the schema flexible so that each provider can define its own fields without
     # requiring additional columns.
@@ -640,6 +664,17 @@ def create_record_schema(engine) -> None:
     """Create tables for the recordings/metadata DB on the given engine."""
 
     RecordBase.metadata.create_all(engine)
+
+    # Migration-lite: add new columns to existing deployments without requiring a full
+    # migration framework.
+    try:
+        insp = inspect(engine)
+        cols = {c.get("name") for c in insp.get_columns("storage_modules")}
+        if "priority" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE storage_modules ADD COLUMN priority INTEGER DEFAULT 100"))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class AuditEvent(AuditBase):

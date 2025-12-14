@@ -1,0 +1,5 @@
+<div class="pv-module-config-group" data-provider="local_fs" style="display: none;">
+  <label for="module_cfg_base_dir">Base directory</label>
+  <input id="module_cfg_base_dir" name="module_cfg_base_dir" type="text" value="{{ edit_cfg.get('base_dir', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Choose a folder on the server where recordings will be written. Make sure the service has write permissions.</div>
+</div>

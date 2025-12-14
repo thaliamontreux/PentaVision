@@ -1,0 +1,9 @@
+<div class="pv-module-config-group" data-provider="azure_blob" style="display: none;">
+  <label for="module_cfg_azure_container">Container</label>
+  <input id="module_cfg_azure_container" name="module_cfg_azure_container" type="text" value="{{ edit_cfg.get('container', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Blob container name where recordings will be stored. <a href="https://learn.microsoft.com/azure/storage/blobs/storage-quickstart-blobs-portal" target="_blank" rel="noopener">Create a container</a></div>
+
+  <label for="module_cfg_azure_connection_string" style="margin-top: 0.35rem;">Connection string</label>
+  <input id="module_cfg_azure_connection_string" name="module_cfg_azure_connection_string" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">From the Storage Account “Access keys” section. <a href="https://learn.microsoft.com/azure/storage/common/storage-account-keys-manage" target="_blank" rel="noopener">Find access keys / connection strings</a></div>
+</div>

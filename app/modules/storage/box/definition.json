@@ -1,0 +1,23 @@
+{
+  "provider_type": "box",
+  "display_name": "Box",
+  "category": "File sync / consumer cloud",
+  "fields": [
+    {
+      "key": "access_token",
+      "label": "Box access token",
+      "type": "password",
+      "required": true,
+      "help": "Token from a Box app integration.",
+      "link": "https://developer.box.com/"
+    },
+    {
+      "key": "folder_id",
+      "label": "Folder ID (optional)",
+      "type": "text",
+      "required": false,
+      "help": "Optional Box folder to upload into.",
+      "link": "https://developer.box.com/guides/api-calls/folders/"
+    }
+  ]
+}

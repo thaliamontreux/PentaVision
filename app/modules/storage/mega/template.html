@@ -1,0 +1,13 @@
+<div class="pv-module-config-group" data-provider="mega" style="display: none;">
+  <label for="module_cfg_mega_email">MEGA account email</label>
+  <input id="module_cfg_mega_email" name="module_cfg_mega_email" type="email" value="{{ edit_cfg.get('email', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">The email for the MEGA account that will store recordings. <a href="https://mega.io/" target="_blank" rel="noopener">MEGA</a></div>
+
+  <label for="module_cfg_mega_password" style="margin-top: 0.35rem;">MEGA account password</label>
+  <input id="module_cfg_mega_password" name="module_cfg_mega_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Use a dedicated MEGA account for service credentials when possible.</div>
+
+  <label for="module_cfg_mega_folder_name" style="margin-top: 0.35rem;">Folder name (optional)</label>
+  <input id="module_cfg_mega_folder_name" name="module_cfg_mega_folder_name" type="text" value="{{ edit_cfg.get('folder_name', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-help">Optional destination folder inside MEGA.</div>
+</div>

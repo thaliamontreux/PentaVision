@@ -1,0 +1,15 @@
+{
+  "provider_type": "dropbox",
+  "display_name": "Dropbox",
+  "category": "File sync / consumer cloud",
+  "fields": [
+    {
+      "key": "access_token",
+      "label": "Dropbox access token",
+      "type": "password",
+      "required": true,
+      "help": "Generate a token from a Dropbox app.",
+      "link": "https://www.dropbox.com/developers/documentation/http/documentation"
+    }
+  ]
+}

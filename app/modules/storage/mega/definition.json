@@ -1,0 +1,10 @@
+{
+  "provider_type": "mega",
+  "display_name": "MEGA",
+  "category": "File sync / consumer cloud",
+  "fields": [
+    {"key": "email", "label": "MEGA account email", "type": "email", "required": true, "help": "Email for the MEGA account that will store recordings."},
+    {"key": "password", "label": "MEGA account password", "type": "password", "required": true, "help": "Use a dedicated MEGA account for service credentials when possible."},
+    {"key": "folder_name", "label": "Folder name (optional)", "type": "text", "required": false, "help": "Optional destination folder inside MEGA."}
+  ]
+}

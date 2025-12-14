@@ -1,0 +1,47 @@
+{
+  "provider_type": "s3",
+  "display_name": "S3-compatible",
+  "category": "Object storage",
+  "fields": [
+    {
+      "key": "bucket",
+      "label": "S3 bucket",
+      "type": "text",
+      "required": true,
+      "help": "Bucket name where recordings will be stored.",
+      "link": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/creating-bucket.html"
+    },
+    {
+      "key": "endpoint",
+      "label": "Endpoint",
+      "type": "text",
+      "required": false,
+      "help": "Leave blank for AWS, or set the URL for S3-compatible providers.",
+      "link": "https://docs.aws.amazon.com/general/latest/gr/s3.html"
+    },
+    {
+      "key": "region",
+      "label": "Region",
+      "type": "text",
+      "required": false,
+      "help": "AWS region for the bucket (e.g. us-east-1).",
+      "link": "https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints"
+    },
+    {
+      "key": "access_key",
+      "label": "Access key ID",
+      "type": "password",
+      "required": true,
+      "help": "From an IAM user or access key.",
+      "link": "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html"
+    },
+    {
+      "key": "secret_key",
+      "label": "Secret access key",
+      "type": "password",
+      "required": true,
+      "help": "Shown only once when you create the key. Store it securely.",
+      "link": "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html"
+    }
+  ]
+}

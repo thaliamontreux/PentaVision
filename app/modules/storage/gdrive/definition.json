@@ -1,0 +1,23 @@
+{
+  "provider_type": "gdrive",
+  "display_name": "Google Drive",
+  "category": "File sync / consumer cloud",
+  "fields": [
+    {
+      "key": "access_token",
+      "label": "Google Drive access token",
+      "type": "password",
+      "required": true,
+      "help": "OAuth 2.0 access token with Drive scopes.",
+      "link": "https://developers.google.com/drive/api/guides/about-auth"
+    },
+    {
+      "key": "folder_id",
+      "label": "Folder ID (optional)",
+      "type": "text",
+      "required": false,
+      "help": "Optional Drive folder to store files under.",
+      "link": "https://developers.google.com/drive/api/guides/folder"
+    }
+  ]
+}

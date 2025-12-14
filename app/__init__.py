@@ -1,5 +1,7 @@
 from flask import Flask
 
+from jinja2 import ChoiceLoader, FileSystemLoader
+
 from .admin import bp as admin_bp
 from .auth import bp as auth_bp
 from .camera_admin import bp as camera_admin_bp
@@ -15,6 +17,21 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(load_config())
     init_security(app)
+    app.jinja_loader = ChoiceLoader(
+        [
+            app.jinja_loader,
+            FileSystemLoader(app.root_path),
+        ]
+    )
+
+    try:
+        from .modules.storage.registry import (  # noqa: PLC0415
+            load_storage_provider_plugins,
+        )
+
+        load_storage_provider_plugins()
+    except Exception:  # noqa: BLE001
+        pass
 
     with app.app_context():
         try:
@@ -33,6 +50,14 @@ def create_app() -> Flask:
             engine = get_record_engine()
             if engine is not None:
                 create_record_schema(engine)
+                try:
+                    from .modules.storage.registry import (  # noqa: PLC0415
+                        sync_installed_storage_provider_modules,
+                    )
+
+                    sync_installed_storage_provider_modules(engine)
+                except Exception:  # noqa: BLE001
+                    pass
         except Exception:  # noqa: BLE001
             pass
 

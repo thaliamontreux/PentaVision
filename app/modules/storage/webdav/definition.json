@@ -1,0 +1,29 @@
+{
+  "provider_type": "webdav",
+  "display_name": "WebDAV",
+  "category": "Network / protocol-based",
+  "fields": [
+    {
+      "key": "base_url",
+      "label": "Base URL",
+      "type": "text",
+      "required": true,
+      "help": "Example: https://example.com/dav",
+      "link": "https://en.wikipedia.org/wiki/WebDAV"
+    },
+    {
+      "key": "username",
+      "label": "Username",
+      "type": "text",
+      "required": true,
+      "help": "Often your WebDAV account username (sometimes an email address)."
+    },
+    {
+      "key": "password",
+      "label": "Password / app token",
+      "type": "password",
+      "required": true,
+      "help": "Use an app password/token if your provider supports it."
+    }
+  ]
+}

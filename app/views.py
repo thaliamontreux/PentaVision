@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import pickle
+import time
 
 from flask import (
     Blueprint,
@@ -48,6 +49,9 @@ from .models import (
     FacePrivacySetting,
     RecordingData,
     StorageModule,
+    StorageModuleEvent,
+    StorageModuleHealthCheck,
+    StorageModuleWriteStat,
     StorageSettings,
     User,
     UserNotificationSettings,
@@ -1557,6 +1561,13 @@ def storage_settings():
                                 ).strip()
                                 if base_dir:
                                     config["base_dir"] = base_dir
+                            elif provider_type == "local_drive":
+                                base_dir = (
+                                    request.form.get("module_cfg_local_drive_path")
+                                    or ""
+                                ).strip()
+                                if base_dir:
+                                    config["base_dir"] = base_dir
                             elif provider_type == "s3":
                                 bucket = (
                                     request.form.get("module_cfg_s3_bucket") or ""
@@ -1632,6 +1643,118 @@ def storage_settings():
                                     config["username"] = username
                                 if password:
                                     config["password"] = password
+                            elif provider_type == "ftp":
+                                host = (
+                                    request.form.get("module_cfg_ftp_host") or ""
+                                ).strip()
+                                port_raw = (
+                                    request.form.get("module_cfg_ftp_port") or ""
+                                ).strip()
+                                username = (
+                                    request.form.get("module_cfg_ftp_username") or ""
+                                ).strip()
+                                password = (
+                                    request.form.get("module_cfg_ftp_password") or ""
+                                ).strip()
+                                base_dir = (
+                                    request.form.get("module_cfg_ftp_base_dir")
+                                    or ""
+                                ).strip()
+                                use_tls = (
+                                    request.form.get("module_cfg_ftp_use_tls")
+                                    == "1"
+                                )
+                                passive = (
+                                    request.form.get("module_cfg_ftp_passive")
+                                    != "0"
+                                )
+                                if host:
+                                    config["host"] = host
+                                if port_raw:
+                                    try:
+                                        config["port"] = int(port_raw)
+                                    except ValueError:
+                                        pass
+                                if username:
+                                    config["username"] = username
+                                if password:
+                                    config["password"] = password
+                                if base_dir:
+                                    config["base_dir"] = base_dir
+                                config["use_tls"] = bool(use_tls)
+                                config["passive"] = bool(passive)
+                            elif provider_type == "sftp":
+                                host = (
+                                    request.form.get("module_cfg_sftp_host") or ""
+                                ).strip()
+                                port_raw = (
+                                    request.form.get("module_cfg_sftp_port") or ""
+                                ).strip()
+                                username = (
+                                    request.form.get("module_cfg_sftp_username") or ""
+                                ).strip()
+                                password = (
+                                    request.form.get("module_cfg_sftp_password") or ""
+                                ).strip()
+                                private_key = (
+                                    request.form.get("module_cfg_sftp_private_key")
+                                    or ""
+                                ).strip()
+                                base_dir = (
+                                    request.form.get("module_cfg_sftp_base_dir")
+                                    or ""
+                                ).strip()
+                                if host:
+                                    config["host"] = host
+                                if port_raw:
+                                    try:
+                                        config["port"] = int(port_raw)
+                                    except ValueError:
+                                        pass
+                                if username:
+                                    config["username"] = username
+                                if password:
+                                    config["password"] = password
+                                if private_key:
+                                    config["private_key"] = private_key
+                                if base_dir:
+                                    config["base_dir"] = base_dir
+                            elif provider_type == "scp":
+                                host = (
+                                    request.form.get("module_cfg_scp_host") or ""
+                                ).strip()
+                                port_raw = (
+                                    request.form.get("module_cfg_scp_port") or ""
+                                ).strip()
+                                username = (
+                                    request.form.get("module_cfg_scp_username") or ""
+                                ).strip()
+                                password = (
+                                    request.form.get("module_cfg_scp_password") or ""
+                                ).strip()
+                                private_key = (
+                                    request.form.get("module_cfg_scp_private_key")
+                                    or ""
+                                ).strip()
+                                base_dir = (
+                                    request.form.get("module_cfg_scp_base_dir")
+                                    or ""
+                                ).strip()
+                                if host:
+                                    config["host"] = host
+                                if port_raw:
+                                    try:
+                                        config["port"] = int(port_raw)
+                                    except ValueError:
+                                        pass
+                                if username:
+                                    config["username"] = username
+                                if password:
+                                    config["password"] = password
+                                if private_key:
+                                    config["private_key"] = private_key
+                                if base_dir:
+                                    config["base_dir"] = base_dir
                             elif provider_type == "gdrive":
                                 access_token = (
                                     request.form.get(
@@ -1749,7 +1872,99 @@ def storage_settings():
                             except Exception:  # noqa: BLE001
                                 return
 
+                        def _log_health_check(
+                            module_id: int | None,
+                            module_name: str,
+                            provider_type: str | None,
+                            ok: bool,
+                            message: str,
+                            duration_ms: int | None,
+                        ) -> None:
+                            try:
+                                session_db.add(
+                                    StorageModuleHealthCheck(
+                                        module_id=(int(module_id) if module_id is not None else None),
+                                        module_name=str(module_name or "")[:160],
+                                        provider_type=(str(provider_type or "")[:64] if provider_type else None),
+                                        ok=1 if ok else 0,
+                                        message=str(message or "")[:512] if message else None,
+                                        duration_ms=int(duration_ms) if duration_ms is not None else None,
+                                    )
+                                )
+                                session_db.commit()
+                            except Exception:  # noqa: BLE001
+                                return
+
+                        def _validate_provider_config(
+                            provider_type: str,
+                            config: dict[str, object],
+                        ) -> list[str]:
+                            missing: list[str] = []
+                            provider_type = (provider_type or "").strip().lower()
+                            if provider_type == "local_fs":
+                                if not str(config.get("base_dir") or "").strip():
+                                    missing.append("Base directory")
+                            elif provider_type == "local_drive":
+                                if not str(config.get("base_dir") or "").strip():
+                                    missing.append("Local drive path")
+                            elif provider_type == "s3":
+                                if not str(config.get("bucket") or "").strip():
+                                    missing.append("S3 bucket")
+                            elif provider_type == "gcs":
+                                if not str(config.get("bucket") or "").strip():
+                                    missing.append("GCS bucket")
+                            elif provider_type == "azure_blob":
+                                if not str(config.get("container") or "").strip():
+                                    missing.append("Container")
+                            elif provider_type == "dropbox":
+                                if not str(config.get("access_token") or "").strip():
+                                    missing.append("Access token")
+                            elif provider_type == "webdav":
+                                if not str(config.get("base_url") or "").strip():
+                                    missing.append("Base URL")
+                                if not str(config.get("username") or "").strip():
+                                    missing.append("Username")
+                                if not str(config.get("password") or "").strip():
+                                    missing.append("Password / app token")
+                            elif provider_type == "ftp":
+                                if not str(config.get("host") or "").strip():
+                                    missing.append("FTP host")
+                            elif provider_type in {"sftp", "scp"}:
+                                if not str(config.get("host") or "").strip():
+                                    missing.append("Host")
+                                if not str(config.get("username") or "").strip():
+                                    missing.append("Username")
+                            elif provider_type == "gdrive":
+                                if not str(config.get("access_token") or "").strip():
+                                    missing.append("Google Drive access token")
+                            elif provider_type == "onedrive":
+                                if not str(config.get("access_token") or "").strip():
+                                    missing.append("OneDrive access token")
+                            elif provider_type == "box":
+                                if not str(config.get("access_token") or "").strip():
+                                    missing.append("Box access token")
+                            elif provider_type == "swift":
+                                if not str(config.get("storage_url") or "").strip():
+                                    missing.append("Storage URL")
+                                if not str(config.get("auth_token") or "").strip():
+                                    missing.append("Auth token")
+                                if not str(config.get("container") or "").strip():
+                                    missing.append("Container")
+                            elif provider_type == "pcloud":
+                                if not str(config.get("access_token") or "").strip():
+                                    missing.append("pCloud access token")
+                            elif provider_type == "mega":
+                                if not str(config.get("email") or "").strip():
+                                    missing.append("MEGA email")
+                                if not str(config.get("password") or "").strip():
+                                    missing.append("MEGA password")
+                            return missing
+
                         StorageModuleEvent.__table__.create(
+                            bind=record_engine, checkfirst=True
+                        )
+
+                        StorageModuleHealthCheck.__table__.create(
                             bind=record_engine, checkfirst=True
                         )
 
@@ -1774,6 +1989,7 @@ def storage_settings():
                                         message=str(message or "")[:1024],
                                     )
                                 )
+                                session_db.commit()
                             except Exception:  # noqa: BLE001
                                 return
 
@@ -1786,6 +2002,11 @@ def storage_settings():
                             enabled_flag = (
                                 1 if request.form.get("module_enabled") == "1" else 0
                             )
+                            priority_raw = (request.form.get("module_priority") or "").strip()
+                            try:
+                                priority_val = int(priority_raw) if priority_raw else 100
+                            except ValueError:
+                                priority_val = 100
 
                             if not name:
                                 errors.append("Module name is required.")
@@ -1830,6 +2051,7 @@ def storage_settings():
                                     label=label or None,
                                     provider_type=provider_type,
                                     is_enabled=enabled_flag,
+                                    priority=int(priority_val),
                                     config_json=json.dumps(config) if config else None,
                                     updated_at=now_dt,
                                 )
@@ -1870,6 +2092,11 @@ def storage_settings():
                                     if request.form.get("module_enabled") == "1"
                                     else 0
                                 )
+                                priority_raw = (request.form.get("module_priority") or "").strip()
+                                try:
+                                    priority_val = int(priority_raw) if priority_raw else 100
+                                except ValueError:
+                                    priority_val = 100
 
                                 if not new_name:
                                     errors.append("Module name is required.")
@@ -1924,6 +2151,7 @@ def storage_settings():
                                     module.name = new_name
                                     module.label = new_label or None
                                     module.is_enabled = enabled_flag
+                                    module.priority = int(priority_val)
                                     module.config_json = (
                                         json.dumps(merged_cfg) if merged_cfg else None
                                     )
@@ -1960,17 +2188,20 @@ def storage_settings():
                                     session_db.query(StorageModule)
                                     .filter(StorageModule.name == new_name)
                                     .first()
-                                )
+
                                 if existing is not None:
-                                    errors.append("A storage module with this name already exists.")
+                                    errors.append(
+                                        "A storage module with this name already exists."
+                                    )
 
                             if not errors and src is not None:
                                 now_dt = datetime.now(timezone.utc)
                                 clone_row = StorageModule(
                                     name=new_name,
                                     label=(src.label or None),
-                                    provider_type=str(src.provider_type or ""),
+                                    provider_type=src.provider_type,
                                     is_enabled=0,
+                                    priority=int(getattr(src, "priority", 100) or 100),
                                     config_json=src.config_json,
                                     updated_at=now_dt,
                                 )
@@ -2110,6 +2341,7 @@ def storage_settings():
                             else:
                                 router = get_storage_router(current_app)
                                 instance_key = str(module.id)
+                                started = time.monotonic()
                                 try:
                                     status = router.health_check(instance_key)
                                 except StorageError as exc:  # pragma: no cover - error path
@@ -2118,12 +2350,42 @@ def storage_settings():
                                         "module_name": module.name,
                                         "message": str(exc)[:300],
                                     }
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    _log_health_check(
+                                        int(module.id),
+                                        str(module.name or ""),
+                                        str(module.provider_type or "") if getattr(module, "provider_type", None) else None,
+                                        False,
+                                        str(exc)[:512],
+                                        duration_ms,
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "health_check_error",
+                                        str(exc)[:1024],
+                                        module_row=module,
+                                    )
                                 except Exception as exc:  # noqa: BLE001
                                     module_test_result = {
                                         "ok": False,
                                         "module_name": module.name,
                                         "message": str(exc)[:300],
                                     }
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    _log_health_check(
+                                        int(module.id),
+                                        str(module.name or ""),
+                                        str(module.provider_type or "") if getattr(module, "provider_type", None) else None,
+                                        False,
+                                        str(exc)[:512],
+                                        duration_ms,
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "health_check_error",
+                                        str(exc)[:1024],
+                                        module_row=module,
+                                    )
                                 else:
                                     status_text = str(status.get("status") or "ok")
                                     message = status.get("message") or (
@@ -2134,6 +2396,15 @@ def storage_settings():
                                         "module_name": module.name,
                                         "message": str(message)[:300],
                                     }
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    _log_health_check(
+                                        int(module.id),
+                                        str(module.name or ""),
+                                        str(module.provider_type or "") if getattr(module, "provider_type", None) else None,
+                                        status_text == "ok",
+                                        str(message)[:512],
+                                        duration_ms,
+                                    )
 
                         elif action == "module_draft_test":
                             module_id_raw = (request.form.get("module_id") or "").strip()
@@ -2182,6 +2453,41 @@ def storage_settings():
                                 config = merged_cfg
 
                             if not errors:
+                                missing_fields = _validate_provider_config(provider_type, config)
+                                if missing_fields:
+                                    errors.append(
+                                        "Missing required fields: " + ", ".join(missing_fields)
+                                    )
+
+                            started = time.monotonic()
+                            duration_ms: int | None = None
+
+                            if errors:
+                                module_test_result = {
+                                    "ok": False,
+                                    "module_name": name,
+                                    "message": "; ".join(errors)[:300],
+                                }
+                                duration_ms = int((time.monotonic() - started) * 1000)
+                                _set_last_module_test("", False)
+                                _log_health_check(
+                                    int(existing_module.id) if existing_module is not None else None,
+                                    str(name or ""),
+                                    str(provider_type or "") if provider_type else None,
+                                    False,
+                                    "; ".join(errors)[:512],
+                                    duration_ms,
+                                )
+                                _log_module_event(
+                                    "error",
+                                    "draft_test_invalid",
+                                    "; ".join(errors)[:1024],
+                                    module_row=existing_module,
+                                    module_name=str(name or ""),
+                                )
+                                errors = []
+
+                            if module_test_result is None and not errors:
                                 tmp_module = StorageModule(
                                     name=name,
                                     label=label or None,
@@ -2212,6 +2518,22 @@ def storage_settings():
                                         "message": str(exc)[:300],
                                     }
                                     _set_last_module_test("", False)
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    _log_health_check(
+                                        int(existing_module.id) if existing_module is not None else None,
+                                        str(name or ""),
+                                        str(provider_type or "") if provider_type else None,
+                                        False,
+                                        str(exc)[:512],
+                                        duration_ms,
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "draft_test_error",
+                                        str(exc)[:1024],
+                                        module_row=existing_module,
+                                        module_name=str(name or ""),
+                                    )
                                 except Exception as exc:  # noqa: BLE001
                                     module_test_result = {
                                         "ok": False,
@@ -2219,6 +2541,22 @@ def storage_settings():
                                         "message": str(exc)[:300],
                                     }
                                     _set_last_module_test("", False)
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    _log_health_check(
+                                        int(existing_module.id) if existing_module is not None else None,
+                                        str(name or ""),
+                                        str(provider_type or "") if provider_type else None,
+                                        False,
+                                        str(exc)[:512],
+                                        duration_ms,
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "draft_test_error",
+                                        str(exc)[:1024],
+                                        module_row=existing_module,
+                                        module_name=str(name or ""),
+                                    )
                                 else:
                                     status_text = str(status.get("status") or "ok")
                                     ok = status_text == "ok"
@@ -2238,6 +2576,15 @@ def storage_settings():
                                     )
                                     _set_last_module_test(fp, ok)
                                     module_test_ready = bool(ok)
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    _log_health_check(
+                                        int(existing_module.id) if existing_module is not None else None,
+                                        str(name or ""),
+                                        str(provider_type or "") if provider_type else None,
+                                        ok,
+                                        str(message)[:512],
+                                        duration_ms,
+                                    )
 
     providers_raw = build_storage_providers(current_app)
     providers = []
@@ -2348,7 +2695,7 @@ def storage_settings():
             StorageModule.__table__.create(bind=record_engine, checkfirst=True)
             module_rows = (
                 session_db.query(StorageModule)
-                .order_by(StorageModule.id)
+                .order_by(getattr(StorageModule, "priority", StorageModule.id), StorageModule.id)
                 .all()
             )
         router = get_storage_router(current_app)
@@ -2375,6 +2722,7 @@ def storage_settings():
                     "label": m.label or "",
                     "provider_type": m.provider_type,
                     "is_enabled": is_enabled,
+                    "priority": int(getattr(m, "priority", 100) or 100),
                     "status": status_text,
                     "status_message": status_message,
                 }
@@ -2507,6 +2855,55 @@ def storage_settings():
                     .all()
                 )
 
+    module_definitions = []
+    try:
+        record_engine = get_record_engine()
+    except Exception:  # noqa: BLE001
+        record_engine = None
+
+    if record_engine is not None:
+        try:
+            from .models import StorageProviderModule  # noqa: PLC0415
+            from .modules.storage.registry import (  # noqa: PLC0415
+                StorageModuleDefinition,
+            )
+
+            with Session(record_engine) as session_db:
+                rows = (
+                    session_db.query(StorageProviderModule)
+                    .filter(StorageProviderModule.is_installed == 1)
+                    .order_by(
+                        StorageProviderModule.category,
+                        StorageProviderModule.display_name,
+                        StorageProviderModule.provider_type,
+                    )
+                    .all()
+                )
+
+            for r in rows:
+                module_definitions.append(
+                    StorageModuleDefinition(
+                        provider_type=str(r.provider_type),
+                        display_name=str(r.display_name or r.provider_type),
+                        category=str(r.category or "Custom"),
+                        fields=[],
+                        template=str(r.template_path or ""),
+                        module_dir="",
+                    )
+                )
+        except Exception:  # noqa: BLE001
+            module_definitions = []
+
+    if not module_definitions:
+        try:
+            from .modules.storage.registry import (  # noqa: PLC0415
+                discover_storage_module_definitions,
+            )
+
+            module_definitions = discover_storage_module_definitions()
+        except Exception:  # noqa: BLE001
+            module_definitions = []
+
     return render_template(
         "storage_modules.html",
         providers=providers,
@@ -2530,6 +2927,7 @@ def storage_settings():
         saved=saved,
         edit_module=edit_module,
         edit_module_config=edit_module_config,
+        module_definitions=module_definitions,
     )
 
 
@@ -2696,7 +3094,7 @@ def recording_settings():
             StorageModule.__table__.create(bind=record_engine, checkfirst=True)
             rows = (
                 session_db.query(StorageModule)
-                .order_by(StorageModule.id)
+                .order_by(getattr(StorageModule, "priority", StorageModule.id), StorageModule.id)
                 .all()
             )
         for m in rows:
@@ -2707,6 +3105,7 @@ def recording_settings():
                     "label": m.label or "",
                     "provider_type": m.provider_type,
                     "is_enabled": bool(getattr(m, "is_enabled", 0)),
+                    "priority": int(getattr(m, "priority", 100) or 100),
                 }
             )
 

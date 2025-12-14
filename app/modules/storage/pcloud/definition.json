@@ -1,0 +1,22 @@
+{
+  "provider_type": "pcloud",
+  "display_name": "pCloud",
+  "category": "File sync / consumer cloud",
+  "fields": [
+    {
+      "key": "access_token",
+      "label": "pCloud access token",
+      "type": "password",
+      "required": true,
+      "help": "OAuth token from your pCloud app.",
+      "link": "https://docs.pcloud.com/"
+    },
+    {
+      "key": "path",
+      "label": "Path (optional)",
+      "type": "text",
+      "required": false,
+      "help": "Optional destination folder path in your pCloud account."
+    }
+  ]
+}

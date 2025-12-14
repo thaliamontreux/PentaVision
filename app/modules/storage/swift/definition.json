@@ -1,0 +1,29 @@
+{
+  "provider_type": "swift",
+  "display_name": "Swift",
+  "category": "Object storage",
+  "fields": [
+    {
+      "key": "storage_url",
+      "label": "Storage URL",
+      "type": "text",
+      "required": true,
+      "help": "Swift endpoint URL from your provider.",
+      "link": "https://docs.openstack.org/api-ref/object-store/"
+    },
+    {
+      "key": "auth_token",
+      "label": "Auth token",
+      "type": "password",
+      "required": true,
+      "help": "Provider-issued auth token (often via Keystone)."
+    },
+    {
+      "key": "container",
+      "label": "Container",
+      "type": "text",
+      "required": true,
+      "help": "Container (bucket-equivalent) for recordings."
+    }
+  ]
+}
