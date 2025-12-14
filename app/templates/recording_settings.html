@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block title %}Recording settings · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Recording settings</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if saved %}
+      <div class="pv-alert pv-alert-success" role="status">
+        <p>Recording settings updated.</p>
+      </div>
+    {% endif %}
+
+    <div class="pv-card" style="margin-bottom: 1.5rem;">
+      <h2>Overview</h2>
+      <p class="pv-card-subtitle">
+        Current time: {{ current_time_local.strftime('%Y-%m-%d %H:%M:%S') }} ({{ current_timezone }})
+      </p>
+      <p class="pv-card-subtitle">
+        Recording windows are evaluated using each camera's recording schedule. When no schedule is configured for a camera, it records 24 hours a day.
+      </p>
+    </div>
+
+    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); gap: 1.5rem; align-items: flex-start;">
+      <div class="pv-card">
+        <h2>Storage modules</h2>
+        <p class="pv-card-subtitle">
+          These modules define where recordings are stored. Multiple modules can use the same provider type (for example, several Google Cloud Storage buckets or Google Drive folders).
+        </p>
+        {% if modules %}
+          <table class="pv-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Label</th>
+                <th>Provider</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in modules %}
+                <tr>
+                  <td><code>{{ m.name }}</code></td>
+                  <td>{{ m.label or '\u00a0' }}</td>
+                  <td>{{ m.provider_type }}</td>
+                  <td>
+                    {% if m.is_enabled %}
+                      <span style="color: #16a34a;">Enabled</span>
+                    {% else %}
+                      <span style="color: #6b7280;">Disabled</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="pv-card-subtitle">
+            No storage modules are configured yet. The system will fall back to the legacy global storage settings.
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="pv-card">
+        <h2>Per-camera schedules</h2>
+        <p class="pv-card-subtitle">
+          Configure when each camera records. Use "Always" to record 24 hours a day, or "Scheduled" with start and stop times.
+        </p>
+        {% if cameras %}
+          <table class="pv-table">
+            <thead>
+              <tr>
+                <th>Camera</th>
+                <th>Storage targets</th>
+                <th>Retention (days)</th>
+                <th>Mode</th>
+                <th>Window</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in cameras %}
+                <tr>
+                  <td>{{ c.name }}</td>
+                  <td style="font-size: 0.85rem;">{{ c.storage_targets or 'Global default' }}</td>
+                  <td>{{ c.retention_days if c.retention_days is not none else '\u2013' }}</td>
+                  <td>
+                    <form method="post" class="pv-inline-form">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="device_id" value="{{ c.id }}" />
+                      <select name="mode">
+                        <option value="always" {% if c.mode == 'always' %}selected{% endif %}>Always</option>
+                        <option value="scheduled" {% if c.mode == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                        <option value="motion_only" {% if c.mode == 'motion_only' %}selected{% endif %}>Motion only</option>
+                        <option value="scheduled_motion" {% if c.mode == 'scheduled_motion' %}selected{% endif %}>Scheduled + motion</option>
+                      </select>
+                  </td>
+                  <td>
+                      <div style="display: flex; gap: 0.25rem; align-items: center;">
+                        <input
+                          type="time"
+                          name="start_time"
+                          value="{{ c.start_time }}"
+                          style="max-width: 6.5rem;"
+                        />
+                        <span style="font-size: 0.8rem; color: #9ca3af;">to</span>
+                        <input
+                          type="time"
+                          name="end_time"
+                          value="{{ c.end_time }}"
+                          style="max-width: 6.5rem;"
+                        />
+                      </div>
+                      <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
+                        {{ c.schedule_summary }}
+                      </p>
+                  </td>
+                  <td style="white-space: nowrap;">
+                      <button type="submit" class="pv-button-primary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        class="pv-button-secondary rs-24h-btn"
+                        data-device-id="{{ c.id }}"
+                        style="padding: 0.25rem 0.6rem; font-size: 0.8rem; margin-left: 0.25rem;"
+                      >
+                        24h
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="pv-card-subtitle">No cameras are configured.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      var buttons = document.querySelectorAll('.rs-24h-btn');
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var row = btn.closest('tr');
+          if (!row) return;
+          var form = row.querySelector('form');
+          if (!form) return;
+          var modeSelect = form.querySelector('select[name="mode"]');
+          var startInput = form.querySelector('input[name="start_time"]');
+          var endInput = form.querySelector('input[name="end_time"]');
+          if (modeSelect) modeSelect.value = 'always';
+          if (startInput) startInput.value = '';
+          if (endInput) endInput.value = '';
+          form.submit();
+        });
+      });
+    })();
+  </script>
+{% endblock %}

@@ -5,6 +5,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import urlparse, urlunparse
@@ -15,9 +16,12 @@ from sqlalchemy.orm import Session
 from .db import get_record_engine
 from .models import (
     CameraDevice,
+    CameraPropertyLink,
     CameraRecording,
+    CameraRecordingSchedule,
     CameraStoragePolicy,
     CameraUrlPattern,
+    Property,
     UploadQueueItem,
 )
 from .storage_providers import StorageProvider, build_storage_providers
@@ -67,6 +71,91 @@ def _mask_url_password(url: str) -> str:
     return urlunparse(parsed._replace(netloc=netloc))
 
 
+def _parse_time_str(value: str) -> Optional[int]:
+    if not value:
+        return None
+    parts = value.split(":", 1)
+    if len(parts) != 2:
+        return None
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError:
+        return None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    return hour * 60 + minute
+
+
+def _is_time_in_window(now_minutes: int, start_minutes: int, end_minutes: int) -> bool:
+    if start_minutes == end_minutes:
+        return False
+    if start_minutes < end_minutes:
+        return start_minutes <= now_minutes < end_minutes
+    return now_minutes >= start_minutes or now_minutes < end_minutes
+
+
+def _should_record_now(app: Flask, device_id: int) -> bool:
+    engine = get_record_engine()
+    if engine is None:
+        return True
+    now_utc = datetime.now(timezone.utc)
+    with Session(engine) as session:
+        CameraRecordingSchedule.__table__.create(bind=engine, checkfirst=True)
+        CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
+        Property.__table__.create(bind=engine, checkfirst=True)
+        schedule = (
+            session.query(CameraRecordingSchedule)
+            .filter(CameraRecordingSchedule.device_id == device_id)
+            .first()
+        )
+        if schedule is None:
+            return True
+        link = (
+            session.query(CameraPropertyLink)
+            .filter(CameraPropertyLink.device_id == device_id)
+            .first()
+        )
+        property_tz = None
+        if link is not None and getattr(link, "property_id", None) is not None:
+            prop = session.get(Property, link.property_id)
+            if prop is not None:
+                property_tz = getattr(prop, "timezone", None)
+        mode = (schedule.mode or "always").strip().lower()
+        days_raw = (schedule.days_of_week or "*").strip()
+        sched_tz_name = schedule.timezone or property_tz
+        if not sched_tz_name:
+            sched_tz_name = str(app.config.get("DEFAULT_TIMEZONE") or "UTC")
+    try:
+        tz = ZoneInfo(str(sched_tz_name))
+    except Exception:
+        tz = timezone.utc
+    now_local = now_utc.astimezone(tz)
+    weekday = now_local.weekday()
+    if days_raw and days_raw != "*":
+        allowed_days: set[int] = set()
+        for token in days_raw.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                day_idx = int(token)
+            except ValueError:
+                continue
+            if 0 <= day_idx <= 6:
+                allowed_days.add(day_idx)
+        if allowed_days and weekday not in allowed_days:
+            return False
+    if mode in {"always", "motion_only"}:
+        return True
+    start_minutes = _parse_time_str(getattr(schedule, "start_time", "") or "")
+    end_minutes = _parse_time_str(getattr(schedule, "end_time", "") or "")
+    if start_minutes is None or end_minutes is None:
+        return True
+    now_minutes = now_local.hour * 60 + now_local.minute
+    return _is_time_in_window(now_minutes, start_minutes, end_minutes)
+
+
 class CameraWorker(threading.Thread):
     def __init__(
         self,
@@ -91,6 +180,10 @@ class CameraWorker(threading.Thread):
                     time.sleep(self.retry_delay)
 
     def _record_segment(self) -> None:
+        if not _should_record_now(self.app, self.config.device_id):
+            sleep_seconds = max(5, min(self.segment_seconds, 60))
+            time.sleep(sleep_seconds)
+            return
         use_gst = bool(self.app.config.get("USE_GSTREAMER_RECORDING"))
         if use_gst:
             self._record_segment_gstreamer()

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import base64
 import io
@@ -37,12 +38,15 @@ from .models import (
     CameraDevice,
     CameraPropertyLink,
     CameraRecording,
+    CameraRecordingSchedule,
+    CameraStoragePolicy,
     CameraUrlPattern,
+    DlnaSettings,
     FaceEmbedding,
     FacePrivacySetting,
     RecordingData,
+    StorageModule,
     StorageSettings,
-    DlnaSettings,
     User,
     UserNotificationSettings,
     WebAuthnCredential,
@@ -1572,6 +1576,157 @@ def storage_settings():
         form=form,
         errors=errors,
         saved=saved,
+    )
+
+
+@bp.route("/recording-settings", methods=["GET", "POST"])
+def recording_settings():
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+    if not user_has_role(user, "System Administrator"):
+        abort(403)
+
+    errors: list[str] = []
+    saved = False
+    record_engine = get_record_engine()
+    if record_engine is None:
+        errors.append("Record database is not configured.")
+
+    tz_name = getattr(user, "timezone", None) or "UTC"
+    try:
+        tz = ZoneInfo(str(tz_name))
+    except Exception:  # noqa: BLE001
+        tz = timezone.utc
+        tz_name = "UTC"
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+
+    if request.method == "POST" and record_engine is not None:
+        if not validate_global_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+        else:
+            device_id_raw = request.form.get("device_id") or ""
+            mode = (request.form.get("mode") or "").strip().lower()
+            start_time = (request.form.get("start_time") or "").strip()
+            end_time = (request.form.get("end_time") or "").strip()
+
+            try:
+                device_id = int(device_id_raw)
+            except ValueError:
+                device_id = None
+
+            valid_modes = {"always", "scheduled", "motion_only", "scheduled_motion"}
+            if mode not in valid_modes:
+                mode = "always"
+
+            if device_id is not None:
+                with Session(record_engine) as session_db:
+                    CameraRecordingSchedule.__table__.create(
+                        bind=record_engine,
+                        checkfirst=True,
+                    )
+                    sched = (
+                        session_db.query(CameraRecordingSchedule)
+                        .filter(CameraRecordingSchedule.device_id == device_id)
+                        .first()
+                    )
+                    if sched is None:
+                        sched = CameraRecordingSchedule(device_id=device_id)
+
+                    sched.mode = mode
+                    sched.days_of_week = "*"
+                    if mode == "always":
+                        sched.start_time = None
+                        sched.end_time = None
+                    else:
+                        sched.start_time = start_time or None
+                        sched.end_time = end_time or None
+                    sched.updated_at = datetime.now(timezone.utc)
+
+                    session_db.add(sched)
+                    session_db.commit()
+                    saved = True
+
+    modules: list[dict] = []
+    if record_engine is not None:
+        with Session(record_engine) as session_db:
+            StorageModule.__table__.create(bind=record_engine, checkfirst=True)
+            rows = (
+                session_db.query(StorageModule)
+                .order_by(StorageModule.id)
+                .all()
+            )
+        for m in rows:
+            modules.append(
+                {
+                    "id": m.id,
+                    "name": m.name,
+                    "label": m.label or "",
+                    "provider_type": m.provider_type,
+                    "is_enabled": bool(getattr(m, "is_enabled", 0)),
+                }
+            )
+
+    camera_rows: list[dict] = []
+    if record_engine is not None:
+        with Session(record_engine) as session_db:
+            CameraDevice.__table__.create(bind=record_engine, checkfirst=True)
+            CameraStoragePolicy.__table__.create(bind=record_engine, checkfirst=True)
+            CameraRecordingSchedule.__table__.create(
+                bind=record_engine,
+                checkfirst=True,
+            )
+            devices = (
+                session_db.query(CameraDevice)
+                .order_by(CameraDevice.name)
+                .all()
+            )
+            policies = session_db.query(CameraStoragePolicy).all()
+            schedules = session_db.query(CameraRecordingSchedule).all()
+
+        policies_index = {int(p.device_id): p for p in policies}
+        schedules_index = {int(s.device_id): s for s in schedules}
+
+        for dev in devices:
+            pol = policies_index.get(int(dev.id))
+            sched = schedules_index.get(int(dev.id))
+            storage_targets = getattr(pol, "storage_targets", None) or ""
+            retention_days = getattr(pol, "retention_days", None)
+            mode = getattr(sched, "mode", None) or "always"
+            start_time = getattr(sched, "start_time", None) or ""
+            end_time = getattr(sched, "end_time", None) or ""
+
+            if mode == "always":
+                schedule_summary = "24 hours (always recording)"
+            elif start_time and end_time:
+                schedule_summary = f"Daily {start_time}–{end_time}"
+            elif start_time or end_time:
+                schedule_summary = f"From {start_time or '??'} to {end_time or '??'}"
+            else:
+                schedule_summary = "No window configured"
+
+            camera_rows.append(
+                {
+                    "id": dev.id,
+                    "name": dev.name,
+                    "storage_targets": storage_targets,
+                    "retention_days": retention_days,
+                    "mode": mode,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "schedule_summary": schedule_summary,
+                }
+            )
+
+    return render_template(
+        "recording_settings.html",
+        errors=errors,
+        saved=saved,
+        modules=modules,
+        cameras=camera_rows,
+        current_time_local=now_local,
+        current_timezone=tz_name,
     )
 
 

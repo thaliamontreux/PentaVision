@@ -72,6 +72,12 @@ def storage_alias():
     return redirect(url_for("main.storage_settings"))
 
 
+@bp.get("/recording-settings")
+def recording_settings_alias():
+    """Admin-scoped alias for the main recording settings view."""
+    return redirect(url_for("main.recording_settings"))
+
+
 @bp.get("/audit")
 def audit_alias():
     """Admin-scoped alias for the main audit log view."""

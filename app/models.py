@@ -487,6 +487,24 @@ class CameraStoragePolicy(RecordBase):
     )
 
 
+class CameraRecordingSchedule(RecordBase):
+    __tablename__ = "camera_recording_schedules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(Integer, index=True, unique=True)
+    timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    mode: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    days_of_week: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    start_time: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    end_time: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class CameraPropertyLink(RecordBase):
     __tablename__ = "camera_property_links"
 
