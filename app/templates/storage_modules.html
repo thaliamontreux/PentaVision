@@ -134,6 +134,48 @@
                   <div class="pv-storage-metric-value">{{ selected_metrics.active_streams if selected_metrics else 0 }}</div>
                   <div class="pv-storage-metric-sub">Based on recent segments.</div>
                 </div>
+                <div class="pv-storage-metric">
+                  <div class="pv-storage-metric-title">Last successful write</div>
+                  <div class="pv-storage-metric-value">{{ selected_metrics.last_ok_text if selected_metrics else 'n/a' }}</div>
+                  <div class="pv-storage-metric-sub">From write stats.</div>
+                </div>
+                <div class="pv-storage-metric">
+                  <div class="pv-storage-metric-title">Last error</div>
+                  <div class="pv-storage-metric-value">{{ selected_metrics.last_error_text if selected_metrics else 'n/a' }}</div>
+                  <div class="pv-storage-metric-sub">{{ selected_metrics.last_error_message if selected_metrics and selected_metrics.last_error_message else 'No recent errors.' }}</div>
+                </div>
+                <div class="pv-storage-metric">
+                  <div class="pv-storage-metric-title">Write volume (15m)</div>
+                  <div class="pv-storage-metric-value">{{ selected_metrics.writes_15m if selected_metrics else 0 }}</div>
+                  <div class="pv-storage-metric-sub">Bytes: {{ selected_metrics.bytes_15m if selected_metrics else 0 }}</div>
+                </div>
+              </div>
+
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Recent errors</div>
+                <div class="pv-card-subtitle">Most recent error-level events for this module.</div>
+                {% if recent_error_rows %}
+                  <table class="pv-table" style="margin-top: 0.65rem;">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for e in recent_error_rows %}
+                        <tr>
+                          <td>{{ e.created_at }}</td>
+                          <td><code>{{ e.event_type }}</code></td>
+                          <td style="max-width: 560px; overflow: hidden; text-overflow: ellipsis;">{{ e.message }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No recent errors.</div>
+                {% endif %}
               </div>
             {% else %}
               <div class="pv-storage-empty">
@@ -205,9 +247,71 @@
                     <label for="module_cfg_s3_region" style="margin-top: 0.35rem;">Region</label>
                     <input id="module_cfg_s3_region" name="module_cfg_s3_region" type="text" value="{{ edit_cfg.get('region', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
                     <label for="module_cfg_s3_access_key" style="margin-top: 0.35rem;">Access key ID</label>
-                    <input id="module_cfg_s3_access_key" name="module_cfg_s3_access_key" type="password" autocomplete="off" />
+                    <input id="module_cfg_s3_access_key" name="module_cfg_s3_access_key" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
                     <label for="module_cfg_s3_secret_key" style="margin-top: 0.35rem;">Secret access key</label>
-                    <input id="module_cfg_s3_secret_key" name="module_cfg_s3_secret_key" type="password" autocomplete="off" />
+                    <input id="module_cfg_s3_secret_key" name="module_cfg_s3_secret_key" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="gcs" style="display: none;">
+                    <label for="module_cfg_gcs_bucket">GCS bucket</label>
+                    <input id="module_cfg_gcs_bucket" name="module_cfg_gcs_bucket" type="text" value="{{ edit_cfg.get('bucket', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="azure_blob" style="display: none;">
+                    <label for="module_cfg_azure_container">Container</label>
+                    <input id="module_cfg_azure_container" name="module_cfg_azure_container" type="text" value="{{ edit_cfg.get('container', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_azure_connection_string" style="margin-top: 0.35rem;">Connection string</label>
+                    <input id="module_cfg_azure_connection_string" name="module_cfg_azure_connection_string" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="dropbox" style="display: none;">
+                    <label for="module_cfg_dropbox_access_token">Dropbox access token</label>
+                    <input id="module_cfg_dropbox_access_token" name="module_cfg_dropbox_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="webdav" style="display: none;">
+                    <label for="module_cfg_webdav_base_url">Base URL</label>
+                    <input id="module_cfg_webdav_base_url" name="module_cfg_webdav_base_url" type="text" value="{{ edit_cfg.get('base_url', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_webdav_username" style="margin-top: 0.35rem;">Username</label>
+                    <input id="module_cfg_webdav_username" name="module_cfg_webdav_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_webdav_password" style="margin-top: 0.35rem;">Password / app token</label>
+                    <input id="module_cfg_webdav_password" name="module_cfg_webdav_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="gdrive" style="display: none;">
+                    <label for="module_cfg_gdrive_access_token">Google Drive access token</label>
+                    <input id="module_cfg_gdrive_access_token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_gdrive_folder_id" style="margin-top: 0.35rem;">Folder ID (optional)</label>
+                    <input id="module_cfg_gdrive_folder_id" name="module_cfg_gdrive_folder_id" type="text" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="onedrive" style="display: none;">
+                    <label for="module_cfg_onedrive_access_token">OneDrive access token</label>
+                    <input id="module_cfg_onedrive_access_token" name="module_cfg_onedrive_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_onedrive_root_path" style="margin-top: 0.35rem;">Root path (optional)</label>
+                    <input id="module_cfg_onedrive_root_path" name="module_cfg_onedrive_root_path" type="text" value="{{ edit_cfg.get('root_path', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="box" style="display: none;">
+                    <label for="module_cfg_box_access_token">Box access token</label>
+                    <input id="module_cfg_box_access_token" name="module_cfg_box_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_box_folder_id" style="margin-top: 0.35rem;">Folder ID (optional)</label>
+                    <input id="module_cfg_box_folder_id" name="module_cfg_box_folder_id" type="text" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="swift" style="display: none;">
+                    <label for="module_cfg_swift_storage_url">Storage URL</label>
+                    <input id="module_cfg_swift_storage_url" name="module_cfg_swift_storage_url" type="text" value="{{ edit_cfg.get('storage_url', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_swift_auth_token" style="margin-top: 0.35rem;">Auth token</label>
+                    <input id="module_cfg_swift_auth_token" name="module_cfg_swift_auth_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_swift_container" style="margin-top: 0.35rem;">Container</label>
+                    <input id="module_cfg_swift_container" name="module_cfg_swift_container" type="text" value="{{ edit_cfg.get('container', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="pcloud" style="display: none;">
+                    <label for="module_cfg_pcloud_access_token">pCloud access token</label>
+                    <input id="module_cfg_pcloud_access_token" name="module_cfg_pcloud_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_pcloud_path" style="margin-top: 0.35rem;">Path (optional)</label>
+                    <input id="module_cfg_pcloud_path" name="module_cfg_pcloud_path" type="text" value="{{ edit_cfg.get('path', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                  </div>
+                  <div class="pv-module-config-group" data-provider="mega" style="display: none;">
+                    <label for="module_cfg_mega_email">MEGA account email</label>
+                    <input id="module_cfg_mega_email" name="module_cfg_mega_email" type="email" value="{{ edit_cfg.get('email', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_mega_password" style="margin-top: 0.35rem;">MEGA account password</label>
+                    <input id="module_cfg_mega_password" name="module_cfg_mega_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+                    <label for="module_cfg_mega_folder_name" style="margin-top: 0.35rem;">Folder name (optional)</label>
+                    <input id="module_cfg_mega_folder_name" name="module_cfg_mega_folder_name" type="text" value="{{ edit_cfg.get('folder_name', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
                   </div>
                 </div>
               </div>
@@ -458,6 +562,38 @@
                   <input id="pv-wiz-mega-pass" name="module_cfg_mega_password" type="password" autocomplete="off" />
                   <label for="pv-wiz-mega-folder" style="margin-top: 0.35rem;">Folder name (optional)</label>
                   <input id="pv-wiz-mega-folder" name="module_cfg_mega_folder_name" type="text" />
+                </div>
+                <div class="pv-module-config-group" data-provider="gdrive" style="display: none;">
+                  <label for="pv-wiz-gd-token">Google Drive access token</label>
+                  <input id="pv-wiz-gd-token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off" />
+                  <label for="pv-wiz-gd-folder" style="margin-top: 0.35rem;">Folder ID (optional)</label>
+                  <input id="pv-wiz-gd-folder" name="module_cfg_gdrive_folder_id" type="text" />
+                </div>
+                <div class="pv-module-config-group" data-provider="onedrive" style="display: none;">
+                  <label for="pv-wiz-od-token">OneDrive access token</label>
+                  <input id="pv-wiz-od-token" name="module_cfg_onedrive_access_token" type="password" autocomplete="off" />
+                  <label for="pv-wiz-od-root" style="margin-top: 0.35rem;">Root path (optional)</label>
+                  <input id="pv-wiz-od-root" name="module_cfg_onedrive_root_path" type="text" />
+                </div>
+                <div class="pv-module-config-group" data-provider="box" style="display: none;">
+                  <label for="pv-wiz-box-token">Box access token</label>
+                  <input id="pv-wiz-box-token" name="module_cfg_box_access_token" type="password" autocomplete="off" />
+                  <label for="pv-wiz-box-folder" style="margin-top: 0.35rem;">Folder ID (optional)</label>
+                  <input id="pv-wiz-box-folder" name="module_cfg_box_folder_id" type="text" />
+                </div>
+                <div class="pv-module-config-group" data-provider="swift" style="display: none;">
+                  <label for="pv-wiz-swift-url">Storage URL</label>
+                  <input id="pv-wiz-swift-url" name="module_cfg_swift_storage_url" type="text" />
+                  <label for="pv-wiz-swift-token" style="margin-top: 0.35rem;">Auth token</label>
+                  <input id="pv-wiz-swift-token" name="module_cfg_swift_auth_token" type="password" autocomplete="off" />
+                  <label for="pv-wiz-swift-container" style="margin-top: 0.35rem;">Container</label>
+                  <input id="pv-wiz-swift-container" name="module_cfg_swift_container" type="text" />
+                </div>
+                <div class="pv-module-config-group" data-provider="pcloud" style="display: none;">
+                  <label for="pv-wiz-pc-token">pCloud access token</label>
+                  <input id="pv-wiz-pc-token" name="module_cfg_pcloud_access_token" type="password" autocomplete="off" />
+                  <label for="pv-wiz-pc-path" style="margin-top: 0.35rem;">Path (optional)</label>
+                  <input id="pv-wiz-pc-path" name="module_cfg_pcloud_path" type="text" />
                 </div>
               </div>
             </div>

@@ -24,6 +24,9 @@ from .models import (
     CameraStoragePolicy,
     CameraUrlPattern,
     Property,
+    StorageModule,
+    StorageModuleEvent,
+    StorageModuleWriteStat,
     UploadQueueItem,
 )
 from .storage_providers import StorageProvider, build_storage_providers
@@ -414,9 +417,23 @@ class CameraWorker(threading.Thread):
                         data,
                         str(exc),
                     )
+                    self._write_stat(
+                        provider.name,
+                        None,
+                        len(data),
+                        False,
+                        str(exc),
+                    )
                     continue
 
             self._create_camera_recording(provider.name, storage_key)
+            self._write_stat(
+                provider.name,
+                storage_key,
+                len(data),
+                True,
+                None,
+            )
         temp_path.unlink(missing_ok=True)
 
     def _record_segment_gstreamer(self) -> None:
@@ -503,8 +520,22 @@ class CameraWorker(threading.Thread):
                     data,
                     str(exc),
                 )
+                self._write_stat(
+                    provider.name,
+                    None,
+                    len(data),
+                    False,
+                    str(exc),
+                )
                 continue
             self._create_camera_recording(provider.name, storage_key)
+            self._write_stat(
+                provider.name,
+                storage_key,
+                len(data),
+                True,
+                None,
+            )
         temp_path.unlink(missing_ok=True)
 
     def _segment_temp_dir(self) -> Path:
@@ -530,6 +561,62 @@ class CameraWorker(threading.Thread):
             )
             session.add(row)
             session.commit()
+
+    def _write_stat(
+        self,
+        provider_name: str,
+        storage_key: Optional[str],
+        bytes_written: int,
+        ok: bool,
+        error: Optional[str],
+    ) -> None:
+        engine = get_record_engine()
+        if engine is None:
+            return
+        StorageModuleWriteStat.__table__.create(bind=engine, checkfirst=True)
+        StorageModule.__table__.create(bind=engine, checkfirst=True)
+        StorageModuleEvent.__table__.create(bind=engine, checkfirst=True)
+        module_id_val: Optional[int] = None
+        module_name_val = str(provider_name or "")
+        with Session(engine) as session:
+            try:
+                mod = (
+                    session.query(StorageModule)
+                    .filter(StorageModule.name == module_name_val)
+                    .first()
+                )
+                if mod is not None:
+                    module_id_val = int(mod.id)
+                    module_name_val = str(mod.name or module_name_val)
+            except Exception:  # noqa: BLE001
+                module_id_val = None
+
+            try:
+                session.add(
+                    StorageModuleWriteStat(
+                        module_id=module_id_val,
+                        module_name=module_name_val,
+                        device_id=int(self.config.device_id),
+                        storage_key=str(storage_key or "")[:512] if storage_key else None,
+                        bytes_written=int(bytes_written) if bytes_written is not None else None,
+                        ok=1 if ok else 0,
+                        error=str(error)[:512] if error else None,
+                    )
+                )
+                if not ok and error:
+                    session.add(
+                        StorageModuleEvent(
+                            module_id=module_id_val,
+                            module_name=module_name_val,
+                            level="error",
+                            event_type="write_error",
+                            message=str(error)[:1024],
+                            stream_id=str(self.config.device_id),
+                        )
+                    )
+                session.commit()
+            except Exception:  # noqa: BLE001
+                return
 
     def _enqueue_upload_failure(
         self,
@@ -671,6 +758,9 @@ class UploadQueueWorker(threading.Thread):
             return
         UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
         CameraRecording.__table__.create(bind=engine, checkfirst=True)
+        StorageModuleWriteStat.__table__.create(bind=engine, checkfirst=True)
+        StorageModule.__table__.create(bind=engine, checkfirst=True)
+        StorageModuleEvent.__table__.create(bind=engine, checkfirst=True)
         with Session(engine) as session:
             items = (
                 session.query(UploadQueueItem)
@@ -690,6 +780,30 @@ class UploadQueueWorker(threading.Thread):
                     item.attempts = (item.attempts or 0) + 1
                     item.status = "failed"
                     item.last_error = "Unknown provider"
+                    try:
+                        session.add(
+                            StorageModuleEvent(
+                                module_id=None,
+                                module_name=str(item.provider_name or ""),
+                                level="error",
+                                event_type="upload_provider_missing",
+                                message="Unknown provider",
+                                stream_id=str(item.device_id),
+                            )
+                        )
+                        session.add(
+                            StorageModuleWriteStat(
+                                module_id=None,
+                                module_name=str(item.provider_name or ""),
+                                device_id=int(item.device_id),
+                                storage_key=None,
+                                bytes_written=int(len(item.payload or b"")),
+                                ok=0,
+                                error="Unknown provider",
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
                     session.add(item)
                     session.commit()
                     continue
@@ -717,6 +831,37 @@ class UploadQueueWorker(threading.Thread):
                     except Exception as exc:  # noqa: BLE001
                         item.attempts = (item.attempts or 0) + 1
                         item.last_error = str(exc)[:512]
+                        try:
+                            mod = (
+                                session.query(StorageModule)
+                                .filter(StorageModule.name == str(item.provider_name or ""))
+                                .first()
+                            )
+                            mod_id = int(mod.id) if mod is not None else None
+                            mod_name = str(mod.name if mod is not None else (item.provider_name or ""))
+                            session.add(
+                                StorageModuleWriteStat(
+                                    module_id=mod_id,
+                                    module_name=mod_name,
+                                    device_id=int(item.device_id),
+                                    storage_key=None,
+                                    bytes_written=int(len(item.payload or b"")),
+                                    ok=0,
+                                    error=str(exc)[:512],
+                                )
+                            )
+                            session.add(
+                                StorageModuleEvent(
+                                    module_id=mod_id,
+                                    module_name=mod_name,
+                                    level="error",
+                                    event_type="upload_error",
+                                    message=str(exc)[:1024],
+                                    stream_id=str(item.device_id),
+                                )
+                            )
+                        except Exception:  # noqa: BLE001
+                            pass
                         if item.attempts >= self.max_attempts:
                             item.status = "failed"
                         session.add(item)
@@ -728,6 +873,27 @@ class UploadQueueWorker(threading.Thread):
                     storage_provider=item.provider_name,
                     storage_key=storage_key,
                 )
+                try:
+                    mod = (
+                        session.query(StorageModule)
+                        .filter(StorageModule.name == str(item.provider_name or ""))
+                        .first()
+                    )
+                    mod_id = int(mod.id) if mod is not None else None
+                    mod_name = str(mod.name if mod is not None else (item.provider_name or ""))
+                    session.add(
+                        StorageModuleWriteStat(
+                            module_id=mod_id,
+                            module_name=mod_name,
+                            device_id=int(item.device_id),
+                            storage_key=str(storage_key or "")[:512] if storage_key else None,
+                            bytes_written=int(len(item.payload or b"")),
+                            ok=1,
+                            error=None,
+                        )
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
                 session.add(recording)
                 session.delete(item)
                 session.commit()

@@ -2398,12 +2398,14 @@ def storage_settings():
     streams_rows = []
     upload_rows = []
     logs_rows = []
+    recent_error_rows = []
     if selected_module is not None:
         engine = get_record_engine()
         if engine is not None:
             CameraRecording.__table__.create(bind=engine, checkfirst=True)
             UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
             StorageModuleEvent.__table__.create(bind=engine, checkfirst=True)
+            StorageModuleWriteStat.__table__.create(bind=engine, checkfirst=True)
             with Session(engine) as session:
                 last_row = (
                     session.query(CameraRecording)
@@ -2424,9 +2426,61 @@ def storage_settings():
                     .scalar()
                     or 0
                 )
+
+                cutoff_15m = datetime.now(timezone.utc) - timedelta(minutes=15)
+                last_ok_row = (
+                    session.query(StorageModuleWriteStat)
+                    .filter(
+                        StorageModuleWriteStat.module_name == selected_module.name,
+                        StorageModuleWriteStat.ok == 1,
+                    )
+                    .order_by(StorageModuleWriteStat.created_at.desc())
+                    .first()
+                )
+                last_err_row = (
+                    session.query(StorageModuleWriteStat)
+                    .filter(
+                        StorageModuleWriteStat.module_name == selected_module.name,
+                        StorageModuleWriteStat.ok == 0,
+                    )
+                    .order_by(StorageModuleWriteStat.created_at.desc())
+                    .first()
+                )
+                recent_ok = (
+                    session.query(
+                        func.count(StorageModuleWriteStat.id),
+                        func.coalesce(func.sum(StorageModuleWriteStat.bytes_written), 0),
+                    )
+                    .filter(
+                        StorageModuleWriteStat.module_name == selected_module.name,
+                        StorageModuleWriteStat.ok == 1,
+                        StorageModuleWriteStat.created_at >= cutoff_15m,
+                    )
+                    .first()
+                )
+                writes_15m = int(recent_ok[0] or 0) if recent_ok else 0
+                bytes_15m = int(recent_ok[1] or 0) if recent_ok else 0
+
+                recent_error_rows = (
+                    session.query(StorageModuleEvent)
+                    .filter(
+                        (StorageModuleEvent.module_id == int(selected_module.id))
+                        | (StorageModuleEvent.module_name == selected_module.name)
+                    )
+                    .filter(StorageModuleEvent.level == "error")
+                    .order_by(StorageModuleEvent.created_at.desc())
+                    .limit(5)
+                    .all()
+                )
+
                 selected_metrics = {
                     "last_write_text": last_write_text,
                     "active_streams": int(active_streams),
+                    "last_ok_text": str(last_ok_row.created_at) if last_ok_row is not None and getattr(last_ok_row, "created_at", None) else "n/a",
+                    "last_error_text": str(last_err_row.created_at) if last_err_row is not None and getattr(last_err_row, "created_at", None) else "n/a",
+                    "last_error_message": str(last_err_row.error)[:200] if last_err_row is not None and getattr(last_err_row, "error", None) else "",
+                    "writes_15m": writes_15m,
+                    "bytes_15m": bytes_15m,
                 }
                 streams_rows = (
                     session.query(CameraRecording)
@@ -2465,6 +2519,7 @@ def storage_settings():
         streams_rows=streams_rows,
         upload_rows=upload_rows,
         logs_rows=logs_rows,
+        recent_error_rows=recent_error_rows,
         s3=s3_info,
         gcs=gcs_info,
         azure=azure_info,
