@@ -1,10 +1,35 @@
 <div class="pv-module-config-group" data-provider="gdrive" style="display: none;">
-  <div class="pv-help">Upload recordings to Google Drive. Tokens are never shown after saving.</div>
+  <div class="pv-help">Upload recordings to Google Drive using a Google OAuth “Web application” client. Use <strong>Connect Google Drive</strong> to generate and store a refresh token.</div>
 
   <div class="pv-field-group">
-    <label for="module_cfg_gdrive_access_token">Access token</label>
+    <label for="module_cfg_gdrive_client_id">OAuth Client ID</label>
+    <input id="module_cfg_gdrive_client_id" name="module_cfg_gdrive_client_id" type="text" value="{{ edit_cfg.get('client_id', '') if edit_module else '' }}" placeholder="xxxxxx.apps.googleusercontent.com" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help"><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console credentials</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_gdrive_client_secret">OAuth Client Secret</label>
+    <input id="module_cfg_gdrive_client_secret" name="module_cfg_gdrive_client_secret" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Client secrets are never echoed back after save for safety.</div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_gdrive_refresh_token">Refresh token</label>
+    <input id="module_cfg_gdrive_refresh_token" name="module_cfg_gdrive_refresh_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">This is stored once and used to automatically refresh access tokens. You can set this via the Connect button.</div>
+  </div>
+
+  {% if edit_module and not cfg_readonly %}
+    <div class="pv-field-group">
+      <button type="button" class="pv-button-secondary" id="pv-gdrive-connect" data-url="{{ url_for('main.gdrive_oauth_start', module_id=edit_module.id) }}">Connect Google Drive</button>
+      <div class="pv-help">Opens Google sign-in in a new tab and returns to this page after authorization.</div>
+    </div>
+  {% endif %}
+
+  <div class="pv-field-group">
+    <label for="module_cfg_gdrive_access_token">Access token (legacy)</label>
     <input id="module_cfg_gdrive_access_token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
-    <div class="pv-help">OAuth 2.0 access token with Drive scopes. <a href="https://developers.google.com/identity/protocols/oauth2" target="_blank" rel="noopener">OAuth 2.0</a> | <a href="https://developers.google.com/drive/api/guides/about-auth" target="_blank" rel="noopener">Drive auth</a></div>
+    <div class="pv-help">Legacy mode only (access tokens expire). Prefer client ID/secret + refresh token.</div>
   </div>
 
   <div class="pv-field-group">

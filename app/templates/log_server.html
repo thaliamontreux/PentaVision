@@ -256,10 +256,17 @@
           .then(function (data) {
             var events = (data && data.events) ? data.events : [];
             var health = (data && data.health) ? data.health : [];
+            var writes = (data && data.writes) ? data.writes : [];
+            var userEvents = (data && data.user_events) ? data.user_events : [];
 
             if (onlyErrors) {
               events = events.filter(function (e) { return String(e.level || '').toLowerCase() === 'error'; });
               health = health.filter(function (h) { return !h.ok; });
+              writes = writes.filter(function (w) { return !w.ok; });
+              userEvents = userEvents.filter(function (u) {
+                var sev = String(u.severity || '').toLowerCase();
+                return sev === 'error' || sev === 'warn' || sev === 'warning';
+              });
             }
 
             var html = '';
@@ -294,6 +301,42 @@
                   + '</div>'
                   + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(h.module_name) + ' · ' + esc(h.provider_type) + '</div>'
                   + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(h.message) + '</div>'
+                  + '</div>';
+              });
+              html += '</div>';
+            }
+
+            html += '<div style="font-weight: 600; margin: 0.75rem 0 0.4rem;">Write stats</div>';
+            if (!writes.length) {
+              html += '<div style="color: #9ca3af;">No write stats.</div>';
+            } else {
+              html += '<div style="display: grid; gap: 0.35rem;">';
+              writes.forEach(function (w) {
+                html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
+                  + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
+                  + '<div style="font-weight: 600;">' + (w.ok ? 'ok' : 'error') + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(w.created_at) + '</div>'
+                  + '</div>'
+                  + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(w.module_name) + ' · ' + esc(w.provider_type) + '</div>'
+                  + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">Key: <code>' + esc(w.storage_key) + '</code></div>'
+                  + '<div style="margin-top: 0.2rem; white-space: pre-wrap; color: #9ca3af;">Bytes: ' + esc(w.bytes) + ' · Duration: ' + esc(w.duration_ms) + 'ms</div>'
+                  + (w.ok ? '' : ('<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(w.error) + '</div>'))
+                  + '</div>';
+              });
+              html += '</div>';
+            }
+
+            if (userEvents && userEvents.length) {
+              html += '<div style="font-weight: 600; margin: 0.75rem 0 0.4rem;">User audit events</div>';
+              html += '<div style="display: grid; gap: 0.35rem;">';
+              userEvents.forEach(function (u) {
+                html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
+                  + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
+                  + '<div style="font-weight: 600;">' + esc(u.severity) + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(u.created_at) + '</div>'
+                  + '</div>'
+                  + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(u.event_type) + ' · user ' + esc(u.user_id) + ' · ' + esc(u.ip) + '</div>'
+                  + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(u.message) + '</div>'
                   + '</div>';
               });
               html += '</div>';

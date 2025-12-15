@@ -4,12 +4,39 @@
   "category": "File sync / consumer cloud",
   "fields": [
     {
+      "key": "client_id",
+      "label": "OAuth Client ID",
+      "type": "text",
+      "form_key": "module_cfg_gdrive_client_id",
+      "required": false,
+      "help": "Google OAuth 2.0 Client ID for a Web application.",
+      "link": "https://console.cloud.google.com/apis/credentials"
+    },
+    {
+      "key": "client_secret",
+      "label": "OAuth Client Secret",
+      "type": "password",
+      "form_key": "module_cfg_gdrive_client_secret",
+      "required": false,
+      "help": "Google OAuth 2.0 Client Secret for your Web application client.",
+      "link": "https://console.cloud.google.com/apis/credentials"
+    },
+    {
+      "key": "refresh_token",
+      "label": "Refresh token",
+      "type": "password",
+      "form_key": "module_cfg_gdrive_refresh_token",
+      "required": false,
+      "help": "Long-lived token used by the server to automatically obtain fresh access tokens.",
+      "link": "https://developers.google.com/identity/protocols/oauth2/web-server"
+    },
+    {
       "key": "access_token",
-      "label": "Google Drive access token",
+      "label": "Access token (legacy)",
       "type": "password",
       "form_key": "module_cfg_gdrive_access_token",
-      "required": true,
-      "help": "OAuth 2.0 access token with Drive scopes.",
+      "required": false,
+      "help": "Legacy mode only (access tokens expire quickly). Prefer refresh token.",
       "link": "https://developers.google.com/drive/api/guides/about-auth"
     },
     {

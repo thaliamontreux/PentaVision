@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import pickle
+import secrets
 import time
 
 from flask import (
@@ -21,6 +22,7 @@ from flask import (
     session,
     url_for,
 )
+import requests
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
@@ -876,6 +878,180 @@ def streams_status():
         )
 
     return jsonify({"ok": True, "streams": streams})
+
+@bp.get("/storage/gdrive/oauth/start")
+def gdrive_oauth_start():
+    user = get_current_user()
+    if user is None:
+        return redirect(url_for("main.login"))
+    if not user_has_role(user, "System Administrator"):
+        abort(403)
+
+    module_id_raw = (request.args.get("module_id") or "").strip()
+    try:
+        module_id = int(module_id_raw)
+    except Exception:
+        module_id = None
+    if module_id is None:
+        return redirect(url_for("main.storage_settings", pv_toast="Invalid module id"))
+
+    record_engine = get_record_engine()
+    if record_engine is None:
+        return redirect(url_for("main.storage_settings", pv_toast="Record database is not configured"))
+
+    with Session(record_engine) as session_db:
+        module = session_db.get(StorageModule, module_id)
+        if module is None:
+            return redirect(url_for("main.storage_settings", pv_toast="Storage module not found"))
+        if (module.provider_type or "").strip().lower() != "gdrive":
+            return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Module is not Google Drive"))
+
+        try:
+            cfg = json.loads(module.config_json) if module.config_json else {}
+        except Exception:  # noqa: BLE001
+            cfg = {}
+
+    client_id = str(cfg.get("client_id") or "").strip()
+    client_secret_present = bool(str(cfg.get("client_secret") or "").strip())
+    if not client_id or not client_secret_present:
+        return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Enter Client ID and Client Secret, then Save, before connecting"))
+
+    state = secrets.token_urlsafe(24)
+    try:
+        session["gdrive_oauth_state"] = {
+            "state": state,
+            "module_id": int(module_id),
+            "at": int(time.time()),
+        }
+    except Exception:  # noqa: BLE001
+        pass
+
+    redirect_uri = url_for("main.gdrive_oauth_callback", _external=True)
+    scope = "https://www.googleapis.com/auth/drive.file"
+    auth_url = (
+        "https://accounts.google.com/o/oauth2/v2/auth"
+        "?response_type=code"
+        f"&client_id={requests.utils.quote(client_id)}"
+        f"&redirect_uri={requests.utils.quote(redirect_uri)}"
+        f"&scope={requests.utils.quote(scope)}"
+        "&access_type=offline"
+        "&include_granted_scopes=true"
+        "&prompt=consent"
+        f"&state={requests.utils.quote(state)}"
+    )
+    return redirect(auth_url)
+
+
+@bp.get("/storage/gdrive/oauth/callback")
+def gdrive_oauth_callback():
+    user = get_current_user()
+    if user is None:
+        return redirect(url_for("main.login"))
+    if not user_has_role(user, "System Administrator"):
+        abort(403)
+
+    code = (request.args.get("code") or "").strip()
+    state = (request.args.get("state") or "").strip()
+    err = (request.args.get("error") or "").strip()
+
+    st = None
+    try:
+        st = session.get("gdrive_oauth_state")
+    except Exception:  # noqa: BLE001
+        st = None
+
+    try:
+        session.pop("gdrive_oauth_state", None)
+    except Exception:  # noqa: BLE001
+        pass
+
+    module_id = None
+    if isinstance(st, dict) and st.get("state") == state:
+        try:
+            module_id = int(st.get("module_id"))
+        except Exception:
+            module_id = None
+
+    if not module_id:
+        return redirect(url_for("main.storage_settings", pv_toast="Google Drive OAuth state mismatch. Please try again."))
+
+    if err:
+        return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast=f"Google OAuth error: {err}"))
+    if not code:
+        return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Missing authorization code from Google"))
+
+    record_engine = get_record_engine()
+    if record_engine is None:
+        return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Record database is not configured"))
+
+    with Session(record_engine) as session_db:
+        module = session_db.get(StorageModule, int(module_id))
+        if module is None:
+            return redirect(url_for("main.storage_settings", pv_toast="Storage module not found"))
+        if (module.provider_type or "").strip().lower() != "gdrive":
+            return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Module is not Google Drive"))
+
+        try:
+            cfg = json.loads(module.config_json) if module.config_json else {}
+        except Exception:  # noqa: BLE001
+            cfg = {}
+
+        client_id = str(cfg.get("client_id") or "").strip()
+        client_secret = str(cfg.get("client_secret") or "").strip()
+        if not client_id or not client_secret:
+            return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Missing client credentials on module (save first)"))
+
+        token_url = "https://oauth2.googleapis.com/token"
+        redirect_uri = url_for("main.gdrive_oauth_callback", _external=True)
+        payload = {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        resp = requests.post(token_url, data=payload, timeout=20)
+        if resp.status_code >= 400:
+            return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast=f"Token exchange failed: {resp.text[:180]}"))
+        try:
+            data = resp.json()
+        except Exception:  # noqa: BLE001
+            return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Token exchange returned invalid JSON"))
+
+        refresh_token = str(data.get("refresh_token") or "").strip()
+        access_token = str(data.get("access_token") or "").strip()
+        if not refresh_token:
+            return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="No refresh token returned. Ensure prompt=consent and try again."))
+
+        cfg["refresh_token"] = refresh_token
+        if access_token:
+            cfg["access_token"] = access_token
+
+        module.config_json = json.dumps(cfg) if cfg else None
+        module.updated_at = datetime.now(timezone.utc)
+        session_db.add(module)
+        try:
+            session_db.commit()
+        except Exception:  # noqa: BLE001
+            session_db.rollback()
+            return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Failed to save refresh token"))
+
+        try:
+            StorageModuleEvent.__table__.create(bind=record_engine, checkfirst=True)
+            session_db.add(
+                StorageModuleEvent(
+                    module_id=int(module.id),
+                    module_name=str(module.name or ""),
+                    level="info",
+                    event_type="gdrive_oauth",
+                    message="Google Drive OAuth connected (refresh token saved).",
+                )
+            )
+            session_db.commit()
+        except Exception:  # noqa: BLE001
+            pass
+
+    return redirect(url_for("main.storage_settings", edit_module=module_id, pv_toast="Google Drive connected. Refresh token saved."))
 
 
 def _decode_image_from_request(data):
@@ -1736,6 +1912,18 @@ def storage_settings():
                             config: dict[str, object],
                         ) -> list[str]:
                             provider_type = (provider_type or "").strip().lower()
+                            if provider_type == "gdrive":
+                                client_id = str(config.get("client_id") or "").strip()
+                                client_secret = str(config.get("client_secret") or "").strip()
+                                refresh_token = str(config.get("refresh_token") or "").strip()
+                                access_token = str(config.get("access_token") or "").strip()
+                                if client_id and client_secret and refresh_token:
+                                    return []
+                                if access_token:
+                                    return []
+                                return [
+                                    "OAuth Client ID + Client Secret + Refresh token (recommended) or Access token (legacy)"
+                                ]
                             definition = _load_provider_definition(provider_type)
                             fields = list(definition.get("fields") or [])
                             missing: list[str] = []

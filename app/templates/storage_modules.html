@@ -710,6 +710,31 @@
         }, 10000);
       }
 
+      try {
+        var qs = new URLSearchParams(window.location.search || '');
+        var toastMsg = qs.get('pv_toast') || '';
+        if (toastMsg) {
+          showToast(toastMsg, true);
+        }
+      } catch (e) {
+      }
+
+      try {
+        var gdriveBtn = document.getElementById('pv-gdrive-connect');
+        if (gdriveBtn) {
+          gdriveBtn.addEventListener('click', function () {
+            var url = gdriveBtn.getAttribute('data-url') || '';
+            if (!url) return;
+            try {
+              window.open(url, '_blank', 'noopener');
+            } catch (e) {
+              window.location.href = url;
+            }
+          });
+        }
+      } catch (e) {
+      }
+
       var moduleTestForms = document.querySelectorAll('.pv-module-test-form');
       if (moduleTestForms && moduleTestForms.length) {
         moduleTestForms.forEach(function (f) {

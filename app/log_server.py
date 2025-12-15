@@ -113,6 +113,8 @@ def create_log_server() -> Flask:
 
         events: list[dict[str, Any]] = []
         health: list[dict[str, Any]] = []
+        writes: list[dict[str, Any]] = []
+        user_events: list[dict[str, Any]] = []
         try:
             with engine.connect() as conn:
                 ev_rows = conn.execute(
@@ -140,6 +142,35 @@ def create_log_server() -> Flask:
                     {"lim": limit},
                 ).mappings().all()
                 health = [dict(r) for r in hc_rows]
+
+                ws_rows = conn.execute(
+                    text(
+                        """
+                        SELECT created_at, module_id, module_name, provider_type, ok, storage_key, bytes, duration_ms, error
+                        FROM storage_module_write_stats
+                        ORDER BY created_at DESC
+                        LIMIT :lim
+                        """
+                    ),
+                    {"lim": limit},
+                ).mappings().all()
+                writes = [dict(r) for r in ws_rows]
+
+                try:
+                    ue_rows = conn.execute(
+                        text(
+                            """
+                            SELECT created_at, event_type, severity, message, user_id, ip
+                            FROM audit_events
+                            ORDER BY created_at DESC
+                            LIMIT :lim
+                            """
+                        ),
+                        {"lim": limit},
+                    ).mappings().all()
+                    user_events = [dict(r) for r in ue_rows]
+                except Exception:  # noqa: BLE001
+                    user_events = []
         except Exception as exc:  # noqa: BLE001
             return jsonify({"error": f"Failed to load audit tables: {exc}"}), 500
 
@@ -177,6 +208,31 @@ def create_log_server() -> Flask:
                         "duration_ms": r.get("duration_ms"),
                     }
                     for r in health
+                ],
+                "writes": [
+                    {
+                        "created_at": _dt(r.get("created_at")),
+                        "module_id": r.get("module_id"),
+                        "module_name": str(r.get("module_name") or ""),
+                        "provider_type": str(r.get("provider_type") or ""),
+                        "ok": bool(r.get("ok") or 0),
+                        "storage_key": str(r.get("storage_key") or ""),
+                        "bytes": int(r.get("bytes") or 0),
+                        "duration_ms": r.get("duration_ms"),
+                        "error": str(r.get("error") or ""),
+                    }
+                    for r in writes
+                ],
+                "user_events": [
+                    {
+                        "created_at": _dt(r.get("created_at")),
+                        "event_type": str(r.get("event_type") or ""),
+                        "severity": str(r.get("severity") or ""),
+                        "message": str(r.get("message") or ""),
+                        "user_id": r.get("user_id"),
+                        "ip": str(r.get("ip") or ""),
+                    }
+                    for r in user_events
                 ],
             }
         )

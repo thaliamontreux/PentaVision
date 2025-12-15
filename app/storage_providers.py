@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
 from urllib.parse import quote_plus
+import time
 
 import boto3
 from flask import Flask
@@ -668,13 +669,71 @@ class SCPStorageProvider(StorageProvider):
 
 
 class GoogleDriveStorageProvider(StorageProvider):
-    def __init__(self, access_token: str, folder_id: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        access_token: Optional[str] = None,
+        folder_id: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+    ) -> None:
         # Logical provider type; the actual provider name used by workers is
         # overridden by the StorageModule name so multiple instances can
         # coexist.
         self.name = "gdrive"
-        self.access_token = access_token
-        self.folder_id = folder_id or None
+        self._folder_id = folder_id or None
+        self._client_id = (client_id or "").strip() or None
+        self._client_secret = (client_secret or "").strip() or None
+        self._refresh_token = (refresh_token or "").strip() or None
+        self._access_token = (access_token or "").strip() or None
+        self._access_token_expires_at = None
+
+    def _get_access_token(self) -> str:
+        if self._access_token and self._refresh_token is None:
+            return self._access_token
+
+        now_ts = time.time()
+        if (
+            self._access_token
+            and self._access_token_expires_at is not None
+            and (self._access_token_expires_at - 30) > now_ts
+        ):
+            return self._access_token
+
+        if not (self._client_id and self._client_secret and self._refresh_token):
+            if self._access_token:
+                return self._access_token
+            raise RuntimeError("Google Drive provider is missing OAuth credentials")
+
+        token_url = "https://oauth2.googleapis.com/token"
+        payload = {
+            "client_id": self._client_id,
+            "client_secret": self._client_secret,
+            "refresh_token": self._refresh_token,
+            "grant_type": "refresh_token",
+        }
+        resp = requests.post(token_url, data=payload, timeout=20)
+        if resp.status_code >= 400:
+            raise RuntimeError(
+                f"Google OAuth token refresh failed with status {resp.status_code}: {resp.text[:512]}"
+            )
+        try:
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Google OAuth token refresh returned invalid JSON") from exc
+
+        token = str(data.get("access_token") or "").strip()
+        if not token:
+            raise RuntimeError("Google OAuth token refresh response missing access_token")
+        expires_in = data.get("expires_in")
+        try:
+            expires_in_val = int(expires_in) if expires_in is not None else 3600
+        except Exception:  # noqa: BLE001
+            expires_in_val = 3600
+
+        self._access_token = token
+        self._access_token_expires_at = now_ts + max(60, expires_in_val)
+        return token
 
     def upload(self, data: bytes, key_hint: str) -> str:
         """Upload a recording to Google Drive using the HTTP API.
@@ -690,8 +749,8 @@ class GoogleDriveStorageProvider(StorageProvider):
         filename = f"recording_{now}_{safe_hint}.mp4"
 
         metadata: dict[str, object] = {"name": filename}
-        if self.folder_id:
-            metadata["parents"] = [self.folder_id]
+        if self._folder_id:
+            metadata["parents"] = [self._folder_id]
 
         boundary = "----pentavision-drive-boundary"
         meta_json = json.dumps(metadata).encode("utf-8")
@@ -708,7 +767,7 @@ class GoogleDriveStorageProvider(StorageProvider):
         body = body_prefix + data + body_suffix
 
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {self._get_access_token()}",
             "Content-Type": f"multipart/related; boundary={boundary}",
         }
         url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
@@ -733,7 +792,7 @@ class GoogleDriveStorageProvider(StorageProvider):
 
     def delete(self, storage_key: str) -> None:
         try:
-            headers = {"Authorization": f"Bearer {self.access_token}"}
+            headers = {"Authorization": f"Bearer {self._get_access_token()}"}
             url = f"https://www.googleapis.com/drive/v3/files/{storage_key}"
             response = requests.delete(url, headers=headers)
             if response.status_code >= 400:
@@ -1221,10 +1280,19 @@ def _build_provider_for_module(
         if host:
             provider = SCPStorageProvider(host, port, username, password, private_key, base_dir)
     elif ptype == "gdrive":
-        access_token = str(cfg.get("access_token") or "").strip()
+        access_token = str(cfg.get("access_token") or "").strip() or None
         folder_id = str(cfg.get("folder_id") or "").strip() or None
-        if access_token:
-            provider = GoogleDriveStorageProvider(access_token, folder_id)
+        client_id = str(cfg.get("client_id") or "").strip() or None
+        client_secret = str(cfg.get("client_secret") or "").strip() or None
+        refresh_token = str(cfg.get("refresh_token") or "").strip() or None
+        if (client_id and client_secret and refresh_token) or access_token:
+            provider = GoogleDriveStorageProvider(
+                access_token=access_token,
+                folder_id=folder_id,
+                client_id=client_id,
+                client_secret=client_secret,
+                refresh_token=refresh_token,
+            )
     elif ptype == "onedrive":
         access_token = str(cfg.get("access_token") or "").strip()
         root_path = str(cfg.get("root_path") or "").strip() or None

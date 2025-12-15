@@ -1,10 +1,27 @@
 <div class="pv-module-config-group" data-provider="gdrive" style="display: none;">
-  <div class="pv-help">Google Drive token and optional destination folder.</div>
+  <div class="pv-help">Google Drive OAuth (Web application). For best results, enter client ID/secret and refresh token. You can also save first and then use Connect in the edit screen.</div>
 
   <div class="pv-field-group">
-    <label for="pv-wiz-gd-token">Access token</label>
+    <label for="pv-wiz-gd-client-id">OAuth Client ID</label>
+    <input id="pv-wiz-gd-client-id" name="module_cfg_gdrive_client_id" type="text" placeholder="xxxxxx.apps.googleusercontent.com" />
+    <div class="pv-help"><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console credentials</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-gd-client-secret">OAuth Client Secret</label>
+    <input id="pv-wiz-gd-client-secret" name="module_cfg_gdrive_client_secret" type="password" autocomplete="off" />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-gd-refresh">Refresh token</label>
+    <input id="pv-wiz-gd-refresh" name="module_cfg_gdrive_refresh_token" type="password" autocomplete="off" />
+    <div class="pv-help"><a href="https://developers.google.com/identity/protocols/oauth2/web-server" target="_blank" rel="noopener">OAuth web server flow</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-gd-token">Access token (legacy)</label>
     <input id="pv-wiz-gd-token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off" />
-    <div class="pv-help"><a href="https://developers.google.com/identity/protocols/oauth2" target="_blank" rel="noopener">Google OAuth 2.0</a> | <a href="https://developers.google.com/drive/api/guides/about-auth" target="_blank" rel="noopener">Drive auth</a></div>
+    <div class="pv-help">Legacy mode only (access tokens expire quickly).</div>
   </div>
 
   <div class="pv-field-group">
