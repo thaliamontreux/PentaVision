@@ -1673,6 +1673,26 @@ def storage_settings():
                                 config[key] = coerced
 
                             if not fields:
+                                try:
+                                    if provider_type == "s3":
+                                        raw_bucket = request.form.get("module_cfg_s3_bucket")
+                                        raw_endpoint = request.form.get("module_cfg_s3_endpoint")
+                                        raw_region = request.form.get("module_cfg_s3_region")
+                                        raw_ak = request.form.get("module_cfg_s3_access_key")
+                                        raw_sk = request.form.get("module_cfg_s3_secret_key")
+
+                                        if raw_bucket is not None and str(raw_bucket).strip():
+                                            config["bucket"] = str(raw_bucket).strip()
+                                        if raw_endpoint is not None and str(raw_endpoint).strip():
+                                            config["endpoint"] = str(raw_endpoint).strip()
+                                        if raw_region is not None and str(raw_region).strip():
+                                            config["region"] = str(raw_region).strip()
+                                        if raw_ak is not None and str(raw_ak).strip():
+                                            config["access_key"] = str(raw_ak).strip()
+                                        if raw_sk is not None and str(raw_sk).strip():
+                                            config["secret_key"] = str(raw_sk).strip()
+                                except Exception:  # noqa: BLE001
+                                    pass
                                 return config
 
                             try:
