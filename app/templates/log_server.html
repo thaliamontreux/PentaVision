@@ -120,6 +120,15 @@
         <div style="display: flex; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
           <button id="pv-audit-refresh" class="pv-button-secondary" type="button">Refresh</button>
           <button id="pv-audit-errors" class="pv-button-secondary" type="button">Errors</button>
+          <label style="display: inline-flex; align-items: center; gap: 0.35rem; color: #9ca3af; margin-left: auto;">
+            <input id="pv-audit-auto" type="checkbox" />
+            <span>Auto</span>
+          </label>
+          <div style="display: inline-flex; align-items: center; gap: 0.4rem; color: #9ca3af;">
+            <label for="pv-audit-interval">Refresh</label>
+            <input id="pv-audit-interval" type="range" min="0" max="4" step="1" value="2" style="width: 120px;" />
+            <span id="pv-audit-interval-label" style="min-width: 2.5rem; text-align: right;">10s</span>
+          </div>
         </div>
         <div id="pv-audit-output" style="padding: 0.75rem; overflow: auto; font-size: 12px; line-height: 1.35; flex: 1;"></div>
       </div>
@@ -141,6 +150,10 @@
       var auditOut = document.getElementById('pv-audit-output');
       var auditBtn = document.getElementById('pv-audit-refresh');
       var auditErrBtn = document.getElementById('pv-audit-errors');
+      var auditAutoEl = document.getElementById('pv-audit-auto');
+      var auditIntervalEl = document.getElementById('pv-audit-interval');
+      var auditIntervalLabelEl = document.getElementById('pv-audit-interval-label');
+      var auditOnlyErrors = false;
 
       function esc(s) {
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -251,6 +264,7 @@
 
       function fetchAudit(onlyErrors) {
         if (!auditOut) return;
+        auditOnlyErrors = !!onlyErrors;
         fetch('/api/audit/storage?limit=300')
           .then(function (r) { return r.json(); })
           .then(function (data) {
@@ -354,6 +368,63 @@
       if (auditBtn) auditBtn.addEventListener('click', function () { fetchAudit(false); });
       if (auditErrBtn) auditErrBtn.addEventListener('click', function () { fetchAudit(true); });
 
+      function currentAuditIntervalMs() {
+        if (!auditIntervalEl) return 10000;
+        var idx = parseInt(auditIntervalEl.value || '2', 10);
+        if (isNaN(idx)) idx = 2;
+        idx = Math.max(0, Math.min(idx, 4));
+        var values = [1, 5, 10, 30, 60];
+        return values[idx] * 1000;
+      }
+
+      function updateAuditIntervalLabel() {
+        if (!auditIntervalLabelEl || !auditIntervalEl) return;
+        var idx = parseInt(auditIntervalEl.value || '2', 10);
+        if (isNaN(idx)) idx = 2;
+        idx = Math.max(0, Math.min(idx, 4));
+        var values = [1, 5, 10, 30, 60];
+        auditIntervalLabelEl.textContent = String(values[idx]) + 's';
+      }
+
+      var auditTimer = null;
+      function startAuditAutoRefresh() {
+        if (auditTimer) {
+          clearInterval(auditTimer);
+          auditTimer = null;
+        }
+        auditTimer = setInterval(function () {
+          if (auditAutoEl && auditAutoEl.checked) {
+            fetchAudit(!!auditOnlyErrors);
+          }
+        }, currentAuditIntervalMs());
+      }
+
+      if (auditAutoEl) {
+        auditAutoEl.checked = true;
+        auditAutoEl.addEventListener('change', function () {
+          if (auditAutoEl.checked) {
+            fetchAudit(!!auditOnlyErrors);
+            startAuditAutoRefresh();
+          } else if (auditTimer) {
+            clearInterval(auditTimer);
+            auditTimer = null;
+          }
+        });
+      }
+
+      if (auditIntervalEl) {
+        updateAuditIntervalLabel();
+        auditIntervalEl.addEventListener('input', function () {
+          updateAuditIntervalLabel();
+        });
+        auditIntervalEl.addEventListener('change', function () {
+          updateAuditIntervalLabel();
+          if (auditAutoEl && auditAutoEl.checked) {
+            startAuditAutoRefresh();
+          }
+        });
+      }
+
       function currentIntervalMs() {
         if (!intervalEl) return 5000;
         var idx = parseInt(intervalEl.value || '1', 10);
@@ -418,6 +489,7 @@
       fetchAudit(false);
 
       startAutoRefresh();
+      startAuditAutoRefresh();
     })();
   </script>
   </body>

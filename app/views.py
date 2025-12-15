@@ -1856,6 +1856,20 @@ def storage_settings():
                                     (module_row.name if module_row is not None else "")
                                 )
                                 mod_id = int(module_row.id) if module_row is not None else None
+
+                                try:
+                                    lvl = str(level or "info").strip().lower()
+                                    msg = str(message or "")
+                                    prefix = f"storage_module[{name_val or '?'} id={mod_id if mod_id is not None else '?'} type={event_type}] "
+                                    if lvl == "error":
+                                        current_app.logger.error(prefix + msg)
+                                    elif lvl == "warn" or lvl == "warning":
+                                        current_app.logger.warning(prefix + msg)
+                                    else:
+                                        current_app.logger.info(prefix + msg)
+                                except Exception:  # noqa: BLE001
+                                    pass
+
                                 session_db.add(
                                     StorageModuleEvent(
                                         module_id=mod_id,
@@ -1943,6 +1957,24 @@ def storage_settings():
                                 session_db.add(module)
                                 session_db.commit()
                                 saved = True
+
+                                try:
+                                    if provider_type == "sql_db":
+                                        from .storage_providers import (  # noqa: PLC0415
+                                            ExternalSQLDatabaseStorageProvider,
+                                            _build_provider_for_module,
+                                        )
+
+                                        provider = _build_provider_for_module(
+                                            current_app,
+                                            module,
+                                            config,
+                                        )
+                                        if isinstance(provider, ExternalSQLDatabaseStorageProvider):
+                                            provider.ensure_write_test_table()
+                                except Exception:  # noqa: BLE001
+                                    pass
+
                                 try:
                                     session.pop("storage_wizard_draft", None)
                                 except Exception:  # noqa: BLE001
@@ -2103,6 +2135,23 @@ def storage_settings():
                                     session_db.add(module)
                                     session_db.commit()
                                     saved = True
+
+                                    try:
+                                        if provider_type == "sql_db":
+                                            from .storage_providers import (  # noqa: PLC0415
+                                                ExternalSQLDatabaseStorageProvider,
+                                                _build_provider_for_module,
+                                            )
+
+                                            provider = _build_provider_for_module(
+                                                current_app,
+                                                module,
+                                                merged_cfg,
+                                            )
+                                            if isinstance(provider, ExternalSQLDatabaseStorageProvider):
+                                                provider.ensure_write_test_table()
+                                    except Exception:  # noqa: BLE001
+                                        pass
 
                                     try:
                                         edit_module = module
@@ -2427,6 +2476,18 @@ def storage_settings():
                                         # deletion failures should still surface
                                         raise
 
+                                    try:
+                                        if provider_type == "sql_db" and hasattr(impl, "_provider"):
+                                            from .storage_providers import (  # noqa: PLC0415
+                                                ExternalSQLDatabaseStorageProvider,
+                                            )
+
+                                            prov = getattr(impl, "_provider", None)
+                                            if isinstance(prov, ExternalSQLDatabaseStorageProvider):
+                                                prov.record_write_test()
+                                    except Exception:  # noqa: BLE001
+                                        pass
+
                                 except StorageError as exc:
                                     duration_ms = int((time.monotonic() - started) * 1000)
                                     module_test_result = {
@@ -2582,6 +2643,16 @@ def storage_settings():
                                     if not object_id:
                                         raise StorageError("Write test did not return an object id.")
                                     adapter.delete(object_id)
+
+                                    try:
+                                        from .storage_providers import (  # noqa: PLC0415
+                                            ExternalSQLDatabaseStorageProvider,
+                                        )
+
+                                        if isinstance(provider, ExternalSQLDatabaseStorageProvider):
+                                            provider.record_write_test()
+                                    except Exception:  # noqa: BLE001
+                                        pass
 
                                 except StorageError as exc:
                                     duration_ms = int((time.monotonic() - started) * 1000)

@@ -14,7 +14,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 from flask import Flask
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, delete as sa_delete, func, insert
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, delete as sa_delete, func, insert, select, update as sa_update
 from sqlalchemy.orm import Session
 from google.cloud import storage as gcs_storage
 from azure.storage.blob import BlobServiceClient
@@ -66,6 +66,7 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
         self._mssql_driver = str(mssql_driver or "").strip() or None
         self._engine = None
         self._table = None
+        self._test_table = None
 
     def _build_sqlalchemy_url(self) -> str:
         if not self._host:
@@ -124,6 +125,77 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
             Column("created_at", DateTime(timezone=True), server_default=func.now()),
         )
         metadata.create_all(self._engine)
+
+    def _ensure_test_table(self):
+        if self._test_table is not None:
+            return
+        self._ensure_engine()
+        metadata = MetaData()
+        self._test_table = Table(
+            "test",
+            metadata,
+            Column("id", Integer, primary_key=True, autoincrement=False),
+            Column("last_testdate", DateTime(timezone=True), nullable=True),
+            Column("currennt_testdate", DateTime(timezone=True), nullable=True),
+        )
+        metadata.create_all(self._engine)
+
+    def ensure_write_test_table(self) -> None:
+        self._ensure_test_table()
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                select(self._test_table.c.id).where(self._test_table.c.id == 1)
+            ).first()
+            if row is None:
+                conn.execute(
+                    insert(self._test_table).values(
+                        {
+                            "id": 1,
+                            "last_testdate": None,
+                            "currennt_testdate": None,
+                        }
+                    )
+                )
+
+    def record_write_test(self, at: datetime | None = None) -> None:
+        self._ensure_test_table()
+        now_dt = at or datetime.utcnow()
+        with self._engine.begin() as conn:
+            prev_current = None
+            try:
+                row = conn.execute(
+                    select(self._test_table.c.currennt_testdate).where(self._test_table.c.id == 1)
+                ).first()
+                if row is not None:
+                    prev_current = row[0]
+            except Exception:  # noqa: BLE001
+                prev_current = None
+
+            # Ensure row exists.
+            try:
+                exists = conn.execute(
+                    select(self._test_table.c.id).where(self._test_table.c.id == 1)
+                ).first()
+            except Exception:  # noqa: BLE001
+                exists = None
+
+            if exists is None:
+                conn.execute(
+                    insert(self._test_table).values(
+                        {
+                            "id": 1,
+                            "last_testdate": None,
+                            "currennt_testdate": now_dt,
+                        }
+                    )
+                )
+                return
+
+            conn.execute(
+                sa_update(self._test_table)
+                .where(self._test_table.c.id == 1)
+                .values({"last_testdate": prev_current, "currennt_testdate": now_dt})
+            )
 
     def upload(self, data: bytes, key_hint: str) -> str:
         self._ensure_table()
