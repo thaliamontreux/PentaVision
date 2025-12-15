@@ -58,7 +58,10 @@
       .pv-log-line.is-new {
         color: #86efac;
       }
-      .pv-log-line.is-old {
+      .pv-log-line.is-age-yellow {
+        color: #fde68a;
+      }
+      .pv-log-line.is-age-red {
         color: #fca5a5;
       }
       a { color: #93c5fd; text-decoration: none; }
@@ -148,6 +151,7 @@
           .then(function (r) { return r.text(); })
           .then(function (txt) {
             var raw = txt || '';
+            var nowMs = Date.now();
             var formattedLines = raw.split('\n').map(function (line) {
               line = String(line || '');
               if (!line.trim()) return '';
@@ -160,7 +164,9 @@
 
               var d = new Date(isoTs);
               var tsText = isoTs;
+              var tsMs = NaN;
               if (!isNaN(d.getTime())) {
+                tsMs = d.getTime();
                 var mm = String(d.getMonth() + 1).padStart(2, '0');
                 var dd = String(d.getDate()).padStart(2, '0');
                 var hh = String(d.getHours()).padStart(2, '0');
@@ -170,14 +176,17 @@
               }
 
               rest = rest.replace(/^\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{4}\]\s*/, '');
+              rest = rest.replace(/:\s*\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{4}\]\s*/, ': ');
 
-              return tsText + ' ' + rest;
+              return { text: (tsText + ' ' + rest), tsMs: tsMs };
             });
 
             var lastLineNow = '';
             for (var i = formattedLines.length - 1; i >= 0; i--) {
-              if (String(formattedLines[i] || '').trim()) {
-                lastLineNow = String(formattedLines[i] || '');
+              var li = formattedLines[i];
+              var t = (li && typeof li === 'object') ? String(li.text || '') : String(li || '');
+              if (t.trim()) {
+                lastLineNow = t;
                 break;
               }
             }
@@ -185,7 +194,9 @@
             var newStart = 0;
             if (lastTailLine) {
               for (var j = formattedLines.length - 1; j >= 0; j--) {
-                if (formattedLines[j] === lastTailLine) {
+                var lj = formattedLines[j];
+                var tj = (lj && typeof lj === 'object') ? String(lj.text || '') : String(lj || '');
+                if (tj === lastTailLine) {
                   newStart = j + 1;
                   break;
                 }
@@ -194,10 +205,23 @@
 
             var html = '';
             for (var k = 0; k < formattedLines.length; k++) {
-              var l = String(formattedLines[k] || '');
-              if (!l.trim()) continue;
-              var cls = k >= newStart ? 'is-new' : 'is-old';
-              html += '<div class="pv-log-line ' + cls + '">' + esc(l) + '</div>';
+              var lk = formattedLines[k];
+              var text = (lk && typeof lk === 'object') ? String(lk.text || '') : String(lk || '');
+              if (!text.trim()) continue;
+
+              var cls = '';
+              if (k >= newStart) {
+                cls = 'is-new';
+              } else {
+                var tsMsK = (lk && typeof lk === 'object') ? lk.tsMs : NaN;
+                if (!isNaN(tsMsK)) {
+                  var ageMs = nowMs - tsMsK;
+                  if (ageMs >= 10 * 60 * 1000) cls = 'is-age-red';
+                  else if (ageMs >= 5 * 60 * 1000) cls = 'is-age-yellow';
+                }
+              }
+
+              html += '<div class="pv-log-line ' + cls + '">' + esc(text) + '</div>';
             }
             out.innerHTML = html;
             out.scrollTop = out.scrollHeight;
