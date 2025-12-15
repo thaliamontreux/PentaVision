@@ -24,11 +24,7 @@
       </div>
     {% endif %}
 
-    {% if module_test_result %}
-      <div class="pv-alert {% if module_test_result.ok %}pv-alert-success{% else %}pv-alert-error{% endif %}" role="status">
-        <p>Module <code>{{ module_test_result.module_name }}</code>: {{ module_test_result.message }}</p>
-      </div>
-    {% endif %}
+    <div id="pv-toast" style="position: fixed; right: 18px; bottom: 18px; z-index: 9999; display: none; max-width: min(520px, calc(100vw - 36px)); padding: 0.8rem 0.95rem; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);"></div>
 
     <div class="pv-storage-grid">
       <aside class="pv-storage-left">
@@ -605,6 +601,9 @@
       var wizPanels = document.querySelectorAll('.pv-storage-wizard-panel');
       var wizBack = document.getElementById('pv-wiz-back');
       var wizNext = document.getElementById('pv-wiz-next');
+      var wizTest = document.getElementById('pv-wiz-test');
+      var wizSave = document.getElementById('pv-wiz-save');
+      var toastEl = document.getElementById('pv-toast');
 
       var wizStep = 1;
       function setWizardStep(step) {
@@ -658,6 +657,70 @@
         });
         setWizardStep(1);
         updateWizardProviderConfig();
+      }
+
+      function showToast(message, ok) {
+        if (!toastEl) return;
+        toastEl.textContent = String(message || '');
+        toastEl.style.display = 'block';
+        toastEl.style.background = ok ? '#86efac' : '#fca5a5';
+        toastEl.style.color = ok ? '#111827' : '#111827';
+        window.clearTimeout(showToast._t);
+        showToast._t = window.setTimeout(function () {
+          toastEl.style.display = 'none';
+        }, 6000);
+      }
+
+      function runWizardTestAjax() {
+        if (!wizForm) return;
+        if (wizAction) wizAction.value = 'module_draft_test';
+        var fd = new FormData(wizForm);
+
+        if (wizTest) {
+          wizTest.disabled = true;
+          wizTest.textContent = 'Testing…';
+        }
+
+        fetch(window.location.pathname, {
+          method: 'POST',
+          body: fd,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          }
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            var ok = !!(data && data.ok);
+            var msg = 'Module ' + (data && data.module_name ? data.module_name : '') + ': ' + (data && data.message ? data.message : '');
+            showToast(msg, ok);
+
+            if (wizSave) {
+              wizSave.disabled = !(data && data.module_test_ready);
+            }
+
+            if (data && data.wizard_step) {
+              setWizardStep(parseInt(data.wizard_step, 10) || 3);
+            }
+          })
+          .catch(function (e) {
+            showToast('Test failed: ' + e, false);
+          })
+          .finally(function () {
+            if (wizTest) {
+              wizTest.disabled = false;
+              wizTest.textContent = 'Test';
+            }
+          });
+      }
+
+      if (wizTest) {
+        wizTest.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          runWizardTestAjax();
+        });
       }
 
       {% if open_wizard %}
