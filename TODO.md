@@ -12,6 +12,9 @@
 - [x] Add IP lockout exemption for subnet 192.168.250.0/24 so it bypasses too-many-failed-logins lockout.
 - [x] Add Admin Block/Allow menu with IP exemption list, IP/network blocklist, and country-based access policy UI and enforcement.
 - [x] Enhance Block/Allow: preload private LAN ranges (10.0.0.0/8, 172.16.0.0/12, etc.) and add a one-click "Exempt this IP" helper on the access-control page.
+- [x] Implement Blocklist Publication Service on TCP port 7080 (`/blocklist.csv`) for pfSense/firewalls (strict CSV, read-only, deterministic ordering, short TTL/no-cache, request logging, rate limiting, optional token auth).
+- [x] Enforce never-block allowlist exclusions at generation time for blocklist publication (built-in 192.168.250.0/24 and 96.45.17.168-96.45.17.174, plus DB allowlist supersedes subnet blocks).
+- [x] Add systemd service integration for blocklist publication service (`pentavision-blocklist.service`) and install/enable it in Ubuntu installer.
 - [x] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
 
 ## Pentastar-web UI rules / polish

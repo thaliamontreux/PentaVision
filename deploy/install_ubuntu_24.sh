@@ -147,6 +147,7 @@ chmod +x "${WRAPPER_SCRIPT}"
 WEB_UNIT="/etc/systemd/system/pentavision-web.service"
 VIDEO_UNIT="/etc/systemd/system/pentavision-video.service"
 LOG_UNIT="/etc/systemd/system/pentavision-logserver.service"
+BLOCKLIST_UNIT="/etc/systemd/system/pentavision-blocklist.service"
 AUTOUPDATE_UNIT="/etc/systemd/system/pentavision-autoupdate.service"
 AUTOUPDATE_TIMER="/etc/systemd/system/pentavision-autoupdate.timer"
 
@@ -171,6 +172,9 @@ EOF
 
 echo "==> Installing systemd unit for log server: ${LOG_UNIT}"
 install -m 0644 "${APP_DIR}/app/deploy/pentavision-logserver.service" "${LOG_UNIT}"
+
+echo "==> Installing systemd unit for blocklist service: ${BLOCKLIST_UNIT}"
+install -m 0644 "${APP_DIR}/app/deploy/pentavision-blocklist.service" "${BLOCKLIST_UNIT}"
 
 echo "==> Installing auto-update script + systemd timer"
 install -m 0755 "${APP_DIR}/app/deploy/pentavision_autoupdate.sh" "${APP_DIR}/app/deploy/pentavision_autoupdate.sh"
@@ -197,9 +201,9 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable pentavision-web.service pentavision-video.service pentavision-logserver.service
+systemctl enable pentavision-web.service pentavision-video.service pentavision-logserver.service pentavision-blocklist.service
 systemctl enable pentavision-autoupdate.timer
-systemctl restart pentavision-web.service pentavision-video.service pentavision-logserver.service
+systemctl restart pentavision-web.service pentavision-video.service pentavision-logserver.service pentavision-blocklist.service
 systemctl restart pentavision-autoupdate.timer
 
 echo "==> Configuring Apache as reverse proxy to Gunicorn"
