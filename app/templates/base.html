@@ -81,6 +81,13 @@
     </main>
 
     <div
+      id="pv-floating-datetime"
+      role="status"
+      aria-live="polite"
+      style="position: fixed; left: 16px; bottom: 16px; z-index: 9998; padding: 0.6rem 0.85rem; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background: #86efac; color: #111827; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"
+    ></div>
+
+    <div
       id="pv-global-toast"
       role="status"
       aria-live="polite"
@@ -239,6 +246,31 @@
         } else {
           drain(0);
         }
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var el = document.getElementById('pv-floating-datetime');
+        if (!el) return;
+
+        function pad(n) {
+          return String(n).padStart(2, '0');
+        }
+
+        function tick() {
+          var d = new Date();
+          var yyyy = d.getFullYear();
+          var mm = pad(d.getMonth() + 1);
+          var dd = pad(d.getDate());
+          var hh = pad(d.getHours());
+          var mi = pad(d.getMinutes());
+          var ss = pad(d.getSeconds());
+          el.textContent = yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + mi + ':' + ss;
+        }
+
+        tick();
+        window.setInterval(tick, 1000);
       })();
     </script>
   </body>
