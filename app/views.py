@@ -2347,6 +2347,16 @@ def storage_settings():
                                 merged_cfg.update(config)
                                 config = merged_cfg
 
+                            try:
+                                if provider_type == "local_drive":
+                                    raw_base_dir = request.form.get("module_cfg_local_drive_path")
+                                    if raw_base_dir is not None:
+                                        raw_base_dir = str(raw_base_dir).strip()
+                                        if raw_base_dir:
+                                            config["base_dir"] = raw_base_dir
+                            except Exception:  # noqa: BLE001
+                                pass
+
                             if not errors:
                                 missing_fields = _validate_provider_config(provider_type, config)
                                 if missing_fields:

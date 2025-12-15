@@ -9,6 +9,10 @@ body {
   color: #e5e7eb;
 }
 
+ .pv-alert-error {
+   display: none !important;
+ }
+
 .pv-splash-overlay {
   position: fixed;
   inset: 0;
