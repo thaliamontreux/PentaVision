@@ -418,7 +418,7 @@ def create_blocklist_service() -> Flask:
     .badge {{
       position: fixed;
       left: 16px;
-      bottom: 16px;
+      bottom: 64px;
       z-index: 9999;
       padding: 10px 12px;
       border-radius: 10px;
@@ -431,10 +431,31 @@ def create_blocklist_service() -> Flask:
     .badge .title {{ font-weight: 800; font-size: 0.9rem; }}
     .badge .msg {{ margin-top: 2px; font-size: 0.85rem; }}
     .empty {{ padding: 18px; color: var(--muted); }}
+    .pv-status-bar {{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 9998;
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.55rem 0.9rem;
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.55);
+      background: linear-gradient(90deg, rgba(15,23,42,0.98), rgba(2,6,23,0.96));
+      color: #e5e7eb;
+      font-weight: 700;
+      font-size: 0.92rem;
+      border-top: 1px solid rgba(56,189,248,0.22);
+      backdrop-filter: blur(10px);
+    }}
+    .pv-status-sep {{ opacity: 0.55; }}
+    .pv-status-label {{ white-space: nowrap; color: rgba(229,231,235,0.78); }}
+    .pv-mono {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }}
   </style>
 </head>
 <body>
-  <div class=\"wrap\">
+  <div class=\"wrap\" style=\"padding-bottom: 80px;\">
     <div class=\"header\">
       <div>
         <h1>Blocklist Publication Service</h1>
@@ -497,7 +518,48 @@ def create_blocklist_service() -> Flask:
     <div id=\"healthMsg\" class=\"msg\">{health_text}</div>
   </div>
 
+  <div id=\"pvStatusBar\" class=\"pv-status-bar\" role=\"status\" aria-live=\"polite\">
+    <span id=\"pvStatusDatetime\" class=\"pv-mono\"></span>
+    <span class=\"pv-status-sep\">|</span>
+    <span class=\"pv-status-label\">System:</span>
+    <span id=\"pvStatusSystem\" style=\"white-space: nowrap;\">{health_text}</span>
+    <span class=\"pv-status-sep\">|</span>
+    <span class=\"pv-status-label\">Last error:</span>
+    <span id=\"pvStatusLastError\" style=\"font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;\"></span>
+  </div>
+
   <script>
+    (function () {
+      const el = document.getElementById('pvStatusDatetime');
+      if (!el) return;
+      function pad(n) { return String(n).padStart(2, '0'); }
+      function tick() {
+        const d = new Date();
+        const mm = pad(d.getMonth() + 1);
+        const dd = pad(d.getDate());
+        const yy = pad(d.getFullYear() % 100);
+        const hh = pad(d.getHours());
+        const mi = pad(d.getMinutes());
+        el.textContent = mm + '/' + dd + '/' + yy + ' ' + hh + ':' + mi;
+      }
+      tick();
+      window.setInterval(tick, 1000);
+    })();
+
+    (function () {
+      const lastEl = document.getElementById('pvStatusLastError');
+      if (!lastEl) return;
+      function setLastError(message) {
+        lastEl.textContent = String(message || '');
+        try { window.sessionStorage.setItem('pvBlocklistLastError', String(message || '')); } catch (e) {}
+      }
+      try {
+        const stored = window.sessionStorage.getItem('pvBlocklistLastError') || '';
+        if (stored) lastEl.textContent = stored;
+      } catch (e) {}
+      window.pvSetBlocklistLastError = setLastError;
+    })();
+
     async function pollHealth() {{
       try {{
         const r = await fetch('/healthz', {{ cache: 'no-store' }});
@@ -505,15 +567,24 @@ def create_blocklist_service() -> Flask:
         const ok = r.ok && t.toLowerCase() === 'ok';
         const badge = document.getElementById('healthBadge');
         const msg = document.getElementById('healthMsg');
+        const sys = document.getElementById('pvStatusSystem');
         msg.textContent = t || (ok ? 'ok' : 'not_ok');
+        if (sys) sys.textContent = msg.textContent;
         badge.style.background = ok ? '#22c55e' : '#ef4444';
         badge.style.color = '#000';
       }} catch (e) {{
         const badge = document.getElementById('healthBadge');
         const msg = document.getElementById('healthMsg');
+        const sys = document.getElementById('pvStatusSystem');
         msg.textContent = 'not_ok: health_check_failed';
+        if (sys) sys.textContent = msg.textContent;
         badge.style.background = '#ef4444';
         badge.style.color = '#000';
+        try {
+          if (window.pvSetBlocklistLastError) {
+            window.pvSetBlocklistLastError('health: ' + (e && e.message ? e.message : String(e || 'failed')));
+          }
+        } catch (err) {}
       }}
     }}
     pollHealth();

@@ -20,13 +20,9 @@ if [[ -z "${LE_EMAIL}" ]]; then
   exit 1
 fi
 
-CLOUDFLARE_INI_DIR="/root/.secrets/certbot"
-CLOUDFLARE_INI="${CLOUDFLARE_INI_DIR}/cloudflare.ini"
+CLOUDFLARE_INI="/etc/letsencrypt/cloudflare.ini"
 
 if [[ ! -f "${CLOUDFLARE_INI}" ]]; then
-  mkdir -p "${CLOUDFLARE_INI_DIR}"
-  chmod 700 "${CLOUDFLARE_INI_DIR}"
-
   echo "Cloudflare credentials file not found: ${CLOUDFLARE_INI}"
   echo "You need a Cloudflare API token with DNS:Edit permissions for the zone."
   read -r -s -p "Cloudflare API token: " CF_TOKEN
@@ -83,19 +79,16 @@ echo "==> Enabling required Apache modules"
 a2enmod ssl >/dev/null
  a2enmod proxy proxy_http headers >/dev/null
 
-PORTS_CONF="/etc/apache2/ports.conf"
-if [[ -f "${PORTS_CONF}" ]]; then
-  if ! grep -qE '^\s*Listen\s+8443\b' "${PORTS_CONF}"; then
-    echo "==> Adding Listen 8443 to ${PORTS_CONF}"
-    echo "Listen 8443" >>"${PORTS_CONF}"
-  fi
-fi
-
 SITE_NAME="pentavision-blocklist-service"
 SITE_CONF="/etc/apache2/sites-available/${SITE_NAME}.conf"
 
 echo "==> Writing Apache site: ${SITE_CONF}"
 cat >"${SITE_CONF}" <<EOF
+<VirtualHost *:80>
+    ServerName ${HOSTNAME}
+    Redirect permanent / https://${HOSTNAME}/
+</VirtualHost>
+
 <VirtualHost *:443>
     ServerName ${HOSTNAME}
 
@@ -113,29 +106,7 @@ cat >"${SITE_CONF}" <<EOF
     ErrorLog \${APACHE_LOG_DIR}/pentavision_blocklist_error.log
     CustomLog \${APACHE_LOG_DIR}/pentavision_blocklist_access.log combined
 </VirtualHost>
-
-<VirtualHost *:8443>
-    ServerName ${HOSTNAME}
-
-    SSLEngine on
-    SSLCertificateFile ${CERT_DIR}/fullchain.pem
-    SSLCertificateKeyFile ${CERT_DIR}/privkey.pem
-
-    ProxyPreserveHost On
-    RequestHeader set X-Forwarded-Proto "https"
-    RequestHeader set X-Forwarded-Port "8443"
-
-    ProxyPass / http://127.0.0.1:7080/
-    ProxyPassReverse / http://127.0.0.1:7080/
-
-    ErrorLog \${APACHE_LOG_DIR}/pentavision_blocklist_error.log
-    CustomLog \${APACHE_LOG_DIR}/pentavision_blocklist_access.log combined
-</VirtualHost>
 EOF
-
-if [[ -f "/etc/apache2/sites-enabled/${SITE_NAME}.conf" ]]; then
-  true
-fi
 
 a2ensite "${SITE_NAME}.conf" >/dev/null
 
@@ -146,4 +117,3 @@ echo "==> Done"
 echo "Certificate: ${CERT_DIR}"
 echo "Apache vhost: ${SITE_CONF}"
 echo "Blocklist over TLS: https://${HOSTNAME}/"
-echo "Alternate: https://${HOSTNAME}:8443/"

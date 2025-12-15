@@ -72,7 +72,7 @@
     </style>
   </head>
   <body>
-  <section class="pv-page" style="padding: 1rem;">
+  <section class="pv-page" style="padding: 1rem 1rem 3.25rem;">
     <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
       <div>
         <h2 style="margin: 0;">PentaVision Log Server</h2>
@@ -135,6 +135,21 @@
     </div>
   </section>
 
+  <div
+    id="pv-status-bar"
+    role="status"
+    aria-live="polite"
+    style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 9998; display: flex; gap: 0.75rem; align-items: center; padding: 0.55rem 0.9rem; box-shadow: 0 -10px 30px rgba(0,0,0,0.55); background: linear-gradient(90deg, rgba(15,23,42,0.98), rgba(2,6,23,0.96)); color: #e5e7eb; font-weight: 700; font-size: 0.92rem; border-top: 1px solid rgba(56,189,248,0.22); backdrop-filter: blur(10px);"
+  >
+    <span id="pv-status-datetime" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></span>
+    <span style="opacity: 0.55;">|</span>
+    <span style="white-space: nowrap; color: rgba(229,231,235,0.78);">System:</span>
+    <span id="pv-status-system" style="white-space: nowrap;">log-server</span>
+    <span style="opacity: 0.55;">|</span>
+    <span style="white-space: nowrap; color: rgba(229,231,235,0.78);">Last error:</span>
+    <span id="pv-status-last-error" style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+  </div>
+
   <script>
     (function () {
       var unitSel = document.getElementById('pv-log-unit');
@@ -154,6 +169,18 @@
       var auditIntervalEl = document.getElementById('pv-audit-interval');
       var auditIntervalLabelEl = document.getElementById('pv-audit-interval-label');
       var auditOnlyErrors = false;
+
+      function setLastError(message) {
+        try {
+          var el = document.getElementById('pv-status-last-error');
+          if (el) {
+            el.textContent = String(message || '');
+          }
+          try {
+            window.sessionStorage.setItem('pvLogLastError', String(message || ''));
+          } catch (e) {}
+        } catch (e) {}
+      }
 
       function esc(s) {
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -252,6 +279,7 @@
           })
           .catch(function (e) {
             out.textContent = 'Failed to load journal: ' + e;
+            setLastError('journal: ' + (e && e.message ? e.message : String(e || 'failed')));
           });
       }
 
@@ -360,6 +388,7 @@
           })
           .catch(function (e) {
             auditOut.textContent = 'Failed to load audit: ' + e;
+            setLastError('audit: ' + (e && e.message ? e.message : String(e || 'failed')));
           });
       }
 
@@ -490,6 +519,77 @@
 
       startAutoRefresh();
       startAuditAutoRefresh();
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var el = document.getElementById('pv-status-datetime');
+      if (!el) return;
+
+      function pad(n) {
+        return String(n).padStart(2, '0');
+      }
+
+      function tick() {
+        var d = new Date();
+        var mm = pad(d.getMonth() + 1);
+        var dd = pad(d.getDate());
+        var yy = pad(d.getFullYear() % 100);
+        var hh = pad(d.getHours());
+        var mi = pad(d.getMinutes());
+        el.textContent = mm + '/' + dd + '/' + yy + ' ' + hh + ':' + mi;
+      }
+
+      tick();
+      window.setInterval(tick, 1000);
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var lastEl = document.getElementById('pv-status-last-error');
+      if (!lastEl) return;
+
+      function setLastError(message) {
+        lastEl.textContent = String(message || '');
+        try {
+          window.sessionStorage.setItem('pvLogLastError', String(message || ''));
+        } catch (e) {}
+      }
+
+      try {
+        var stored = window.sessionStorage.getItem('pvLogLastError') || '';
+        if (stored) lastEl.textContent = stored;
+      } catch (e) {}
+
+      function wrapFetch(fn, label) {
+        return function () {
+          try {
+            return fn.apply(this, arguments);
+          } catch (e) {
+            setLastError(label + ': ' + (e && e.message ? e.message : String(e || 'error')));
+            throw e;
+          }
+        };
+      }
+
+      // Capture common fetch failures by patching specific callers.
+      if (typeof window.fetchJournal === 'function') {
+        window.fetchJournal = wrapFetch(window.fetchJournal, 'journal');
+      }
+      if (typeof window.fetchAudit === 'function') {
+        window.fetchAudit = wrapFetch(window.fetchAudit, 'audit');
+      }
+
+      // Also record unhandled promise errors (fetch failures etc.).
+      window.addEventListener('unhandledrejection', function (ev) {
+        try {
+          var r = ev && ev.reason;
+          var msg = (r && r.message) ? r.message : String(r || 'unhandled rejection');
+          setLastError(msg);
+        } catch (e) {}
+      });
     })();
   </script>
   </body>
