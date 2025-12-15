@@ -147,6 +147,7 @@ chmod +x "${WRAPPER_SCRIPT}"
 
 WEB_UNIT="/etc/systemd/system/pentavision-web.service"
 VIDEO_UNIT="/etc/systemd/system/pentavision-video.service"
+LOG_UNIT="/etc/systemd/system/pentavision-logserver.service"
 
 echo "==> Writing systemd unit for web service: ${WEB_UNIT}"
 cat >"${WEB_UNIT}" <<EOF
@@ -166,6 +167,9 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 EOF
+
+echo "==> Installing systemd unit for log server: ${LOG_UNIT}"
+install -m 0644 "${APP_DIR}/app/deploy/pentavision-logserver.service" "${LOG_UNIT}"
 
 echo "==> Writing systemd unit for video worker: ${VIDEO_UNIT}"
 cat >"${VIDEO_UNIT}" <<EOF
@@ -187,8 +191,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable pentavision-web.service pentavision-video.service
-systemctl restart pentavision-web.service pentavision-video.service
+systemctl enable pentavision-web.service pentavision-video.service pentavision-logserver.service
+systemctl restart pentavision-web.service pentavision-video.service pentavision-logserver.service
 
 echo "==> Configuring Apache as reverse proxy to Gunicorn"
 a2enmod proxy proxy_http >/dev/null

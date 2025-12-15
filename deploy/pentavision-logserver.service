@@ -1,0 +1,16 @@
+[Unit]
+Description=PentaVision Log Server
+After=network.target
+
+[Service]
+User=pentavision
+Group=pentavision
+WorkingDirectory=/opt/pentavision/app
+Environment="PATH=/opt/pentavision/venv/bin"
+EnvironmentFile=/opt/pentavision/app/.env
+SupplementaryGroups=systemd-journal
+ExecStart=/opt/pentavision/venv/bin/gunicorn "log_wsgi:app" --bind 0.0.0.0:8123 --workers 1 --threads 4
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

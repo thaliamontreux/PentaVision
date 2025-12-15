@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <section class="pv-page" style="padding: 1rem;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+      <div>
+        <h2 style="margin: 0;">PentaVision Log Server</h2>
+        <div style="margin-top: 0.25rem; color: #9ca3af;">Live system logs and audit events</div>
+      </div>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <label for="pv-log-unit" style="color: #9ca3af;">Unit</label>
+        <select id="pv-log-unit" class="pv-input" style="min-width: 240px;">
+          <option value="pentavision-web">pentavision-web</option>
+          <option value="pentavision-video">pentavision-video</option>
+        </select>
+        <button id="pv-log-refresh" class="pv-button-secondary" type="button">Refresh</button>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 0.9rem; margin-top: 1rem; align-items: start;">
+      <div class="pv-card" style="height: calc(100vh - 210px); overflow: hidden; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <div>
+            <div class="pv-card-title" style="margin: 0;">Journal</div>
+            <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Tail of systemd journal (auto-refresh)</div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <label for="pv-log-lines" style="color: #9ca3af;">Lines</label>
+            <input id="pv-log-lines" class="pv-input" type="number" min="20" max="5000" value="300" style="width: 90px;" />
+            <label style="display: inline-flex; align-items: center; gap: 0.35rem; color: #9ca3af;">
+              <input id="pv-log-auto" type="checkbox" checked />
+              <span>Auto</span>
+            </label>
+          </div>
+        </div>
+        <pre id="pv-log-output" style="margin: 0; padding: 0.75rem; overflow: auto; font-size: 12px; line-height: 1.35; white-space: pre; flex: 1;"></pre>
+      </div>
+
+      <div class="pv-card" style="height: calc(100vh - 210px); overflow: hidden; display: flex; flex-direction: column;">
+        <div style="padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <div class="pv-card-title" style="margin: 0;">Audit</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Storage module events + health checks</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <button id="pv-audit-refresh" class="pv-button-secondary" type="button">Refresh</button>
+          <button id="pv-audit-errors" class="pv-button-secondary" type="button">Errors</button>
+        </div>
+        <div id="pv-audit-output" style="padding: 0.75rem; overflow: auto; font-size: 12px; line-height: 1.35; flex: 1;"></div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      var unitSel = document.getElementById('pv-log-unit');
+      var out = document.getElementById('pv-log-output');
+      var btn = document.getElementById('pv-log-refresh');
+      var linesEl = document.getElementById('pv-log-lines');
+      var autoEl = document.getElementById('pv-log-auto');
+
+      var auditOut = document.getElementById('pv-audit-output');
+      var auditBtn = document.getElementById('pv-audit-refresh');
+      var auditErrBtn = document.getElementById('pv-audit-errors');
+
+      function esc(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      function fetchJournal() {
+        if (!out) return;
+        var unit = unitSel ? (unitSel.value || '') : '';
+        var lines = linesEl ? (linesEl.value || '300') : '300';
+        fetch('/api/journal?unit=' + encodeURIComponent(unit) + '&lines=' + encodeURIComponent(lines))
+          .then(function (r) { return r.text(); })
+          .then(function (txt) {
+            out.textContent = txt || '';
+            out.scrollTop = out.scrollHeight;
+          })
+          .catch(function (e) {
+            out.textContent = 'Failed to load journal: ' + e;
+          });
+      }
+
+      function fetchAudit(onlyErrors) {
+        if (!auditOut) return;
+        fetch('/api/audit/storage?limit=300')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var events = (data && data.events) ? data.events : [];
+            var health = (data && data.health) ? data.health : [];
+
+            if (onlyErrors) {
+              events = events.filter(function (e) { return String(e.level || '').toLowerCase() === 'error'; });
+              health = health.filter(function (h) { return !h.ok; });
+            }
+
+            var html = '';
+            html += '<div style="font-weight: 600; margin-bottom: 0.4rem;">Events</div>';
+            if (!events.length) {
+              html += '<div style="color: #9ca3af;">No events.</div>';
+            } else {
+              html += '<div style="display: grid; gap: 0.35rem;">';
+              events.forEach(function (e) {
+                html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
+                  + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
+                  + '<div style="font-weight: 600;">' + esc(e.level) + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(e.created_at) + '</div>'
+                  + '</div>'
+                  + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(e.module_name) + ' · ' + esc(e.action) + '</div>'
+                  + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(e.message) + '</div>'
+                  + '</div>';
+              });
+              html += '</div>';
+            }
+
+            html += '<div style="font-weight: 600; margin: 0.75rem 0 0.4rem;">Health checks</div>';
+            if (!health.length) {
+              html += '<div style="color: #9ca3af;">No health checks.</div>';
+            } else {
+              html += '<div style="display: grid; gap: 0.35rem;">';
+              health.forEach(function (h) {
+                html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
+                  + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
+                  + '<div style="font-weight: 600;">' + (h.ok ? 'ok' : 'error') + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(h.created_at) + '</div>'
+                  + '</div>'
+                  + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(h.module_name) + ' · ' + esc(h.provider_type) + '</div>'
+                  + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(h.message) + '</div>'
+                  + '</div>';
+              });
+              html += '</div>';
+            }
+
+            auditOut.innerHTML = html;
+          })
+          .catch(function (e) {
+            auditOut.textContent = 'Failed to load audit: ' + e;
+          });
+      }
+
+      if (btn) btn.addEventListener('click', fetchJournal);
+      if (unitSel) unitSel.addEventListener('change', fetchJournal);
+      if (auditBtn) auditBtn.addEventListener('click', function () { fetchAudit(false); });
+      if (auditErrBtn) auditErrBtn.addEventListener('click', function () { fetchAudit(true); });
+
+      fetchJournal();
+      fetchAudit(false);
+
+      setInterval(function () {
+        if (autoEl && autoEl.checked) {
+          fetchJournal();
+        }
+      }, 2500);
+    })();
+  </script>
+{% endblock %}
