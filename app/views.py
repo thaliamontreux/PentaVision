@@ -1556,6 +1556,8 @@ def storage_settings():
                 "module_toggle",
                 "module_test",
                 "module_draft_test",
+                "module_write_test",
+                "module_draft_write_test",
                 "module_clone",
             }:
                 if record_engine is None:
@@ -1729,6 +1731,31 @@ def storage_settings():
                             except Exception:  # noqa: BLE001
                                 return
 
+                        def _log_write_stat(
+                            module_id: int | None,
+                            module_name: str,
+                            provider_type: str | None,
+                            ok: bool,
+                            storage_key: str | None,
+                            bytes_written: int | None,
+                            error: str | None,
+                        ) -> None:
+                            try:
+                                session_db.add(
+                                    StorageModuleWriteStat(
+                                        module_id=(int(module_id) if module_id is not None else None),
+                                        module_name=str(module_name or "")[:160],
+                                        device_id=None,
+                                        storage_key=(str(storage_key or "")[:512] if storage_key else None),
+                                        bytes_written=(int(bytes_written) if bytes_written is not None else None),
+                                        ok=1 if ok else 0,
+                                        error=(str(error or "")[:512] if error else None),
+                                    )
+                                )
+                                session_db.commit()
+                            except Exception:  # noqa: BLE001
+                                return
+
                         def _log_health_check(
                             module_id: int | None,
                             module_name: str,
@@ -1783,6 +1810,10 @@ def storage_settings():
                         )
 
                         StorageModuleHealthCheck.__table__.create(
+                            bind=record_engine, checkfirst=True
+                        )
+
+                        StorageModuleWriteStat.__table__.create(
                             bind=record_engine, checkfirst=True
                         )
 
@@ -2307,6 +2338,256 @@ def storage_settings():
                                         duration_ms,
                                     )
 
+                        elif action == "module_write_test":
+                            module_id_raw = (request.form.get("module_id") or "").strip()
+                            try:
+                                module_id = int(module_id_raw) if module_id_raw else None
+                            except ValueError:
+                                module_id = None
+
+                            if module_id is not None:
+                                module = session_db.get(StorageModule, module_id)
+                            else:
+                                module = None
+
+                            if module is None:
+                                module_test_result = {
+                                    "ok": False,
+                                    "module_name": f"#{module_id_raw}",
+                                    "message": "Storage module not found.",
+                                }
+                            else:
+                                provider_type = (str(getattr(module, "provider_type", "") or "").strip().lower())
+                                started = time.monotonic()
+                                try:
+                                    router = get_storage_router(current_app)
+                                    handle = router.get_instance(str(module.id))
+                                    if handle is None:
+                                        raise StorageError("Storage module is not enabled or provider is not available.")
+                                    impl = handle.impl
+
+                                    # Tiny write + delete
+                                    payload = b"pv-write-test"
+                                    res = impl.write(io.BytesIO(payload), {"key_hint": "pv_write_test"})
+                                    object_id = None
+                                    if isinstance(res, dict):
+                                        object_id = res.get("object_id")
+                                    object_id = str(object_id or "").strip()
+                                    if not object_id:
+                                        raise StorageError("Write test did not return an object id.")
+                                    try:
+                                        impl.delete(object_id)
+                                    except Exception:
+                                        # deletion failures should still surface
+                                        raise
+
+                                except StorageError as exc:
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": module.name,
+                                        "message": str(exc)[:300],
+                                    }
+                                    _log_write_stat(
+                                        int(module.id),
+                                        str(module.name or ""),
+                                        provider_type or None,
+                                        False,
+                                        None,
+                                        None,
+                                        str(exc)[:512],
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "write_test_error",
+                                        str(exc)[:1024],
+                                        module_row=module,
+                                    )
+                                except Exception as exc:  # noqa: BLE001
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": module.name,
+                                        "message": str(exc)[:300],
+                                    }
+                                    _log_write_stat(
+                                        int(module.id),
+                                        str(module.name or ""),
+                                        provider_type or None,
+                                        False,
+                                        None,
+                                        None,
+                                        str(exc)[:512],
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "write_test_error",
+                                        str(exc)[:1024],
+                                        module_row=module,
+                                    )
+                                else:
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    module_test_result = {
+                                        "ok": True,
+                                        "module_name": module.name,
+                                        "message": f"Write test OK ({len(payload)} bytes).",
+                                    }
+                                    _log_write_stat(
+                                        int(module.id),
+                                        str(module.name or ""),
+                                        provider_type or None,
+                                        True,
+                                        str(object_id)[:512] if object_id else None,
+                                        int(len(payload)),
+                                        None,
+                                    )
+                                    _log_module_event(
+                                        "info",
+                                        "write_test_ok",
+                                        f"Write test OK for '{module.name}'.",
+                                        module_row=module,
+                                    )
+
+                        elif action == "module_draft_write_test":
+                            module_id_raw = (request.form.get("module_id") or "").strip()
+                            try:
+                                module_id = int(module_id_raw) if module_id_raw else None
+                            except ValueError:
+                                module_id = None
+
+                            existing_module: StorageModule | None = None
+                            if module_id is not None:
+                                existing_module = session_db.get(StorageModule, module_id)
+                                if existing_module is None:
+                                    errors.append("Storage module not found.")
+
+                            provider_type = ""
+                            if existing_module is not None:
+                                provider_type = (existing_module.provider_type or "").strip().lower()
+
+                            name = (request.form.get("module_name") or "").strip() or (
+                                existing_module.name if existing_module is not None else ""
+                            )
+
+                            config = _build_module_config_from_form(provider_type)
+                            if existing_module is not None:
+                                try:
+                                    current_cfg = (
+                                        json.loads(existing_module.config_json)
+                                        if existing_module.config_json
+                                        else {}
+                                    )
+                                except Exception:  # noqa: BLE001
+                                    current_cfg = {}
+                                merged_cfg = dict(current_cfg)
+                                merged_cfg.update(config)
+                                config = merged_cfg
+
+                            started = time.monotonic()
+                            if not errors:
+                                try:
+                                    tmp_module = StorageModule(
+                                        name=name,
+                                        label=None,
+                                        provider_type=provider_type,
+                                        is_enabled=1,
+                                        config_json=None,
+                                    )
+                                    from .storage_providers import (  # noqa: PLC0415
+                                        _LegacyProviderAdapter,
+                                        _build_provider_for_module,
+                                    )
+
+                                    provider = _build_provider_for_module(
+                                        current_app,
+                                        tmp_module,
+                                        config,
+                                    )
+                                    if provider is None:
+                                        raise StorageError("Failed to build provider")
+                                    provider.name = name
+                                    adapter = _LegacyProviderAdapter(provider)
+
+                                    payload = b"pv-write-test"
+                                    res = adapter.write(io.BytesIO(payload), {"key_hint": "pv_write_test"})
+                                    object_id = None
+                                    if isinstance(res, dict):
+                                        object_id = res.get("object_id")
+                                    object_id = str(object_id or "").strip()
+                                    if not object_id:
+                                        raise StorageError("Write test did not return an object id.")
+                                    adapter.delete(object_id)
+
+                                except StorageError as exc:
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": name,
+                                        "message": str(exc)[:300],
+                                    }
+                                    _log_write_stat(
+                                        int(existing_module.id) if existing_module is not None else None,
+                                        str(name or "")[:160],
+                                        provider_type or None,
+                                        False,
+                                        None,
+                                        None,
+                                        str(exc)[:512],
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "write_test_error",
+                                        str(exc)[:1024],
+                                        module_row=existing_module,
+                                        module_name=str(name or ""),
+                                    )
+                                except Exception as exc:  # noqa: BLE001
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    module_test_result = {
+                                        "ok": False,
+                                        "module_name": name,
+                                        "message": str(exc)[:300],
+                                    }
+                                    _log_write_stat(
+                                        int(existing_module.id) if existing_module is not None else None,
+                                        str(name or "")[:160],
+                                        provider_type or None,
+                                        False,
+                                        None,
+                                        None,
+                                        str(exc)[:512],
+                                    )
+                                    _log_module_event(
+                                        "error",
+                                        "write_test_error",
+                                        str(exc)[:1024],
+                                        module_row=existing_module,
+                                        module_name=str(name or ""),
+                                    )
+                                else:
+                                    duration_ms = int((time.monotonic() - started) * 1000)
+                                    module_test_result = {
+                                        "ok": True,
+                                        "module_name": name,
+                                        "message": f"Write test OK ({len(payload)} bytes).",
+                                    }
+                                    _log_write_stat(
+                                        int(existing_module.id) if existing_module is not None else None,
+                                        str(name or "")[:160],
+                                        provider_type or None,
+                                        True,
+                                        str(object_id)[:512] if object_id else None,
+                                        int(len(payload)),
+                                        None,
+                                    )
+                                    _log_module_event(
+                                        "info",
+                                        "write_test_ok",
+                                        f"Write test OK for '{name}'.",
+                                        module_row=existing_module,
+                                        module_name=str(name or ""),
+                                    )
+
                             try:
                                 wants_json = False
                                 hdr = (request.headers.get("X-Requested-With") or "").strip().lower()
@@ -2597,12 +2878,7 @@ def storage_settings():
                                 if wants_json:
                                     fp_out = ""
                                     try:
-                                        fp_out = _fingerprint_module_payload(
-                                            provider_type,
-                                            name,
-                                            config,
-                                            int(existing_module.id) if existing_module is not None else None,
-                                        )
+                                        fp_out = str(fp or "")
                                     except Exception:  # noqa: BLE001
                                         fp_out = ""
                                     return jsonify(
