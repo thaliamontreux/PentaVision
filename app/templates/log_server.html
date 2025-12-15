@@ -58,6 +58,9 @@
       .pv-log-line.is-new {
         color: #86efac;
       }
+      .pv-log-line.is-age-green {
+        color: #86efac;
+      }
       .pv-log-line.is-age-yellow {
         color: #fde68a;
       }
@@ -221,8 +224,9 @@
                 var tsMsK = (lk && typeof lk === 'object') ? lk.tsMs : NaN;
                 if (!isNaN(tsMsK)) {
                   var ageMs = nowMs - tsMsK;
-                  if (ageMs >= 10 * 60 * 1000) cls = 'is-age-red';
-                  else if (ageMs >= 5 * 60 * 1000) cls = 'is-age-yellow';
+                  if (ageMs > 10 * 60 * 1000) cls = 'is-age-red';
+                  else if (ageMs > 5 * 60 * 1000) cls = 'is-age-yellow';
+                  else cls = 'is-age-green';
                 }
               }
 
