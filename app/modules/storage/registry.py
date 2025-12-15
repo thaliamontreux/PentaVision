@@ -44,6 +44,8 @@ def discover_storage_module_definitions() -> List[StorageModuleDefinition]:
     for name in entries:
         if name.startswith("_"):
             continue
+        if name.strip().lower() == "gdrive":
+            continue
         module_dir = os.path.join(root, name)
         if not os.path.isdir(module_dir):
             continue
@@ -81,6 +83,8 @@ def load_storage_provider_plugins() -> None:
 
     for name in entries:
         if name.startswith("_"):
+            continue
+        if name.strip().lower() == "gdrive":
             continue
         module_dir = os.path.join(root, name)
         if not os.path.isdir(module_dir):

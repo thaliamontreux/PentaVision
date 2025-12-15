@@ -1279,20 +1279,6 @@ def _build_provider_for_module(
         base_dir = str(cfg.get("base_dir") or "/").strip() or "/"
         if host:
             provider = SCPStorageProvider(host, port, username, password, private_key, base_dir)
-    elif ptype == "gdrive":
-        access_token = str(cfg.get("access_token") or "").strip() or None
-        folder_id = str(cfg.get("folder_id") or "").strip() or None
-        client_id = str(cfg.get("client_id") or "").strip() or None
-        client_secret = str(cfg.get("client_secret") or "").strip() or None
-        refresh_token = str(cfg.get("refresh_token") or "").strip() or None
-        if (client_id and client_secret and refresh_token) or access_token:
-            provider = GoogleDriveStorageProvider(
-                access_token=access_token,
-                folder_id=folder_id,
-                client_id=client_id,
-                client_secret=client_secret,
-                refresh_token=refresh_token,
-            )
     elif ptype == "onedrive":
         access_token = str(cfg.get("access_token") or "").strip()
         root_path = str(cfg.get("root_path") or "").strip() or None
@@ -1564,7 +1550,6 @@ for _ptype in (
     "ftp",
     "sftp",
     "scp",
-    "gdrive",
     "onedrive",
     "box",
     "swift",

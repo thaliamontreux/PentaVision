@@ -116,7 +116,6 @@
 - [x] Google Cloud Storage (GCS) — JSON & XML REST APIs, client libraries and quickstarts.
 - [x] Microsoft Azure Blob Storage — Blob REST API, SAS tokens, and detailed protocol docs.
 - [x] Dropbox (Dropbox API v2) — file-level APIs, OAuth flows, SDKs and an API Explorer.
-- [x] Google Drive (Drive API) — Drive REST endpoints for files/permissions/changes with guides.
 - [x] Microsoft OneDrive / Microsoft Graph (OneDrive API) — file APIs via Microsoft Graph; auth + samples.
 - [x] Box — enterprise file storage API, SDKs, and developer guides for integrations.
 - [x] Backblaze B2 — native B2 API plus S3-compatible API; clear quickstarts and examples.
@@ -160,7 +159,6 @@
     - Cloudflare R2 (S3-compatible)
   - File sync / consumer cloud
     - Dropbox
-    - Google Drive
     - Microsoft OneDrive
     - Box
     - pCloud

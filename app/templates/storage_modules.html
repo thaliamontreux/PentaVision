@@ -246,7 +246,6 @@
                     <option value="ftp" {% if edit_module and edit_module.provider_type == 'ftp' %}selected{% endif %}>FTP / FTPS</option>
                     <option value="sftp" {% if edit_module and edit_module.provider_type == 'sftp' %}selected{% endif %}>SFTP</option>
                     <option value="scp" {% if edit_module and edit_module.provider_type == 'scp' %}selected{% endif %}>SCP</option>
-                    <option value="gdrive" {% if edit_module and edit_module.provider_type == 'gdrive' %}selected{% endif %}>Google Drive</option>
                     <option value="onedrive" {% if edit_module and edit_module.provider_type == 'onedrive' %}selected{% endif %}>OneDrive</option>
                     <option value="box" {% if edit_module and edit_module.provider_type == 'box' %}selected{% endif %}>Box</option>
                     <option value="swift" {% if edit_module and edit_module.provider_type == 'swift' %}selected{% endif %}>Swift</option>
@@ -254,7 +253,7 @@
                     <option value="mega" {% if edit_module and edit_module.provider_type == 'mega' %}selected{% endif %}>MEGA</option>
                     {% if module_definitions %}
                       {% for d in module_definitions %}
-                        {% if d.provider_type not in ['db','sql_db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','gdrive','onedrive','box','swift','pcloud','mega'] %}
+                        {% if d.provider_type not in ['db','sql_db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','onedrive','box','swift','pcloud','mega'] %}
                           <option value="{{ d.provider_type }}" {% if edit_module and edit_module.provider_type == d.provider_type %}selected{% endif %}>{{ d.display_name }}</option>
                         {% endif %}
                       {% endfor %}
@@ -279,7 +278,6 @@
                   {% include 'modules/storage/ftp/template.html' %}
                   {% include 'modules/storage/sftp/template.html' %}
                   {% include 'modules/storage/scp/template.html' %}
-                  {% include 'modules/storage/gdrive/template.html' %}
                   {% include 'modules/storage/onedrive/template.html' %}
                   {% include 'modules/storage/box/template.html' %}
                   {% include 'modules/storage/swift/template.html' %}
@@ -471,7 +469,6 @@
                 <option value="ftp">FTP / FTPS</option>
                 <option value="sftp">SFTP</option>
                 <option value="scp">SCP</option>
-                <option value="gdrive">Google Drive</option>
                 <option value="onedrive">OneDrive</option>
                 <option value="box">Box</option>
                 <option value="swift">Swift</option>
@@ -479,7 +476,7 @@
                 <option value="mega">MEGA</option>
                 {% if module_definitions %}
                   {% for d in module_definitions %}
-                    {% if d.provider_type not in ['db','sql_db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','gdrive','onedrive','box','swift','pcloud','mega'] %}
+                    {% if d.provider_type not in ['db','sql_db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','onedrive','box','swift','pcloud','mega'] %}
                       <option value="{{ d.provider_type }}">{{ d.display_name }}</option>
                     {% endif %}
                   {% endfor %}
@@ -522,7 +519,6 @@
                 {% include 'modules/storage/ftp/wizard.html' %}
                 {% include 'modules/storage/sftp/wizard.html' %}
                 {% include 'modules/storage/scp/wizard.html' %}
-                {% include 'modules/storage/gdrive/wizard.html' %}
                 {% include 'modules/storage/onedrive/wizard.html' %}
                 {% include 'modules/storage/box/wizard.html' %}
                 {% include 'modules/storage/swift/wizard.html' %}
@@ -715,22 +711,6 @@
         var toastMsg = qs.get('pv_toast') || '';
         if (toastMsg) {
           showToast(toastMsg, true);
-        }
-      } catch (e) {
-      }
-
-      try {
-        var gdriveBtn = document.getElementById('pv-gdrive-connect');
-        if (gdriveBtn) {
-          gdriveBtn.addEventListener('click', function () {
-            var url = gdriveBtn.getAttribute('data-url') || '';
-            if (!url) return;
-            try {
-              window.open(url, '_blank', 'noopener');
-            } catch (e) {
-              window.location.href = url;
-            }
-          });
         }
       } catch (e) {
       }

@@ -367,9 +367,6 @@
             <option value="webdav" {% if edit_module and edit_module.provider_type == 'webdav' %}selected{% endif %}>
               WebDAV / Nextcloud
             </option>
-            <option value="gdrive" {% if edit_module and edit_module.provider_type == 'gdrive' %}selected{% endif %}>
-              Google Drive
-            </option>
             <option value="onedrive" {% if edit_module and edit_module.provider_type == 'onedrive' %}selected{% endif %}>
               Microsoft OneDrive / Graph
             </option>
@@ -440,13 +437,6 @@
             <input id="module_cfg_webdav_username" name="module_cfg_webdav_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}"/>
             <label for="module_cfg_webdav_password" style="margin-top: 0.35rem;">Password / app token</label>
             <input id="module_cfg_webdav_password" name="module_cfg_webdav_password" type="password" autocomplete="off"/>
-          </div>
-
-          <div class="pv-module-config-group" data-provider="gdrive" style="display: none;">
-            <label for="module_cfg_gdrive_access_token">Access token</label>
-            <input id="module_cfg_gdrive_access_token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off"/>
-            <label for="module_cfg_gdrive_folder_id" style="margin-top: 0.35rem;">Folder ID (optional)</label>
-            <input id="module_cfg_gdrive_folder_id" name="module_cfg_gdrive_folder_id" type="text" placeholder="Drive folder ID" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}"/>
           </div>
 
           <div class="pv-module-config-group" data-provider="onedrive" style="display: none;">
