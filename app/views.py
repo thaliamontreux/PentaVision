@@ -1943,6 +1943,18 @@ def storage_settings():
 
                                     try:
                                         if provider_type == "local_drive":
+                                            raw_base_dir = request.form.get(
+                                                "module_cfg_local_drive_path"
+                                            )
+                                            if raw_base_dir is not None:
+                                                raw_base_dir = str(raw_base_dir).strip()
+                                                if raw_base_dir:
+                                                    merged_cfg["base_dir"] = raw_base_dir
+                                    except Exception:  # noqa: BLE001
+                                        pass
+
+                                    try:
+                                        if provider_type == "local_drive":
                                             if (
                                                 isinstance(merged_cfg, dict)
                                                 and "base_dir" not in merged_cfg
@@ -1997,6 +2009,12 @@ def storage_settings():
                                     session_db.add(module)
                                     session_db.commit()
                                     saved = True
+
+                                    try:
+                                        edit_module = module
+                                        edit_module_config = dict(merged_cfg)
+                                    except Exception:  # noqa: BLE001
+                                        pass
                                     _log_module_event(
                                         "info",
                                         "module_update",
