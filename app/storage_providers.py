@@ -8,9 +8,11 @@ import ftplib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
+from urllib.parse import quote_plus
 
 import boto3
 from flask import Flask
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, func, insert
 from sqlalchemy.orm import Session
 from google.cloud import storage as gcs_storage
 from azure.storage.blob import BlobServiceClient
@@ -35,6 +37,101 @@ class StorageProvider:
 
     def upload(self, data: bytes, key_hint: str) -> str:
         raise NotImplementedError
+
+    def get_url(self, storage_key: str) -> Optional[str]:
+        return None
+
+
+class ExternalSQLDatabaseStorageProvider(StorageProvider):
+    def __init__(
+        self,
+        db_type: str,
+        host: str,
+        port: Optional[int],
+        database: str,
+        username: Optional[str],
+        password: Optional[str],
+        mssql_driver: Optional[str],
+    ) -> None:
+        self.name = "sql_db"
+        self._db_type = (db_type or "").strip().lower()
+        self._host = str(host or "").strip()
+        self._port = int(port) if port is not None else None
+        self._database = str(database or "").strip()
+        self._username = str(username or "").strip() or None
+        self._password = str(password or "").strip() or None
+        self._mssql_driver = str(mssql_driver or "").strip() or None
+        self._engine = None
+        self._table = None
+
+    def _build_sqlalchemy_url(self) -> str:
+        if not self._host:
+            raise RuntimeError("SQL DB host is required")
+        if not self._database:
+            raise RuntimeError("SQL DB database name is required")
+
+        if self._db_type in {"mysql", "mariadb"}:
+            port = self._port if self._port is not None else 3306
+            auth = ""
+            if self._username:
+                pwd = quote_plus(self._password or "")
+                auth = f"{quote_plus(self._username)}:{pwd}@"
+            return f"mysql+pymysql://{auth}{self._host}:{port}/{self._database}"
+
+        if self._db_type in {"postgres", "postgresql"}:
+            port = self._port if self._port is not None else 5432
+            auth = ""
+            if self._username:
+                pwd = quote_plus(self._password or "")
+                auth = f"{quote_plus(self._username)}:{pwd}@"
+            # Requires psycopg2/psycopg in the environment.
+            return f"postgresql+psycopg2://{auth}{self._host}:{port}/{self._database}"
+
+        if self._db_type in {"mssql", "sqlserver", "sql_server"}:
+            port = self._port if self._port is not None else 1433
+            driver = self._mssql_driver or "ODBC Driver 18 for SQL Server"
+            # Requires pyodbc + system ODBC driver.
+            auth = ""
+            if self._username:
+                pwd = quote_plus(self._password or "")
+                auth = f"{quote_plus(self._username)}:{pwd}@"
+            return (
+                f"mssql+pyodbc://{auth}{self._host}:{port}/{self._database}"
+                f"?driver={quote_plus(driver)}&TrustServerCertificate=yes"
+            )
+
+        raise RuntimeError("Unsupported SQL DB type. Use mysql, postgres, or mssql.")
+
+    def _ensure_engine(self):
+        if self._engine is not None:
+            return
+        url = self._build_sqlalchemy_url()
+        self._engine = create_engine(url, pool_pre_ping=True)
+
+    def _ensure_table(self):
+        if self._table is not None:
+            return
+        self._ensure_engine()
+        metadata = MetaData()
+        self._table = Table(
+            "external_recording_data",
+            metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("data", LargeBinary, nullable=False),
+            Column("created_at", DateTime(timezone=True), server_default=func.now()),
+        )
+        metadata.create_all(self._engine)
+
+    def upload(self, data: bytes, key_hint: str) -> str:
+        self._ensure_table()
+        stmt = insert(self._table).values({"data": data})
+        with self._engine.begin() as conn:
+            res = conn.execute(stmt)
+            try:
+                new_id = res.inserted_primary_key[0]
+            except Exception:  # noqa: BLE001
+                new_id = None
+        return f"external_recording_data:{new_id}" if new_id is not None else "external_recording_data"
 
     def get_url(self, storage_key: str) -> Optional[str]:
         return None
@@ -1039,6 +1136,29 @@ def _build_provider_for_module(
         provider = LocalFilesystemStorageProvider(str(base_dir))
     elif ptype == "db":
         provider = DatabaseStorageProvider()
+    elif ptype == "sql_db":
+        db_type = str(cfg.get("db_type") or "").strip().lower()
+        host = str(cfg.get("host") or "").strip()
+        database = str(cfg.get("database") or "").strip()
+        username = str(cfg.get("username") or "").strip() or None
+        password = str(cfg.get("password") or "").strip() or None
+        mssql_driver = str(cfg.get("mssql_driver") or "").strip() or None
+        port = None
+        try:
+            if cfg.get("port") is not None and str(cfg.get("port") or "").strip() != "":
+                port = int(cfg.get("port"))
+        except Exception:  # noqa: BLE001
+            port = None
+        if db_type and host and database:
+            provider = ExternalSQLDatabaseStorageProvider(
+                db_type=db_type,
+                host=host,
+                port=port,
+                database=database,
+                username=username,
+                password=password,
+                mssql_driver=mssql_driver,
+            )
     elif ptype == "s3":
         bucket = str(cfg.get("bucket") or "").strip()
         access_key = str(cfg.get("access_key") or "").strip()
@@ -1367,6 +1487,7 @@ for _ptype in (
     "local_fs",
     "local_drive",
     "db",
+    "sql_db",
     "s3",
     "gcs",
     "azure_blob",

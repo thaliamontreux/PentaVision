@@ -1,0 +1,63 @@
+{
+  "provider_type": "sql_db",
+  "display_name": "SQL Database (External)",
+  "category": "Database",
+  "fields": [
+    {
+      "key": "db_type",
+      "label": "Database type",
+      "type": "text",
+      "form_key": "module_cfg_sql_db_type",
+      "required": true,
+      "help": "Database engine: mysql, postgres, or mssql."
+    },
+    {
+      "key": "host",
+      "label": "Host",
+      "type": "text",
+      "form_key": "module_cfg_sql_db_host",
+      "required": true,
+      "help": "Hostname or IP of the database server."
+    },
+    {
+      "key": "port",
+      "label": "Port",
+      "type": "number",
+      "form_key": "module_cfg_sql_db_port",
+      "required": false,
+      "help": "Optional. Defaults: MySQL 3306, Postgres 5432, MSSQL 1433."
+    },
+    {
+      "key": "database",
+      "label": "Database",
+      "type": "text",
+      "form_key": "module_cfg_sql_db_database",
+      "required": true,
+      "help": "Database name."
+    },
+    {
+      "key": "username",
+      "label": "Username",
+      "type": "text",
+      "form_key": "module_cfg_sql_db_username",
+      "required": false,
+      "help": "Optional if your DB allows passwordless auth."
+    },
+    {
+      "key": "password",
+      "label": "Password",
+      "type": "text",
+      "form_key": "module_cfg_sql_db_password",
+      "required": false,
+      "help": "Optional if your DB allows passwordless auth."
+    },
+    {
+      "key": "mssql_driver",
+      "label": "MSSQL ODBC Driver",
+      "type": "text",
+      "form_key": "module_cfg_sql_db_mssql_driver",
+      "required": false,
+      "help": "For MSSQL only. Example: ODBC Driver 18 for SQL Server."
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+<div class="pv-module-config-group" data-provider="sql_db" style="display: none;">
+  <div class="pv-help">Stores recording bytes in an external SQL database (separate from the app's RecordDB). Configure connection details below.</div>
+
+  <div class="pv-field-group" style="margin-top: 0.65rem;">
+    <label for="module_cfg_sql_db_type">Database type</label>
+    <select id="module_cfg_sql_db_type" name="module_cfg_sql_db_type" {% if cfg_readonly %}disabled{% endif %}>
+      {% set sql_db_type = (edit_cfg.get('db_type','mysql') if edit_module else 'mysql') %}
+      <option value="mysql" {% if sql_db_type == 'mysql' %}selected{% endif %}>MySQL</option>
+      <option value="postgres" {% if sql_db_type == 'postgres' %}selected{% endif %}>PostgreSQL</option>
+      <option value="mssql" {% if sql_db_type == 'mssql' %}selected{% endif %}>Microsoft SQL Server</option>
+    </select>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_sql_db_host">Host</label>
+    <input id="module_cfg_sql_db_host" name="module_cfg_sql_db_host" type="text" value="{{ edit_cfg.get('host','') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_sql_db_port">Port</label>
+    <input id="module_cfg_sql_db_port" name="module_cfg_sql_db_port" type="number" value="{{ edit_cfg.get('port','') if edit_module and edit_cfg.get('port') is not none else '' }}" placeholder="3306 / 5432 / 1433" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_sql_db_database">Database</label>
+    <input id="module_cfg_sql_db_database" name="module_cfg_sql_db_database" type="text" value="{{ edit_cfg.get('database','') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_sql_db_username">Username</label>
+    <input id="module_cfg_sql_db_username" name="module_cfg_sql_db_username" type="text" value="{{ edit_cfg.get('username','') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_sql_db_password">Password</label>
+    <input id="module_cfg_sql_db_password" name="module_cfg_sql_db_password" type="password" value="" placeholder="(leave blank to keep existing)" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">For security, the current password is never shown. Leaving it blank keeps the existing value.</div>
+  </div>
+
+  <div class="pv-field-group pv-sql-db-mssql-only" style="display:none;">
+    <label for="module_cfg_sql_db_mssql_driver">MSSQL ODBC Driver</label>
+    <input id="module_cfg_sql_db_mssql_driver" name="module_cfg_sql_db_mssql_driver" type="text" value="{{ edit_cfg.get('mssql_driver','') if edit_module else '' }}" placeholder="ODBC Driver 18 for SQL Server" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
+</div>

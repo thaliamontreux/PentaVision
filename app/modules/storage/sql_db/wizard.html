@@ -1,0 +1,23 @@
+<div class="pv-module-config-group" data-provider="sql_db" style="display: none;">
+  <div class="pv-help">Store recordings in an external SQL database.</div>
+  <label for="pv-wiz-sql-db-type">Database type</label>
+  <select id="pv-wiz-sql-db-type" name="module_cfg_sql_db_type">
+    <option value="mysql">MySQL</option>
+    <option value="postgres">PostgreSQL</option>
+    <option value="mssql">Microsoft SQL Server</option>
+  </select>
+  <label for="pv-wiz-sql-db-host" style="margin-top:0.5rem;">Host</label>
+  <input id="pv-wiz-sql-db-host" name="module_cfg_sql_db_host" type="text" placeholder="db.example.local" />
+  <label for="pv-wiz-sql-db-port" style="margin-top:0.5rem;">Port</label>
+  <input id="pv-wiz-sql-db-port" name="module_cfg_sql_db_port" type="number" placeholder="3306 / 5432 / 1433" />
+  <label for="pv-wiz-sql-db-database" style="margin-top:0.5rem;">Database</label>
+  <input id="pv-wiz-sql-db-database" name="module_cfg_sql_db_database" type="text" placeholder="pentavision_recordings" />
+  <label for="pv-wiz-sql-db-username" style="margin-top:0.5rem;">Username</label>
+  <input id="pv-wiz-sql-db-username" name="module_cfg_sql_db_username" type="text" />
+  <label for="pv-wiz-sql-db-password" style="margin-top:0.5rem;">Password</label>
+  <input id="pv-wiz-sql-db-password" name="module_cfg_sql_db_password" type="password" />
+  <div class="pv-wiz-sql-db-mssql-only" style="display:none;">
+    <label for="pv-wiz-sql-db-driver" style="margin-top:0.5rem;">MSSQL ODBC Driver</label>
+    <input id="pv-wiz-sql-db-driver" name="module_cfg_sql_db_mssql_driver" type="text" placeholder="ODBC Driver 18 for SQL Server" />
+  </div>
+</div>

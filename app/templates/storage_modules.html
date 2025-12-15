@@ -235,6 +235,7 @@
                   <select id="module_provider" name="module_provider" required {% if edit_module %}disabled{% endif %}>
                     <option value="">Select provider…</option>
                     <option value="db" {% if edit_module and edit_module.provider_type == 'db' %}selected{% endif %}>Database (RecordDB)</option>
+                    <option value="sql_db" {% if edit_module and edit_module.provider_type == 'sql_db' %}selected{% endif %}>SQL Database (External)</option>
                     <option value="local_fs" {% if edit_module and edit_module.provider_type == 'local_fs' %}selected{% endif %}>Local filesystem</option>
                     <option value="local_drive" {% if edit_module and edit_module.provider_type == 'local_drive' %}selected{% endif %}>Local drive path</option>
                     <option value="s3" {% if edit_module and edit_module.provider_type == 's3' %}selected{% endif %}>S3-compatible</option>
@@ -253,7 +254,7 @@
                     <option value="mega" {% if edit_module and edit_module.provider_type == 'mega' %}selected{% endif %}>MEGA</option>
                     {% if module_definitions %}
                       {% for d in module_definitions %}
-                        {% if d.provider_type not in ['db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','gdrive','onedrive','box','swift','pcloud','mega'] %}
+                        {% if d.provider_type not in ['db','sql_db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','gdrive','onedrive','box','swift','pcloud','mega'] %}
                           <option value="{{ d.provider_type }}" {% if edit_module and edit_module.provider_type == d.provider_type %}selected{% endif %}>{{ d.display_name }}</option>
                         {% endif %}
                       {% endfor %}
@@ -269,6 +270,7 @@
                 <div>
                   {% include 'modules/storage/local_fs/template.html' %}
                   {% include 'modules/storage/local_drive/template.html' %}
+                  {% include 'modules/storage/sql_db/template.html' %}
                   {% include 'modules/storage/s3/template.html' %}
                   {% include 'modules/storage/gcs/template.html' %}
                   {% include 'modules/storage/azure_blob/template.html' %}
@@ -458,6 +460,7 @@
               <select id="pv-wiz-provider" name="module_provider" required>
                 <option value="">Select provider…</option>
                 <option value="db">Database (RecordDB)</option>
+                <option value="sql_db">SQL Database (External)</option>
                 <option value="local_fs">Local filesystem</option>
                 <option value="local_drive">Local drive path</option>
                 <option value="s3">S3-compatible</option>
@@ -476,7 +479,7 @@
                 <option value="mega">MEGA</option>
                 {% if module_definitions %}
                   {% for d in module_definitions %}
-                    {% if d.provider_type not in ['db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','gdrive','onedrive','box','swift','pcloud','mega'] %}
+                    {% if d.provider_type not in ['db','sql_db','local_fs','local_drive','s3','gcs','azure_blob','dropbox','webdav','ftp','sftp','scp','gdrive','onedrive','box','swift','pcloud','mega'] %}
                       <option value="{{ d.provider_type }}">{{ d.display_name }}</option>
                     {% endif %}
                   {% endfor %}
@@ -509,6 +512,7 @@
               <div style="grid-column: 1 / -1;">
                 {% include 'modules/storage/local_fs/wizard.html' %}
                 {% include 'modules/storage/local_drive/wizard.html' %}
+                {% include 'modules/storage/sql_db/wizard.html' %}
                 {% include 'modules/storage/db/wizard.html' %}
                 {% include 'modules/storage/s3/wizard.html' %}
                 {% include 'modules/storage/gcs/wizard.html' %}
@@ -626,17 +630,37 @@
       function updateWizardProviderConfig() {
         if (!wizProvider) return;
         var value = wizProvider.value || '';
-        var groups = document.querySelectorAll('#pv-storage-wizard .pv-module-config-group');
+        var groups = wizForm.querySelectorAll('.pv-module-config-group');
         groups.forEach(function (el) {
           var target = (el.getAttribute('data-provider') || '').trim();
           el.style.display = target && target === value ? '' : 'none';
         });
+
+        try {
+          var wSel = document.getElementById('pv-wiz-sql-db-type');
+          var wShow = wSel && String(wSel.value || '').toLowerCase() === 'mssql';
+          var wBlocks = wizForm.querySelectorAll('.pv-wiz-sql-db-mssql-only');
+          if (wBlocks && wBlocks.length) {
+            wBlocks.forEach(function (el) {
+              el.style.display = wShow ? '' : 'none';
+            });
+          }
+        } catch (e) {}
       }
       if (wizProvider) {
         wizProvider.addEventListener('change', function () {
           updateWizardProviderConfig();
         });
       }
+
+      try {
+        var wizSqlDbType = document.getElementById('pv-wiz-sql-db-type');
+        if (wizSqlDbType) {
+          wizSqlDbType.addEventListener('change', function () {
+            updateWizardProviderConfig();
+          });
+        }
+      } catch (e) {}
 
       if (wizBack) {
         wizBack.addEventListener('click', function () {
@@ -829,6 +853,16 @@
       {% endif %}
 
       var select = document.getElementById('module_provider');
+      function updateSqlDbTypeFields() {
+        var sel = document.getElementById('module_cfg_sql_db_type');
+        var show = sel && String(sel.value || '').toLowerCase() === 'mssql';
+        var blocks = document.querySelectorAll('.pv-sql-db-mssql-only');
+        if (blocks && blocks.length) {
+          blocks.forEach(function (el) {
+            el.style.display = show ? '' : 'none';
+          });
+        }
+      }
       function updateModuleConfig() {
         if (!select) return;
         var value = select.value || '';
@@ -837,10 +871,16 @@
           var target = (el.getAttribute('data-provider') || '').trim();
           el.style.display = target && target === value ? '' : 'none';
         });
+        updateSqlDbTypeFields();
       }
       if (select) {
         select.addEventListener('change', updateModuleConfig);
         updateModuleConfig();
+      }
+
+      var sqlDbTypeSel = document.getElementById('module_cfg_sql_db_type');
+      if (sqlDbTypeSel) {
+        sqlDbTypeSel.addEventListener('change', updateSqlDbTypeFields);
       }
 
       var form = document.getElementById('pv-storage-form');
