@@ -1,8 +1,12 @@
 <div class="pv-module-config-group" data-provider="local_drive" style="display: none;">
-  <label for="module_cfg_local_drive_path">Local drive path</label>
-  <div style="display: flex; gap: 0.5rem; align-items: center;">
-    <input id="module_cfg_local_drive_path" name="module_cfg_local_drive_path" type="text" value="{{ edit_cfg.get('base_dir', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} style="flex: 1;" />
-    <button type="submit" class="pv-button-secondary" data-pv-submit-action="module_draft_test" {% if cfg_readonly %}disabled{% endif %}>Test Path</button>
+  <div class="pv-help">Store recordings in a specific path on the server machine (Windows drive path or Linux mount).</div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_local_drive_path">Local drive path</label>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <input id="module_cfg_local_drive_path" name="module_cfg_local_drive_path" type="text" value="{{ edit_cfg.get('base_dir', '') if edit_module else '' }}" placeholder="D:\\Recordings" {% if cfg_readonly %}disabled{% endif %} style="flex: 1;" />
+      <button type="submit" class="pv-button-secondary" data-pv-submit-action="module_draft_test" {% if cfg_readonly %}disabled{% endif %}>Test Path</button>
+    </div>
+    <div class="pv-help">Examples: <code>D:\\Recordings</code>, <code>E:\\PentaVision\\Archive</code>, or <code>/mnt/storage/recordings</code>.</div>
   </div>
-  <div class="pv-help">This is a path on the server machine (not the browser). Examples: <code>D:\\Recordings</code>, <code>E:\\PentaVision\\Archive</code>, or <code>/mnt/storage/recordings</code>.</div>
 </div>

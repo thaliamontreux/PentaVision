@@ -1,9 +1,15 @@
 <div class="pv-module-config-group" data-provider="onedrive" style="display: none;">
-  <label for="module_cfg_onedrive_access_token">OneDrive access token</label>
-  <input id="module_cfg_onedrive_access_token" name="module_cfg_onedrive_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">OAuth token for Microsoft Graph. <a href="https://learn.microsoft.com/graph/auth/" target="_blank" rel="noopener">Microsoft Graph auth</a> | <a href="https://learn.microsoft.com/graph/api/resources/onedrive" target="_blank" rel="noopener">OneDrive API</a></div>
+  <div class="pv-help">Upload recordings to OneDrive via Microsoft Graph. Tokens are never shown after saving.</div>
 
-  <label for="module_cfg_onedrive_root_path" style="margin-top: 0.35rem;">Root path (optional)</label>
-  <input id="module_cfg_onedrive_root_path" name="module_cfg_onedrive_root_path" type="text" value="{{ edit_cfg.get('root_path', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Optional subfolder path inside your drive (e.g. <code>Recordings</code>).</div>
+  <div class="pv-field-group">
+    <label for="module_cfg_onedrive_access_token">Access token</label>
+    <input id="module_cfg_onedrive_access_token" name="module_cfg_onedrive_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help"><a href="https://learn.microsoft.com/graph/auth/" target="_blank" rel="noopener">Microsoft Graph auth</a> | <a href="https://learn.microsoft.com/graph/api/resources/onedrive" target="_blank" rel="noopener">OneDrive API</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_onedrive_root_path">Root path (optional)</label>
+    <input id="module_cfg_onedrive_root_path" name="module_cfg_onedrive_root_path" type="text" value="{{ edit_cfg.get('root_path', '') if edit_module else '' }}" placeholder="Recordings" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Optional subfolder path inside your drive (e.g. <code>Recordings</code>).</div>
+  </div>
 </div>

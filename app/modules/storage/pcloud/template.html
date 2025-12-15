@@ -1,9 +1,15 @@
 <div class="pv-module-config-group" data-provider="pcloud" style="display: none;">
-  <label for="module_cfg_pcloud_access_token">pCloud access token</label>
-  <input id="module_cfg_pcloud_access_token" name="module_cfg_pcloud_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">OAuth token from your pCloud app. <a href="https://docs.pcloud.com/" target="_blank" rel="noopener">pCloud API docs</a></div>
+  <div class="pv-help">Upload recordings to pCloud. Tokens are never shown after saving.</div>
 
-  <label for="module_cfg_pcloud_path" style="margin-top: 0.35rem;">Path (optional)</label>
-  <input id="module_cfg_pcloud_path" name="module_cfg_pcloud_path" type="text" value="{{ edit_cfg.get('path', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Optional destination folder path in your pCloud account.</div>
+  <div class="pv-field-group">
+    <label for="module_cfg_pcloud_access_token">Access token</label>
+    <input id="module_cfg_pcloud_access_token" name="module_cfg_pcloud_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">OAuth token from your pCloud app. <a href="https://docs.pcloud.com/" target="_blank" rel="noopener">pCloud API docs</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_pcloud_path">Path (optional)</label>
+    <input id="module_cfg_pcloud_path" name="module_cfg_pcloud_path" type="text" value="{{ edit_cfg.get('path', '') if edit_module else '' }}" placeholder="/recordings" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Optional destination folder path in your pCloud account.</div>
+  </div>
 </div>

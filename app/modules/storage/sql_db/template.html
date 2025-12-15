@@ -1,7 +1,7 @@
 <div class="pv-module-config-group" data-provider="sql_db" style="display: none;">
-  <div class="pv-help">Stores recording bytes in an external SQL database (separate from the app's RecordDB). Configure connection details below.</div>
+  <div class="pv-help">Stores recording bytes in an external SQL database (separate from the app's RecordDB).</div>
 
-  <div class="pv-field-group" style="margin-top: 0.65rem;">
+  <div class="pv-field-group">
     <label for="module_cfg_sql_db_type">Database type</label>
     <select id="module_cfg_sql_db_type" name="module_cfg_sql_db_type" {% if cfg_readonly %}disabled{% endif %}>
       {% set sql_db_type = (edit_cfg.get('db_type','mysql') if edit_module else 'mysql') %}
@@ -13,7 +13,7 @@
 
   <div class="pv-field-group">
     <label for="module_cfg_sql_db_host">Host</label>
-    <input id="module_cfg_sql_db_host" name="module_cfg_sql_db_host" type="text" value="{{ edit_cfg.get('host','') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+    <input id="module_cfg_sql_db_host" name="module_cfg_sql_db_host" type="text" value="{{ edit_cfg.get('host','') if edit_module else '' }}" placeholder="db.example.local" {% if cfg_readonly %}disabled{% endif %} />
   </div>
 
   <div class="pv-field-group">
@@ -23,7 +23,7 @@
 
   <div class="pv-field-group">
     <label for="module_cfg_sql_db_database">Database</label>
-    <input id="module_cfg_sql_db_database" name="module_cfg_sql_db_database" type="text" value="{{ edit_cfg.get('database','') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+    <input id="module_cfg_sql_db_database" name="module_cfg_sql_db_database" type="text" value="{{ edit_cfg.get('database','') if edit_module else '' }}" placeholder="pentavision_recordings" {% if cfg_readonly %}disabled{% endif %} />
   </div>
 
   <div class="pv-field-group">

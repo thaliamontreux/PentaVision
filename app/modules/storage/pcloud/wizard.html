@@ -1,7 +1,14 @@
 <div class="pv-module-config-group" data-provider="pcloud" style="display: none;">
-  <label for="pv-wiz-pc-token">pCloud access token</label>
-  <input id="pv-wiz-pc-token" name="module_cfg_pcloud_access_token" type="password" autocomplete="off" />
-  <div class="pv-help"><a href="https://docs.pcloud.com/" target="_blank" rel="noopener">pCloud API docs</a></div>
-  <label for="pv-wiz-pc-path" style="margin-top: 0.35rem;">Path (optional)</label>
-  <input id="pv-wiz-pc-path" name="module_cfg_pcloud_path" type="text" />
+  <div class="pv-help">pCloud token and optional destination folder path.</div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-pc-token">Access token</label>
+    <input id="pv-wiz-pc-token" name="module_cfg_pcloud_access_token" type="password" autocomplete="off" />
+    <div class="pv-help"><a href="https://docs.pcloud.com/" target="_blank" rel="noopener">pCloud API docs</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-pc-path">Path (optional)</label>
+    <input id="pv-wiz-pc-path" name="module_cfg_pcloud_path" type="text" placeholder="/recordings" />
+  </div>
 </div>

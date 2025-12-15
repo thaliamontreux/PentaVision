@@ -1,14 +1,34 @@
 <div class="pv-module-config-group" data-provider="scp" style="display: none;">
-  <label for="pv-wiz-scp-host">Host</label>
-  <input id="pv-wiz-scp-host" name="module_cfg_scp_host" type="text" />
-  <label for="pv-wiz-scp-port" style="margin-top: 0.35rem;">Port</label>
-  <input id="pv-wiz-scp-port" name="module_cfg_scp_port" type="number" min="1" max="65535" value="22" />
-  <label for="pv-wiz-scp-base" style="margin-top: 0.35rem;">Base directory</label>
-  <input id="pv-wiz-scp-base" name="module_cfg_scp_base_dir" type="text" value="/" />
-  <label for="pv-wiz-scp-user" style="margin-top: 0.35rem;">Username</label>
-  <input id="pv-wiz-scp-user" name="module_cfg_scp_username" type="text" />
-  <label for="pv-wiz-scp-pass" style="margin-top: 0.35rem;">Password (optional)</label>
-  <input id="pv-wiz-scp-pass" name="module_cfg_scp_password" type="password" autocomplete="off" />
-  <label for="pv-wiz-scp-key" style="margin-top: 0.35rem;">Private key (optional)</label>
-  <textarea id="pv-wiz-scp-key" name="module_cfg_scp_private_key" rows="6"></textarea>
+  <div class="pv-help">SCP uses SSH to copy files to a remote server. Use a password or an SSH private key.</div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-scp-host">Host</label>
+    <input id="pv-wiz-scp-host" name="module_cfg_scp_host" type="text" placeholder="scp.example.com" />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-scp-port">Port</label>
+    <input id="pv-wiz-scp-port" name="module_cfg_scp_port" type="number" min="1" max="65535" value="22" />
+    <div class="pv-help">Default: <code>22</code>.</div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-scp-base">Base directory</label>
+    <input id="pv-wiz-scp-base" name="module_cfg_scp_base_dir" type="text" value="/" placeholder="/uploads/pentavision" />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-scp-user">Username</label>
+    <input id="pv-wiz-scp-user" name="module_cfg_scp_username" type="text" />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-scp-pass">Password (optional)</label>
+    <input id="pv-wiz-scp-pass" name="module_cfg_scp_password" type="password" autocomplete="off" />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-scp-key">Private key (optional)</label>
+    <textarea id="pv-wiz-scp-key" name="module_cfg_scp_private_key" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+  </div>
 </div>

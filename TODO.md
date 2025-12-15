@@ -16,7 +16,7 @@
 
 ## Pentastar-web UI rules / polish
 
-- [ ] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.
+- [x] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.
 - [ ] Match Storage Modules UI to `docs\ui-references\storage-modules-manager-reference.png`.
 
 ## Storage Modules Manager fixes
@@ -28,6 +28,7 @@
 - [x] Fix Local Drive Path provider: ensure `base_dir` persists and displays on edit.
 - [x] Make Configuration tab "Test Connection" run via AJAX without page refresh/resetting entered values.
 - [x] Toast auto-hide: bottom-right messages fade after 10 seconds.
+- [x] Polish all storage provider forms (each provider template individually; edit + wizard).
 
 ## System setup & security
 

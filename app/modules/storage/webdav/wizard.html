@@ -1,11 +1,19 @@
 <div class="pv-module-config-group" data-provider="webdav" style="display: none;">
-  <label for="pv-wiz-wd-url">Base URL</label>
-  <input id="pv-wiz-wd-url" name="module_cfg_webdav_base_url" type="text" />
-  <div class="pv-help">Example: <code>https://example.com/dav</code></div>
+  <div class="pv-help">WebDAV endpoint and credentials. Use an app password/token when available.</div>
 
-  <label for="pv-wiz-wd-user" style="margin-top: 0.35rem;">Username</label>
-  <input id="pv-wiz-wd-user" name="module_cfg_webdav_username" type="text" />
+  <div class="pv-field-group">
+    <label for="pv-wiz-wd-url">Base URL</label>
+    <input id="pv-wiz-wd-url" name="module_cfg_webdav_base_url" type="text" placeholder="https://example.com/dav" />
+    <div class="pv-help">Example: <code>https://example.com/dav</code></div>
+  </div>
 
-  <label for="pv-wiz-wd-pass" style="margin-top: 0.35rem;">Password / app token</label>
-  <input id="pv-wiz-wd-pass" name="module_cfg_webdav_password" type="password" autocomplete="off" />
+  <div class="pv-field-group">
+    <label for="pv-wiz-wd-user">Username</label>
+    <input id="pv-wiz-wd-user" name="module_cfg_webdav_username" type="text" />
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-wd-pass">Password / app token</label>
+    <input id="pv-wiz-wd-pass" name="module_cfg_webdav_password" type="password" autocomplete="off" />
+  </div>
 </div>

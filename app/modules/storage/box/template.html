@@ -1,9 +1,15 @@
 <div class="pv-module-config-group" data-provider="box" style="display: none;">
-  <label for="module_cfg_box_access_token">Box access token</label>
-  <input id="module_cfg_box_access_token" name="module_cfg_box_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Token from a Box app integration. <a href="https://developer.box.com/" target="_blank" rel="noopener">Box developer docs</a></div>
+  <div class="pv-help">Upload recordings to Box. Tokens are never shown after saving.</div>
 
-  <label for="module_cfg_box_folder_id" style="margin-top: 0.35rem;">Folder ID (optional)</label>
-  <input id="module_cfg_box_folder_id" name="module_cfg_box_folder_id" type="text" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Optional Box folder to upload into. <a href="https://developer.box.com/guides/api-calls/folders/" target="_blank" rel="noopener">Folders API guide</a></div>
+  <div class="pv-field-group">
+    <label for="module_cfg_box_access_token">Access token</label>
+    <input id="module_cfg_box_access_token" name="module_cfg_box_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Token from a Box app integration. <a href="https://developer.box.com/" target="_blank" rel="noopener">Box developer docs</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_box_folder_id">Folder ID (optional)</label>
+    <input id="module_cfg_box_folder_id" name="module_cfg_box_folder_id" type="text" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}" placeholder="(optional)" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Optional Box folder to upload into. <a href="https://developer.box.com/guides/api-calls/folders/" target="_blank" rel="noopener">Folders API guide</a></div>
+  </div>
 </div>

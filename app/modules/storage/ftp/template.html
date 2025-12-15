@@ -1,34 +1,47 @@
 <div class="pv-module-config-group" data-provider="ftp" style="display: none;">
-  <div class="pv-help" style="margin-bottom: 0.35rem;">FTP/FTPS uploads recordings to a remote server path. Prefer FTPS or SFTP on untrusted networks.</div>
-  <label for="module_cfg_ftp_host">Host</label>
-  <input id="module_cfg_ftp_host" name="module_cfg_ftp_host" type="text" value="{{ edit_cfg.get('host', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Example: <code>ftp.yourdomain.com</code> or <code>10.0.0.20</code>. Ask your server admin for the FTP hostname.</div>
+  <div class="pv-help">FTP/FTPS uploads recordings to a remote server path. Prefer FTPS or SFTP on untrusted networks.</div>
 
-  <label for="module_cfg_ftp_port" style="margin-top: 0.35rem;">Port</label>
-  <input id="module_cfg_ftp_port" name="module_cfg_ftp_port" type="number" min="1" max="65535" value="{{ edit_cfg.get('port', 21) if edit_module else 21 }}" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Default: 21 (FTP/FTPS). If your host uses a custom port, enter it here.</div>
+  <div class="pv-field-group">
+    <label for="module_cfg_ftp_host">Host</label>
+    <input id="module_cfg_ftp_host" name="module_cfg_ftp_host" type="text" value="{{ edit_cfg.get('host', '') if edit_module else '' }}" placeholder="ftp.example.com" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Example: <code>ftp.yourdomain.com</code> or <code>10.0.0.20</code>.</div>
+  </div>
 
-  <label for="module_cfg_ftp_base_dir" style="margin-top: 0.35rem;">Base directory</label>
-  <input id="module_cfg_ftp_base_dir" name="module_cfg_ftp_base_dir" type="text" value="{{ edit_cfg.get('base_dir', '/') if edit_module else '/' }}" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Where recordings will be stored. Example: <code>/uploads/pentavision</code>.</div>
+  <div class="pv-field-group">
+    <label for="module_cfg_ftp_port">Port</label>
+    <input id="module_cfg_ftp_port" name="module_cfg_ftp_port" type="number" min="1" max="65535" value="{{ edit_cfg.get('port', 21) if edit_module else 21 }}" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Default: <code>21</code> (FTP/FTPS).</div>
+  </div>
 
-  <label for="module_cfg_ftp_username" style="margin-top: 0.35rem;">Username</label>
-  <input id="module_cfg_ftp_username" name="module_cfg_ftp_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-field-group">
+    <label for="module_cfg_ftp_base_dir">Base directory</label>
+    <input id="module_cfg_ftp_base_dir" name="module_cfg_ftp_base_dir" type="text" value="{{ edit_cfg.get('base_dir', '/') if edit_module else '/' }}" placeholder="/uploads/pentavision" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Where recordings will be stored on the server (requires write permission).</div>
+  </div>
 
-  <label for="module_cfg_ftp_password" style="margin-top: 0.35rem;">Password</label>
-  <input id="module_cfg_ftp_password" name="module_cfg_ftp_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Credentials are never echoed back after save for safety.</div>
+  <div class="pv-field-group">
+    <label for="module_cfg_ftp_username">Username</label>
+    <input id="module_cfg_ftp_username" name="module_cfg_ftp_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
 
-  <div class="pv-field-group" style="margin-top: 0.35rem;">
+  <div class="pv-field-group">
+    <label for="module_cfg_ftp_password">Password</label>
+    <input id="module_cfg_ftp_password" name="module_cfg_ftp_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Credentials are never echoed back after save for safety.</div>
+  </div>
+
+  <div class="pv-field-group">
     <input type="hidden" name="module_cfg_ftp_use_tls_present" value="1" />
-    <label style="display: inline-flex; align-items: center; gap: 0.4rem;">
+    <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
       <input type="checkbox" name="module_cfg_ftp_use_tls" value="1" {% if edit_module and edit_cfg.get('use_tls') %}checked{% endif %} {% if cfg_readonly %}disabled{% endif %} />
       <span>Use TLS (FTPS)</span>
     </label>
     <div class="pv-help">Enable for encrypted transport if your server supports it.</div>
+  </div>
 
+  <div class="pv-field-group">
     <input type="hidden" name="module_cfg_ftp_passive_present" value="1" />
-    <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem;">
+    <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
       <input type="checkbox" name="module_cfg_ftp_passive" value="1" {% if not edit_module or edit_cfg.get('passive', True) %}checked{% endif %} {% if cfg_readonly %}disabled{% endif %} />
       <span>Passive mode</span>
     </label>

@@ -1,9 +1,15 @@
 <div class="pv-module-config-group" data-provider="gdrive" style="display: none;">
-  <label for="module_cfg_gdrive_access_token">Google Drive access token</label>
-  <input id="module_cfg_gdrive_access_token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">OAuth 2.0 access token with Drive scopes. <a href="https://developers.google.com/identity/protocols/oauth2" target="_blank" rel="noopener">OAuth 2.0 docs</a> | <a href="https://developers.google.com/drive/api/guides/about-auth" target="_blank" rel="noopener">Drive authentication</a></div>
+  <div class="pv-help">Upload recordings to Google Drive. Tokens are never shown after saving.</div>
 
-  <label for="module_cfg_gdrive_folder_id" style="margin-top: 0.35rem;">Folder ID (optional)</label>
-  <input id="module_cfg_gdrive_folder_id" name="module_cfg_gdrive_folder_id" type="text" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
-  <div class="pv-help">Optional Drive folder to store files under. <a href="https://developers.google.com/drive/api/guides/folder" target="_blank" rel="noopener">Drive folders guide</a></div>
+  <div class="pv-field-group">
+    <label for="module_cfg_gdrive_access_token">Access token</label>
+    <input id="module_cfg_gdrive_access_token" name="module_cfg_gdrive_access_token" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">OAuth 2.0 access token with Drive scopes. <a href="https://developers.google.com/identity/protocols/oauth2" target="_blank" rel="noopener">OAuth 2.0</a> | <a href="https://developers.google.com/drive/api/guides/about-auth" target="_blank" rel="noopener">Drive auth</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="module_cfg_gdrive_folder_id">Folder ID (optional)</label>
+    <input id="module_cfg_gdrive_folder_id" name="module_cfg_gdrive_folder_id" type="text" value="{{ edit_cfg.get('folder_id', '') if edit_module else '' }}" placeholder="(optional)" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Optional Drive folder to store files under. <a href="https://developers.google.com/drive/api/guides/folder" target="_blank" rel="noopener">Folders guide</a></div>
+  </div>
 </div>

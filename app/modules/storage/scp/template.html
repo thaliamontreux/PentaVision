@@ -1,22 +1,37 @@
 <div class="pv-module-config-group" data-provider="scp" style="display: none;">
-  <div class="pv-help" style="margin-bottom: 0.35rem;">SCP also uses SSH. It’s simple and widely supported, but SFTP is generally preferred.</div>
+  <div class="pv-help">SCP uses SSH to copy files to a remote server path. SFTP is generally preferred, but SCP is widely supported.</div>
 
-  <label for="module_cfg_scp_host">Host</label>
-  <input id="module_cfg_scp_host" name="module_cfg_scp_host" type="text" value="{{ edit_cfg.get('host', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-field-group">
+    <label for="module_cfg_scp_host">Host</label>
+    <input id="module_cfg_scp_host" name="module_cfg_scp_host" type="text" value="{{ edit_cfg.get('host', '') if edit_module else '' }}" placeholder="scp.example.com" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
 
-  <label for="module_cfg_scp_port" style="margin-top: 0.35rem;">Port</label>
-  <input id="module_cfg_scp_port" name="module_cfg_scp_port" type="number" min="1" max="65535" value="{{ edit_cfg.get('port', 22) if edit_module else 22 }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-field-group">
+    <label for="module_cfg_scp_port">Port</label>
+    <input id="module_cfg_scp_port" name="module_cfg_scp_port" type="number" min="1" max="65535" value="{{ edit_cfg.get('port', 22) if edit_module else 22 }}" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Default: <code>22</code>.</div>
+  </div>
 
-  <label for="module_cfg_scp_base_dir" style="margin-top: 0.35rem;">Base directory</label>
-  <input id="module_cfg_scp_base_dir" name="module_cfg_scp_base_dir" type="text" value="{{ edit_cfg.get('base_dir', '/') if edit_module else '/' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-field-group">
+    <label for="module_cfg_scp_base_dir">Base directory</label>
+    <input id="module_cfg_scp_base_dir" name="module_cfg_scp_base_dir" type="text" value="{{ edit_cfg.get('base_dir', '/') if edit_module else '/' }}" placeholder="/uploads/pentavision" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">Where recordings will be stored on the server (requires write permission).</div>
+  </div>
 
-  <label for="module_cfg_scp_username" style="margin-top: 0.35rem;">Username</label>
-  <input id="module_cfg_scp_username" name="module_cfg_scp_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-field-group">
+    <label for="module_cfg_scp_username">Username</label>
+    <input id="module_cfg_scp_username" name="module_cfg_scp_username" type="text" value="{{ edit_cfg.get('username', '') if edit_module else '' }}" {% if cfg_readonly %}disabled{% endif %} />
+  </div>
 
-  <label for="module_cfg_scp_password" style="margin-top: 0.35rem;">Password (optional)</label>
-  <input id="module_cfg_scp_password" name="module_cfg_scp_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+  <div class="pv-field-group">
+    <label for="module_cfg_scp_password">Password (optional)</label>
+    <input id="module_cfg_scp_password" name="module_cfg_scp_password" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    <div class="pv-help">If you use key authentication, you can leave this blank.</div>
+  </div>
 
-  <label for="module_cfg_scp_private_key" style="margin-top: 0.35rem;">Private key (optional)</label>
-  <textarea id="module_cfg_scp_private_key" name="module_cfg_scp_private_key" rows="6" {% if cfg_readonly %}disabled{% endif %}>{{ edit_cfg.get('private_key', '') if edit_module else '' }}</textarea>
-  <div class="pv-help">If password auth is disabled on the server, paste the private key. <a href="https://www.ssh.com/academy/ssh/keygen" target="_blank" rel="noopener">SSH key guide</a></div>
+  <div class="pv-field-group">
+    <label for="module_cfg_scp_private_key">Private key (optional)</label>
+    <textarea id="module_cfg_scp_private_key" name="module_cfg_scp_private_key" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" {% if cfg_readonly %}disabled{% endif %}>{{ edit_cfg.get('private_key', '') if edit_module else '' }}</textarea>
+    <div class="pv-help">Paste the PEM/OpenSSH private key. <a href="https://www.ssh.com/academy/ssh/keygen" target="_blank" rel="noopener">SSH key guide</a></div>
+  </div>
 </div>
