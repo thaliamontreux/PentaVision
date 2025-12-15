@@ -53,6 +53,7 @@ from .models import (
     StorageModuleHealthCheck,
     StorageModuleWriteStat,
     StorageSettings,
+    UploadQueueItem,
     User,
     UserNotificationSettings,
     WebAuthnCredential,
