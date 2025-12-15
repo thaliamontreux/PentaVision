@@ -10,6 +10,7 @@ from .db import get_face_engine, get_record_engine, get_user_engine
 from .installer import bp as installer_bp
 from .models import create_face_schema, create_record_schema, create_user_schema
 from .security import init_security
+from .storage_startup import start_storage_startup_checks
 from .views import bp as main_bp
 
 
@@ -60,6 +61,8 @@ def create_app() -> Flask:
                     pass
         except Exception:  # noqa: BLE001
             pass
+
+    start_storage_startup_checks(app)
 
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)

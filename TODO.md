@@ -21,8 +21,10 @@
 
 ## Storage Modules Manager fixes
 
-- [ ] Make existing-module Test on `/storage?edit_module=...` run via AJAX (no page reload) and show toast results.
-- [ ] Persist Test -> Save proof reliably for both wizard and edit flows.
+- [x] Make existing-module Test on `/storage?edit_module=...` run via AJAX (no page reload) and show toast results.
+- [x] Persist Test -> Save proof reliably for both wizard and edit flows.
+- [ ] On app startup, run a test write for enabled storage modules and record it in `storage_module_write_stats`.
+- [ ] Ensure Health/Last write/Last OK/Last error panels reflect `StorageModuleWriteStat` + `StorageModuleHealthCheck` correctly.
 
 ## System setup & security
 

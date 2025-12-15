@@ -2621,7 +2621,15 @@ def storage_settings():
                     .first()
                 )
                 last_write_text = "n/a"
-                if last_row is not None and getattr(last_row, "created_at", None):
+                last_write_stat = (
+                    session.query(StorageModuleWriteStat)
+                    .filter(StorageModuleWriteStat.module_name == selected_module.name)
+                    .order_by(StorageModuleWriteStat.created_at.desc())
+                    .first()
+                )
+                if last_write_stat is not None and getattr(last_write_stat, "created_at", None):
+                    last_write_text = str(last_write_stat.created_at)
+                elif last_row is not None and getattr(last_row, "created_at", None):
                     last_write_text = str(last_row.created_at)
                 cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
                 active_streams = (
