@@ -81,11 +81,19 @@
     </main>
 
     <div
-      id="pv-floating-datetime"
+      id="pv-status-bar"
       role="status"
       aria-live="polite"
-      style="position: fixed; left: 16px; bottom: 16px; z-index: 9998; padding: 0.6rem 0.85rem; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background: #86efac; color: #111827; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"
-    ></div>
+      style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 9998; display: flex; gap: 0.75rem; align-items: center; padding: 0.55rem 0.9rem; box-shadow: 0 -10px 30px rgba(0,0,0,0.35); background: #86efac; color: #111827; font-weight: 700; font-size: 0.92rem;"
+    >
+      <span id="pv-status-datetime" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></span>
+      <span style="opacity: 0.7;">|</span>
+      <span style="white-space: nowrap;">System:</span>
+      <span id="pv-status-system" style="white-space: nowrap;"></span>
+      <span style="opacity: 0.7;">|</span>
+      <span style="white-space: nowrap;">Last error:</span>
+      <span id="pv-status-last-error" style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+    </div>
 
     <div
       id="pv-global-toast"
@@ -197,9 +205,26 @@
         var toastEl = document.getElementById('pv-global-toast');
         if (!toastEl) return;
 
+        var statusLastErrorEl = document.getElementById('pv-status-last-error');
+        function setLastError(message) {
+          if (!statusLastErrorEl) return;
+          statusLastErrorEl.textContent = String(message || '');
+          try {
+            window.sessionStorage.setItem('pvLastError', String(message || ''));
+          } catch (e) {}
+        }
+
+        try {
+          var storedLast = window.sessionStorage.getItem('pvLastError') || '';
+          if (storedLast && statusLastErrorEl) {
+            statusLastErrorEl.textContent = storedLast;
+          }
+        } catch (e) {}
+
         function showToast(message) {
           toastEl.textContent = String(message || '');
           toastEl.style.display = 'block';
+          setLastError(message);
           window.clearTimeout(showToast._t);
           showToast._t = window.setTimeout(function () {
             toastEl.style.display = 'none';
@@ -251,7 +276,7 @@
 
     <script>
       (function () {
-        var el = document.getElementById('pv-floating-datetime');
+        var el = document.getElementById('pv-status-datetime');
         if (!el) return;
 
         function pad(n) {
@@ -260,17 +285,49 @@
 
         function tick() {
           var d = new Date();
-          var yyyy = d.getFullYear();
           var mm = pad(d.getMonth() + 1);
           var dd = pad(d.getDate());
+          var yy = pad(d.getFullYear() % 100);
           var hh = pad(d.getHours());
           var mi = pad(d.getMinutes());
-          var ss = pad(d.getSeconds());
-          el.textContent = yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + mi + ':' + ss;
+          el.textContent = mm + '/' + dd + '/' + yy + ' ' + hh + ':' + mi;
         }
 
         tick();
         window.setInterval(tick, 1000);
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var statusEl = document.getElementById('pv-status-system');
+        if (!statusEl) return;
+
+        function applyStatus(data) {
+          var overall = (data && (data.overall_status || data.status)) ? String(data.overall_status || data.status) : 'unknown';
+          statusEl.textContent = overall;
+        }
+
+        function tick() {
+          try {
+            fetch('{{ url_for('main.api_status') }}', { credentials: 'same-origin' })
+              .then(function (r) {
+                if (!r.ok) throw new Error('status ' + r.status);
+                return r.json();
+              })
+              .then(function (data) {
+                applyStatus(data);
+              })
+              .catch(function () {
+                statusEl.textContent = 'unknown';
+              });
+          } catch (e) {
+            statusEl.textContent = 'unknown';
+          }
+        }
+
+        tick();
+        window.setInterval(tick, 5000);
       })();
     </script>
   </body>

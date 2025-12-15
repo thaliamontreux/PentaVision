@@ -81,6 +81,12 @@ bp = Blueprint("main", __name__)
 FACE_MATCH_THRESHOLD = 0.6
 
 
+_pv_status_cache: dict[str, object] = {
+    "ts": 0.0,
+    "data": None,
+}
+
+
 def _get_face_match_threshold() -> float:
     value = current_app.config.get("FACE_MATCH_THRESHOLD")
     if value is None or value == "":
@@ -89,6 +95,53 @@ def _get_face_match_threshold() -> float:
         return float(value)
     except (TypeError, ValueError):
         return FACE_MATCH_THRESHOLD
+
+
+@bp.get("/api/status")
+def api_status() -> Response:
+    user = get_current_user()
+    if user is None:
+        return jsonify({"overall_status": "signed_out"})
+
+    now = time.time()
+    try:
+        cached_ts = float(_pv_status_cache.get("ts") or 0.0)
+    except Exception:  # noqa: BLE001
+        cached_ts = 0.0
+
+    cached_data = _pv_status_cache.get("data")
+    if cached_data is not None and (now - cached_ts) < 5.0:
+        return jsonify(cached_data)
+
+    db_status: dict[str, str] = {}
+    for label, getter in (
+        ("user", get_user_engine),
+        ("face", get_face_engine),
+        ("record", get_record_engine),
+    ):
+        engine = getter()
+        if engine is None:
+            db_status[label] = "not_configured"
+            continue
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        except Exception:  # noqa: BLE001
+            db_status[label] = "error"
+        else:
+            db_status[label] = "ok"
+
+    all_ok = all(value != "error" for value in db_status.values())
+    overall = "ok" if all_ok else "degraded"
+
+    payload = {
+        "overall_status": overall,
+        "db_status": db_status,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _pv_status_cache["ts"] = now
+    _pv_status_cache["data"] = payload
+    return jsonify(payload)
 
 
 def _load_camera_property_map(record_engine) -> dict[int, int]:
