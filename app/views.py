@@ -1374,6 +1374,8 @@ def storage_settings():
     record_engine = get_record_engine()
 
     edit_module = None
+    edit_module_id: int | None = None
+    edit_module_name: str | None = None
     edit_module_config: dict[str, object] | None = None
     if record_engine is not None:
         edit_id_raw = request.args.get("edit_module") or ""
@@ -1390,6 +1392,14 @@ def storage_settings():
                 row = session_db.get(StorageModule, edit_id)
             if row is not None:
                 edit_module = row
+                try:
+                    edit_module_id = int(row.id)
+                except Exception:  # noqa: BLE001
+                    edit_module_id = None
+                try:
+                    edit_module_name = str(row.name)
+                except Exception:  # noqa: BLE001
+                    edit_module_name = None
                 if row.config_json:
                     try:
                         edit_module_config = json.loads(row.config_json)
@@ -2013,6 +2023,14 @@ def storage_settings():
                                     try:
                                         edit_module = module
                                         edit_module_config = dict(merged_cfg)
+                                        try:
+                                            edit_module_id = int(module.id)
+                                        except Exception:  # noqa: BLE001
+                                            edit_module_id = None
+                                        try:
+                                            edit_module_name = str(module.name)
+                                        except Exception:  # noqa: BLE001
+                                            edit_module_name = None
                                     except Exception:  # noqa: BLE001
                                         pass
                                     _log_module_event(
@@ -2672,6 +2690,19 @@ def storage_settings():
                 }
             )
 
+    # When rendering the split-view UI, always pass selected_module as a plain
+    # dict (not a detached SQLAlchemy object), because templates read
+    # attributes like selected_module.name and selected_module.id.
+    selected_module = None
+    if edit_module_id is not None:
+        for m in modules:
+            try:
+                if int(m.get("id") or 0) == int(edit_module_id):
+                    selected_module = m
+                    break
+            except Exception:  # noqa: BLE001
+                continue
+
     open_wizard = False
     try:
         open_wizard = bool(request.args.get("wizard"))
@@ -2695,13 +2726,25 @@ def storage_settings():
             pass
 
     # Metrics for split-view UI
-    selected_module = edit_module
     selected_metrics = None
     streams_rows = []
     upload_rows = []
     logs_rows = []
     recent_error_rows = []
     if selected_module is not None:
+        selected_module_id = edit_module_id
+        if selected_module_id is None:
+            try:
+                selected_module_id = int(getattr(selected_module, "id", 0) or 0)
+            except Exception:  # noqa: BLE001
+                selected_module_id = None
+        selected_module_name = edit_module_name
+        if not selected_module_name:
+            try:
+                selected_module_name = str(getattr(selected_module, "name", "") or "")
+            except Exception:  # noqa: BLE001
+                selected_module_name = ""
+
         engine = get_record_engine()
         if engine is not None:
             CameraRecording.__table__.create(bind=engine, checkfirst=True)
@@ -2711,14 +2754,14 @@ def storage_settings():
             with Session(engine) as session:
                 last_row = (
                     session.query(CameraRecording)
-                    .filter(CameraRecording.storage_provider == selected_module.name)
+                    .filter(CameraRecording.storage_provider == selected_module_name)
                     .order_by(CameraRecording.created_at.desc())
                     .first()
                 )
                 last_write_text = "n/a"
                 last_write_stat = (
                     session.query(StorageModuleWriteStat)
-                    .filter(StorageModuleWriteStat.module_name == selected_module.name)
+                    .filter(StorageModuleWriteStat.module_name == selected_module_name)
                     .order_by(StorageModuleWriteStat.created_at.desc())
                     .first()
                 )
@@ -2730,7 +2773,7 @@ def storage_settings():
                 active_streams = (
                     session.query(func.count(func.distinct(CameraRecording.device_id)))
                     .filter(
-                        CameraRecording.storage_provider == selected_module.name,
+                        CameraRecording.storage_provider == selected_module_name,
                         CameraRecording.created_at >= cutoff,
                     )
                     .scalar()
@@ -2741,7 +2784,7 @@ def storage_settings():
                 last_ok_row = (
                     session.query(StorageModuleWriteStat)
                     .filter(
-                        StorageModuleWriteStat.module_name == selected_module.name,
+                        StorageModuleWriteStat.module_name == selected_module_name,
                         StorageModuleWriteStat.ok == 1,
                     )
                     .order_by(StorageModuleWriteStat.created_at.desc())
@@ -2750,7 +2793,7 @@ def storage_settings():
                 last_err_row = (
                     session.query(StorageModuleWriteStat)
                     .filter(
-                        StorageModuleWriteStat.module_name == selected_module.name,
+                        StorageModuleWriteStat.module_name == selected_module_name,
                         StorageModuleWriteStat.ok == 0,
                     )
                     .order_by(StorageModuleWriteStat.created_at.desc())
@@ -2762,7 +2805,7 @@ def storage_settings():
                         func.coalesce(func.sum(StorageModuleWriteStat.bytes_written), 0),
                     )
                     .filter(
-                        StorageModuleWriteStat.module_name == selected_module.name,
+                        StorageModuleWriteStat.module_name == selected_module_name,
                         StorageModuleWriteStat.ok == 1,
                         StorageModuleWriteStat.created_at >= cutoff_15m,
                     )
@@ -2774,8 +2817,8 @@ def storage_settings():
                 recent_error_rows = (
                     session.query(StorageModuleEvent)
                     .filter(
-                        (StorageModuleEvent.module_id == int(selected_module.id))
-                        | (StorageModuleEvent.module_name == selected_module.name)
+                        (StorageModuleEvent.module_id == int(selected_module_id or 0))
+                        | (StorageModuleEvent.module_name == selected_module_name)
                     )
                     .filter(StorageModuleEvent.level == "error")
                     .order_by(StorageModuleEvent.created_at.desc())
@@ -2794,14 +2837,14 @@ def storage_settings():
                 }
                 streams_rows = (
                     session.query(CameraRecording)
-                    .filter(CameraRecording.storage_provider == selected_module.name)
+                    .filter(CameraRecording.storage_provider == selected_module_name)
                     .order_by(CameraRecording.created_at.desc())
                     .limit(25)
                     .all()
                 )
                 upload_rows = (
                     session.query(UploadQueueItem)
-                    .filter(UploadQueueItem.provider_name == selected_module.name)
+                    .filter(UploadQueueItem.provider_name == selected_module_name)
                     .order_by(UploadQueueItem.created_at.desc())
                     .limit(25)
                     .all()
@@ -2809,11 +2852,11 @@ def storage_settings():
                 logs_rows = (
                     session.query(StorageModuleEvent)
                     .filter(
-                        (StorageModuleEvent.module_id == int(selected_module.id))
-                        | (StorageModuleEvent.module_name == selected_module.name)
+                        (StorageModuleEvent.module_id == int(selected_module_id or 0))
+                        | (StorageModuleEvent.module_name == selected_module_name)
                     )
                     .order_by(StorageModuleEvent.created_at.desc())
-                    .limit(50)
+                    .limit(25)
                     .all()
                 )
 

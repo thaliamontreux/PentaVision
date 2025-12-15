@@ -860,21 +860,31 @@
           if (actionInput) actionInput.value = action;
         });
 
-        function runEditTestAjax() {
-          if (editTestBtn) {
-            editTestBtn.disabled = true;
-            editTestBtn.textContent = 'Testing…';
+        function runEditTestAjax(triggerBtn) {
+          if (!form) return;
+          var btn = triggerBtn || editTestBtn;
+
+          try {
+            if (editTestOk) editTestOk.value = '';
+            if (editTestFp) editTestFp.value = '';
+          } catch (e) {}
+
+          if (btn) {
+            btn.disabled = true;
+            try {
+              btn.dataset.pvOrigText = btn.textContent;
+            } catch (e) {}
+            btn.textContent = 'Testing…';
           }
           if (editActionInput) editActionInput.value = 'module_draft_test';
           var fd = new FormData(form);
           fetch(window.location.pathname + window.location.search, {
             method: 'POST',
-            body: fd,
-            credentials: 'same-origin',
             headers: {
               'X-Requested-With': 'XMLHttpRequest',
               'Accept': 'application/json'
-            }
+            },
+            body: fd
           })
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -896,9 +906,13 @@
               showToast('Test failed: ' + e, false);
             })
             .finally(function () {
-              if (editTestBtn) {
-                editTestBtn.disabled = false;
-                editTestBtn.textContent = 'Test Connection';
+              if (btn) {
+                btn.disabled = false;
+                var orig = '';
+                try {
+                  orig = btn.dataset.pvOrigText || '';
+                } catch (e) {}
+                btn.textContent = orig || btn.textContent || 'Test';
               }
             });
         }
@@ -915,7 +929,7 @@
             var act = ev.submitter.getAttribute('data-pv-submit-action');
             if (act === 'module_draft_test') {
               ev.preventDefault();
-              runEditTestAjax();
+              runEditTestAjax(ev.submitter);
             }
           }
         });

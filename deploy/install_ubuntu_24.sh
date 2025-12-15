@@ -61,7 +61,6 @@ fi
 echo "==> Installing Python dependencies"
 sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install --upgrade pip --break-system-packages
 sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install -r requirements.txt --break-system-packages
-sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/pip" install "git+https://github.com/ageitgey/face_recognition_models" --break-system-packages
 
 OPENCV_DONE_MARKER="${APP_DIR}/opencv_build.done"
 if [[ ! -f "${OPENCV_DONE_MARKER}" ]]; then
