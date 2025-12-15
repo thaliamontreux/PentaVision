@@ -8,10 +8,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from flask import Flask, Response, abort, jsonify, render_template, request
-from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from .db import get_record_engine
-from .models import StorageModuleEvent, StorageModuleHealthCheck
 
 
 def _client_ip() -> str:
@@ -102,22 +101,37 @@ def create_log_server() -> Flask:
         if engine is None:
             return jsonify({"error": "RecordDB is not configured"}), 503
 
-        StorageModuleEvent.__table__.create(bind=engine, checkfirst=True)
-        StorageModuleHealthCheck.__table__.create(bind=engine, checkfirst=True)
+        events: list[dict[str, Any]] = []
+        health: list[dict[str, Any]] = []
+        try:
+            with engine.connect() as conn:
+                ev_rows = conn.execute(
+                    text(
+                        """
+                        SELECT created_at, level, action, message, module_id, module_name
+                        FROM storage_module_events
+                        ORDER BY created_at DESC
+                        LIMIT :lim
+                        """
+                    ),
+                    {"lim": limit},
+                ).mappings().all()
+                events = [dict(r) for r in ev_rows]
 
-        with Session(engine) as session_db:
-            events = (
-                session_db.query(StorageModuleEvent)
-                .order_by(StorageModuleEvent.created_at.desc())
-                .limit(limit)
-                .all()
-            )
-            health = (
-                session_db.query(StorageModuleHealthCheck)
-                .order_by(StorageModuleHealthCheck.created_at.desc())
-                .limit(limit)
-                .all()
-            )
+                hc_rows = conn.execute(
+                    text(
+                        """
+                        SELECT created_at, module_id, module_name, provider_type, ok, message, duration_ms
+                        FROM storage_module_health_checks
+                        ORDER BY created_at DESC
+                        LIMIT :lim
+                        """
+                    ),
+                    {"lim": limit},
+                ).mappings().all()
+                health = [dict(r) for r in hc_rows]
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"error": f"Failed to load audit tables: {exc}"}), 500
 
         def _dt(val: Any) -> str:
             if not val:
@@ -133,24 +147,24 @@ def create_log_server() -> Flask:
             {
                 "events": [
                     {
-                        "created_at": _dt(getattr(r, "created_at", None)),
-                        "level": str(getattr(r, "level", "")),
-                        "action": str(getattr(r, "action", "")),
-                        "message": str(getattr(r, "message", "")),
-                        "module_id": getattr(r, "module_id", None),
-                        "module_name": str(getattr(r, "module_name", "")),
+                        "created_at": _dt(r.get("created_at")),
+                        "level": str(r.get("level") or ""),
+                        "action": str(r.get("action") or ""),
+                        "message": str(r.get("message") or ""),
+                        "module_id": r.get("module_id"),
+                        "module_name": str(r.get("module_name") or ""),
                     }
                     for r in events
                 ],
                 "health": [
                     {
-                        "created_at": _dt(getattr(r, "created_at", None)),
-                        "module_id": getattr(r, "module_id", None),
-                        "module_name": str(getattr(r, "module_name", "")),
-                        "provider_type": str(getattr(r, "provider_type", "")),
-                        "ok": bool(getattr(r, "ok", 0)),
-                        "message": str(getattr(r, "message", "")),
-                        "duration_ms": getattr(r, "duration_ms", None),
+                        "created_at": _dt(r.get("created_at")),
+                        "module_id": r.get("module_id"),
+                        "module_name": str(r.get("module_name") or ""),
+                        "provider_type": str(r.get("provider_type") or ""),
+                        "ok": bool(r.get("ok") or 0),
+                        "message": str(r.get("message") or ""),
+                        "duration_ms": r.get("duration_ms"),
                     }
                     for r in health
                 ],

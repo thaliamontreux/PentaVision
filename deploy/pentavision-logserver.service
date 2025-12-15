@@ -7,9 +7,10 @@ User=pentavision
 Group=pentavision
 WorkingDirectory=/opt/pentavision/app
 Environment="PATH=/opt/pentavision/venv/bin"
+Environment="PYTHONPATH=/opt/pentavision/app"
 EnvironmentFile=/opt/pentavision/app/.env
 SupplementaryGroups=systemd-journal
-ExecStart=/opt/pentavision/venv/bin/gunicorn "log_wsgi:app" --bind 0.0.0.0:8123 --workers 1 --threads 4
+ExecStart=/opt/pentavision/venv/bin/gunicorn --chdir /opt/pentavision/app "app.log_server:create_log_server()" --bind 0.0.0.0:8123 --workers 1 --threads 4
 Restart=on-failure
 
 [Install]
