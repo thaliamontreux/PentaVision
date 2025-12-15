@@ -1693,6 +1693,33 @@ def storage_settings():
                                             config["access_key"] = str(raw_ak).strip()
                                         if raw_sk is not None and str(raw_sk).strip():
                                             config["secret_key"] = str(raw_sk).strip()
+
+                                    if provider_type == "sql_db":
+                                        raw_type = request.form.get("module_cfg_sql_db_type")
+                                        raw_host = request.form.get("module_cfg_sql_db_host")
+                                        raw_port = request.form.get("module_cfg_sql_db_port")
+                                        raw_db = request.form.get("module_cfg_sql_db_database")
+                                        raw_user = request.form.get("module_cfg_sql_db_username")
+                                        raw_pass = request.form.get("module_cfg_sql_db_password")
+                                        raw_driver = request.form.get("module_cfg_sql_db_mssql_driver")
+
+                                        if raw_type is not None and str(raw_type).strip():
+                                            config["db_type"] = str(raw_type).strip().lower()
+                                        if raw_host is not None and str(raw_host).strip():
+                                            config["host"] = str(raw_host).strip()
+                                        if raw_port is not None and str(raw_port).strip() != "":
+                                            try:
+                                                config["port"] = int(str(raw_port).strip())
+                                            except Exception:  # noqa: BLE001
+                                                pass
+                                        if raw_db is not None and str(raw_db).strip():
+                                            config["database"] = str(raw_db).strip()
+                                        if raw_user is not None and str(raw_user).strip():
+                                            config["username"] = str(raw_user).strip()
+                                        if raw_pass is not None and str(raw_pass).strip():
+                                            config["password"] = str(raw_pass).strip()
+                                        if raw_driver is not None and str(raw_driver).strip():
+                                            config["mssql_driver"] = str(raw_driver).strip()
                                 except Exception:  # noqa: BLE001
                                     pass
                                 return config

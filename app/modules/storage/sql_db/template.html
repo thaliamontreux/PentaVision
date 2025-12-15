@@ -18,7 +18,8 @@
 
   <div class="pv-field-group">
     <label for="module_cfg_sql_db_port">Port</label>
-    <input id="module_cfg_sql_db_port" name="module_cfg_sql_db_port" type="number" value="{{ edit_cfg.get('port','') if edit_module and edit_cfg.get('port') is not none else '' }}" placeholder="3306 / 5432 / 1433" {% if cfg_readonly %}disabled{% endif %} />
+    {% set _pv_sql_port = (edit_cfg.get('port') if edit_module and edit_cfg.get('port') is not none else (3306 if sql_db_type == 'mysql' else '')) %}
+    <input id="module_cfg_sql_db_port" name="module_cfg_sql_db_port" type="number" value="{{ _pv_sql_port }}" placeholder="3306 / 5432 / 1433" {% if cfg_readonly %}disabled{% endif %} />
   </div>
 
   <div class="pv-field-group">
