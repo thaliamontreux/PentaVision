@@ -2436,6 +2436,23 @@ def storage_settings():
                                         config,
                                     )
                                     if provider is None:
+                                        missing_bits: list[str] = []
+                                        try:
+                                            if provider_type == "s3":
+                                                if not str(config.get("bucket") or "").strip():
+                                                    missing_bits.append("bucket")
+                                                if not str(config.get("access_key") or "").strip():
+                                                    missing_bits.append("access_key")
+                                                if not str(config.get("secret_key") or "").strip():
+                                                    missing_bits.append("secret_key")
+                                        except Exception:  # noqa: BLE001
+                                            missing_bits = []
+                                        if missing_bits:
+                                            raise StorageError(
+                                                "Failed to build provider (missing: "
+                                                + ", ".join(missing_bits)
+                                                + ")"
+                                            )
                                         raise StorageError("Failed to build provider")
                                     provider.name = name
                                     adapter = _LegacyProviderAdapter(provider)
