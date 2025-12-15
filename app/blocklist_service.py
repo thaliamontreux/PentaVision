@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import ipaddress
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -323,6 +324,23 @@ def create_blocklist_service() -> Flask:
                 mimetype="text/plain; charset=utf-8",
             )
 
+    @app.get("/api/status")
+    def api_status() -> Response:
+        # Public-safe: do not leak exception details; just ok/not_ok + server time.
+        server_time = datetime.now(timezone.utc).isoformat()
+        engine = get_user_engine()
+        if engine is None:
+            payload = {"server_time": server_time, "status": "not_ok"}
+            return Response(json.dumps(payload) + "\n", status=503, mimetype="application/json; charset=utf-8")
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            payload = {"server_time": server_time, "status": "ok"}
+            return Response(json.dumps(payload) + "\n", mimetype="application/json; charset=utf-8")
+        except Exception:  # noqa: BLE001
+            payload = {"server_time": server_time, "status": "not_ok"}
+            return Response(json.dumps(payload) + "\n", status=503, mimetype="application/json; charset=utf-8")
+
     @app.get("/")
     def root() -> Response:
         engine = get_user_engine()
@@ -512,63 +530,46 @@ def create_blocklist_service() -> Flask:
     </div>
   </div>
 
-  <div id=\"healthBadge\" class=\"badge\">
-    <div class=\"title\">System Health</div>
-    <div id=\"healthMsg\" class=\"msg\">{health_text}</div>
-  </div>
-
   <div id=\"pvStatusBar\" class=\"pv-status-bar\" role=\"status\" aria-live=\"polite\">
     <span id=\"pvStatusDatetime\" class=\"pv-mono\"></span>
     <span class=\"pv-status-sep\">|</span>
     <span class=\"pv-status-label\">System:</span>
-    <span id=\"pvStatusSystem\" style=\"white-space: nowrap;\">{health_text}</span>
-    <span class=\"pv-status-sep\">|</span>
-    <span class=\"pv-status-label\">Errors:</span>
-    <span style=\"font-weight: 600; white-space: nowrap;\">N/A</span>
+    <span id=\"pvStatusSystem\" style=\"white-space: nowrap;\">unknown</span>
   </div>
 
   <script>
-    (function () {
-      const el = document.getElementById('pvStatusDatetime');
-      if (!el) return;
-      function pad(n) { return String(n).padStart(2, '0'); }
-      function tick() {
-        const d = new Date();
+    function pvFormatStatusTime(iso) {
+      try {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return String(iso || '');
+        const pad = (n) => String(n).padStart(2, '0');
         const mm = pad(d.getMonth() + 1);
         const dd = pad(d.getDate());
         const yy = pad(d.getFullYear() % 100);
         const hh = pad(d.getHours());
         const mi = pad(d.getMinutes());
-        el.textContent = mm + '/' + dd + '/' + yy + ' ' + hh + ':' + mi;
+        return mm + '/' + dd + '/' + yy + ' ' + hh + ':' + mi;
+      } catch (e) {
+        return String(iso || '');
       }
-      tick();
-      window.setInterval(tick, 1000);
-    })();
+    }
 
-    async function pollHealth() {{
-      try {{
-        const r = await fetch('/healthz', {{ cache: 'no-store' }});
-        const t = (await r.text()).trim();
-        const ok = r.ok && t.toLowerCase() === 'ok';
-        const badge = document.getElementById('healthBadge');
-        const msg = document.getElementById('healthMsg');
+    async function pvPollPublicStatus() {
+      try {
+        const r = await fetch('/api/status', { cache: 'no-store' });
+        const data = await r.json();
+        const dt = document.getElementById('pvStatusDatetime');
         const sys = document.getElementById('pvStatusSystem');
-        msg.textContent = t || (ok ? 'ok' : 'not_ok');
-        if (sys) sys.textContent = msg.textContent;
-        badge.style.background = ok ? '#22c55e' : '#ef4444';
-        badge.style.color = '#000';
-      }} catch (e) {{
-        const badge = document.getElementById('healthBadge');
-        const msg = document.getElementById('healthMsg');
+        if (dt) dt.textContent = pvFormatStatusTime(data && data.server_time ? data.server_time : '');
+        if (sys) sys.textContent = (data && data.status ? data.status : (r.ok ? 'ok' : 'not_ok'));
+      } catch (e) {
         const sys = document.getElementById('pvStatusSystem');
-        msg.textContent = 'not_ok: health_check_failed';
-        if (sys) sys.textContent = msg.textContent;
-        badge.style.background = '#ef4444';
-        badge.style.color = '#000';
-      }}
-    }}
-    pollHealth();
-    setInterval(pollHealth, 5000);
+        if (sys) sys.textContent = 'not_ok';
+      }
+    }
+
+    pvPollPublicStatus();
+    setInterval(pvPollPublicStatus, 5000);
   </script>
 </body>
 </html>"""
