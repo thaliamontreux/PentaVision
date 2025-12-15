@@ -12,6 +12,7 @@ from urllib.parse import quote_plus
 import time
 
 import boto3
+from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 from flask import Flask
 from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, func, insert
 from sqlalchemy.orm import Session
@@ -25,6 +26,7 @@ from scp import SCPClient
 from .db import get_record_engine
 from .models import RecordingData, StorageModule, StorageSettings
 from .storage_csal import (
+    StorageAuthError,
     StorageError,
     StorageModuleBase,
     StoragePermanentError,
@@ -1086,6 +1088,53 @@ class _LegacyProviderAdapter(StorageModuleBase):
         return
 
     def validate(self) -> None:  # pragma: no cover
+        # Provider-specific cheap validation hooks.
+        try:
+            if isinstance(self._provider, S3StorageProvider):
+                # Force an actual signed request to verify endpoint, bucket,
+                # and credentials. This is cheaper than a write/delete and
+                # produces clearer auth errors.
+                try:
+                    self._provider._client.head_bucket(Bucket=self._provider.bucket)
+                    self._provider._client.list_objects_v2(
+                        Bucket=self._provider.bucket,
+                        MaxKeys=1,
+                    )
+                except NoCredentialsError as exc:
+                    raise StorageAuthError("Missing S3 credentials") from exc
+                except EndpointConnectionError as exc:
+                    raise StorageTransientError(
+                        f"Failed to connect to S3 endpoint: {exc}"
+                    ) from exc
+                except ClientError as exc:
+                    code = None
+                    try:
+                        code = (
+                            exc.response.get("Error", {}).get("Code")
+                            if hasattr(exc, "response")
+                            else None
+                        )
+                    except Exception:  # noqa: BLE001
+                        code = None
+
+                    msg = str(exc)
+                    if code in {
+                        "InvalidAccessKeyId",
+                        "SignatureDoesNotMatch",
+                        "AccessDenied",
+                        "AllAccessDisabled",
+                        "InvalidToken",
+                        "ExpiredToken",
+                    }:
+                        raise StorageAuthError(msg) from exc
+                    raise StorageTransientError(msg) from exc
+        except StorageError:
+            raise
+        except Exception:
+            # If our validation probe fails unexpectedly, fall back to the
+            # write/delete smoke test.
+            pass
+
         # Basic smoke test: attempt to write and then delete a tiny object
         # when the underlying provider supports deletion.
         stream = io.BytesIO(b"csal-test")
