@@ -22,12 +22,20 @@
   <div class="pv-field-group">
     <label for="module_cfg_s3_access_key">Access key ID</label>
     <input id="module_cfg_s3_access_key" name="module_cfg_s3_access_key" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    {% if edit_module and edit_cfg and edit_cfg.get('access_key') %}
+      {% set _pv_ak = (edit_cfg.get('access_key') or '')|string %}
+      <div class="pv-help">Saved: {{ ('*' * (_pv_ak|length - 4)) ~ _pv_ak[-4:] if _pv_ak and (_pv_ak|length > 4) else ('*' * (_pv_ak|length)) }}</div>
+    {% endif %}
     <div class="pv-help">From an IAM user or access key. <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html" target="_blank" rel="noopener">Find/Create access keys</a></div>
   </div>
 
   <div class="pv-field-group">
     <label for="module_cfg_s3_secret_key">Secret access key</label>
     <input id="module_cfg_s3_secret_key" name="module_cfg_s3_secret_key" type="password" autocomplete="off" {% if cfg_readonly %}disabled{% endif %} />
+    {% if edit_module and edit_cfg and edit_cfg.get('secret_key') %}
+      {% set _pv_sk = (edit_cfg.get('secret_key') or '')|string %}
+      <div class="pv-help">Saved: {{ ('*' * (_pv_sk|length - 4)) ~ _pv_sk[-4:] if _pv_sk and (_pv_sk|length > 4) else ('*' * (_pv_sk|length)) }}</div>
+    {% endif %}
     <div class="pv-help">Credentials are never echoed back after save. Store this key securely.</div>
   </div>
 </div>
