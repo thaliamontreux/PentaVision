@@ -1795,7 +1795,13 @@ def storage_settings():
                                     None,
                                 )
                                 last_test = _get_last_module_test() or {}
-                                if not last_test or not last_test.get("ok"):
+                                client_ok = (request.form.get("module_test_ok") or "").strip() == "1"
+                                client_fp = (request.form.get("module_test_fingerprint") or "").strip()
+                                client_matches = bool(client_ok and client_fp and client_fp == fp_expected)
+
+                                if client_matches:
+                                    _set_last_module_test(fp_expected, True)
+                                elif not last_test or not last_test.get("ok"):
                                     errors.append(
                                         "Please test this storage provider successfully before saving."
                                     )
@@ -2386,6 +2392,16 @@ def storage_settings():
                                 if "application/json" in accept:
                                     wants_json = True
                                 if wants_json:
+                                    fp_out = ""
+                                    try:
+                                        fp_out = _fingerprint_module_payload(
+                                            provider_type,
+                                            name,
+                                            config,
+                                            int(existing_module.id) if existing_module is not None else None,
+                                        )
+                                    except Exception:  # noqa: BLE001
+                                        fp_out = ""
                                     return jsonify(
                                         {
                                             "ok": bool(module_test_result.get("ok")) if isinstance(module_test_result, dict) else False,
@@ -2393,6 +2409,7 @@ def storage_settings():
                                             "message": (str(module_test_result.get("message") or "") if isinstance(module_test_result, dict) else ""),
                                             "module_test_ready": bool(module_test_ready),
                                             "wizard_step": int(wizard_step or 3),
+                                            "fingerprint": fp_out,
                                         }
                                     )
                             except Exception:  # noqa: BLE001
