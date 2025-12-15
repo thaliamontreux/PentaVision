@@ -1664,6 +1664,16 @@ def storage_settings():
                             if not fields:
                                 return config
 
+                            try:
+                                if provider_type == "local_drive" and "base_dir" not in config:
+                                    raw_base_dir = request.form.get("module_cfg_local_drive_path")
+                                    if raw_base_dir is not None:
+                                        raw_base_dir = str(raw_base_dir).strip()
+                                        if raw_base_dir:
+                                            config["base_dir"] = raw_base_dir
+                            except Exception:  # noqa: BLE001
+                                pass
+
                             return config
 
                         def _get_last_module_test() -> dict[str, object] | None:
