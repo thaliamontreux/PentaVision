@@ -153,6 +153,43 @@ CREATE TABLE IF NOT EXISTS audit_events (
   KEY ix_audit_events_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS blocklist_distribution_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  enabled INT NULL,
+  consumer_allow_cidrs VARCHAR(2048) NULL,
+  token_enabled INT NULL,
+  token VARCHAR(255) NULL,
+  ttl_seconds INT NULL,
+  rate_limit_per_min INT NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ip_allowlist (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  cidr VARCHAR(64) NOT NULL,
+  description VARCHAR(255) NULL,
+  created_at DATETIME(6) NULL,
+  UNIQUE KEY ux_ip_allowlist_cidr (cidr)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ip_blocklist (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  cidr VARCHAR(64) NOT NULL,
+  description VARCHAR(255) NULL,
+  created_at DATETIME(6) NULL,
+  UNIQUE KEY ux_ip_blocklist_cidr (cidr)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS country_access_policies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  mode VARCHAR(32) NULL,
+  allowed_countries VARCHAR(512) NULL,
+  blocked_countries VARCHAR(512) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 /**************************************************************************
  * FACE EMBEDDINGS & PRIVACY (pe_faces)
  **************************************************************************/
@@ -314,4 +351,136 @@ CREATE TABLE IF NOT EXISTS storage_settings (
   webdav_password VARCHAR(255) NULL,
   created_at DATETIME(6) NULL,
   updated_at DATETIME(6) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS storage_provider_modules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  provider_type VARCHAR(64) NOT NULL,
+  display_name VARCHAR(255) NULL,
+  category VARCHAR(128) NULL,
+  definition_json VARCHAR(8192) NULL,
+  template_path VARCHAR(512) NULL,
+  wizard_path VARCHAR(512) NULL,
+  is_installed INT NOT NULL DEFAULT 1,
+  last_seen_at DATETIME(6) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL,
+  UNIQUE KEY ux_storage_provider_modules_provider_type (provider_type),
+  KEY ix_storage_provider_modules_provider_type (provider_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS storage_modules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  label VARCHAR(255) NULL,
+  provider_type VARCHAR(64) NOT NULL,
+  is_enabled INT NULL,
+  priority INT NOT NULL DEFAULT 100,
+  config_json VARCHAR(4096) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL,
+  UNIQUE KEY ux_storage_modules_name (name),
+  KEY ix_storage_modules_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS storage_module_health_checks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  module_id INT NULL,
+  module_name VARCHAR(160) NOT NULL,
+  provider_type VARCHAR(64) NULL,
+  ok INT NOT NULL DEFAULT 0,
+  message VARCHAR(512) NULL,
+  duration_ms INT NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_storage_module_health_checks_module_id (module_id),
+  KEY ix_storage_module_health_checks_module_name (module_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS storage_module_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  module_id INT NULL,
+  module_name VARCHAR(160) NOT NULL,
+  level VARCHAR(16) NOT NULL DEFAULT 'info',
+  event_type VARCHAR(64) NOT NULL DEFAULT 'event',
+  message VARCHAR(1024) NOT NULL,
+  stream_id VARCHAR(128) NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_storage_module_events_module_id (module_id),
+  KEY ix_storage_module_events_module_name (module_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS storage_module_write_stats (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  module_id INT NULL,
+  module_name VARCHAR(160) NOT NULL,
+  device_id INT NULL,
+  storage_key VARCHAR(512) NULL,
+  bytes_written INT NULL,
+  ok INT NOT NULL DEFAULT 1,
+  error VARCHAR(512) NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_storage_module_write_stats_module_id (module_id),
+  KEY ix_storage_module_write_stats_module_name (module_name),
+  KEY ix_storage_module_write_stats_device_id (device_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS camera_recording_schedules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  device_id INT NOT NULL,
+  timezone VARCHAR(64) NULL,
+  mode VARCHAR(32) NULL,
+  days_of_week VARCHAR(32) NULL,
+  start_time VARCHAR(8) NULL,
+  end_time VARCHAR(8) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL,
+  UNIQUE KEY ux_camera_recording_schedules_device_id (device_id),
+  KEY ix_camera_recording_schedules_device_id (device_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS camera_recording_windows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  schedule_id INT NOT NULL,
+  day_of_week INT NOT NULL,
+  start_time VARCHAR(8) NOT NULL,
+  end_time VARCHAR(8) NOT NULL,
+  mode VARCHAR(32) NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_camera_recording_windows_schedule_id (schedule_id),
+  KEY ix_camera_recording_windows_day_of_week (day_of_week)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS dlna_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  enabled INT NULL,
+  interface_name VARCHAR(64) NULL,
+  bind_address VARCHAR(64) NULL,
+  network_cidr VARCHAR(64) NULL,
+  last_started_at DATETIME(6) NULL,
+  last_error VARCHAR(512) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS camera_rtmp_outputs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  device_id INT NOT NULL,
+  target_url VARCHAR(512) NOT NULL,
+  is_active INT NULL,
+  created_at DATETIME(6) NULL,
+  last_error VARCHAR(512) NULL,
+  last_started_at DATETIME(6) NULL,
+  KEY ix_camera_rtmp_outputs_device_id (device_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS camera_dlna_media (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  device_id INT NOT NULL,
+  is_enabled INT NULL,
+  title VARCHAR(255) NULL,
+  last_error VARCHAR(512) NULL,
+  last_started_at DATETIME(6) NULL,
+  created_at DATETIME(6) NULL,
+  UNIQUE KEY ux_camera_dlna_media_device_id (device_id),
+  KEY ix_camera_dlna_media_device_id (device_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

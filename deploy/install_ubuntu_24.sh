@@ -11,6 +11,10 @@ APP_DIR="/opt/pentavision"
 REPO_URL="https://github.com/thaliamontreux/PentaVision.git"  # Git repository URL for application code
 PYTHON_BIN="python3"
 
+DB_NAME_USERS="pe_users"
+DB_NAME_FACES="pe_faces"
+DB_NAME_RECORDS="pe_records"
+
 if [[ $EUID -ne 0 ]]; then
   echo "This script must be run as root (sudo)." >&2
   exit 1
@@ -36,6 +40,12 @@ if ! dpkg -s mariadb-server >/dev/null 2>&1 && ! dpkg -s mysql-server >/dev/null
   DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server
 else
   echo "==> Existing MySQL/MariaDB server detected; skipping DB server install"
+fi
+
+if command -v mysql >/dev/null 2>&1; then
+  echo "==> Ensuring MySQL/MariaDB service is running"
+  systemctl enable --now mariadb >/dev/null 2>&1 || true
+  systemctl enable --now mysql >/dev/null 2>&1 || true
 fi
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
@@ -123,6 +133,32 @@ WEBAUTHN_RP_ID=example.com
 WEBAUTHN_RP_NAME=PentaVision
 EOF
   chown "${APP_USER}:${APP_USER}" "${APP_DIR}/app/.env"
+fi
+
+SCHEMA_FILE="${APP_DIR}/app/deploy/pentavision_schema.sql"
+if [[ -f "${SCHEMA_FILE}" ]] && command -v mysql >/dev/null 2>&1; then
+  echo "==> Bootstrapping local databases (if using local MariaDB)"
+  echo "    - Databases: ${DB_NAME_USERS}, ${DB_NAME_FACES}, ${DB_NAME_RECORDS}"
+  echo "    - Schema file: ${SCHEMA_FILE}"
+  echo "    Note: If your MariaDB requires a root password, export MYSQL_PWD before running this installer."
+
+  mysql -uroot -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME_USERS} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || true
+  mysql -uroot -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME_FACES} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || true
+  mysql -uroot -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME_RECORDS} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || true
+
+  if [[ -z "${PENTAVISION_DB_USER:-}" ]] || [[ -z "${PENTAVISION_DB_PASS:-}" ]]; then
+    echo "    Skipping DB user creation (set PENTAVISION_DB_USER and PENTAVISION_DB_PASS to enable)."
+  else
+    echo "    Creating/updating DB user: ${PENTAVISION_DB_USER}"
+    mysql -uroot -e "CREATE USER IF NOT EXISTS '${PENTAVISION_DB_USER}'@'localhost' IDENTIFIED BY '${PENTAVISION_DB_PASS}';" || true
+    mysql -uroot -e "GRANT ALL PRIVILEGES ON ${DB_NAME_USERS}.* TO '${PENTAVISION_DB_USER}'@'localhost';" || true
+    mysql -uroot -e "GRANT ALL PRIVILEGES ON ${DB_NAME_FACES}.* TO '${PENTAVISION_DB_USER}'@'localhost';" || true
+    mysql -uroot -e "GRANT ALL PRIVILEGES ON ${DB_NAME_RECORDS}.* TO '${PENTAVISION_DB_USER}'@'localhost';" || true
+    mysql -uroot -e "FLUSH PRIVILEGES;" || true
+  fi
+
+  echo "==> Applying database schema"
+  mysql -uroot < "${SCHEMA_FILE}" || true
 fi
 
 mkdir -p /var/lib/pentavision/recordings /var/lib/pentavision/storage /var/lib/pentavision/previews
@@ -229,3 +265,4 @@ echo "==> Installation complete"
 echo "- Update ${APP_DIR}/app/.env with real database credentials and secrets."
 echo "- Add a proper ServerName / TLS configuration in ${APACHE_SITE} if needed."
 echo "- Access the app via http://pentavision.local/ (or your server's IP)."
+echo "- Verify services: systemctl status pentavision-web pentavision-video pentavision-logserver pentavision-blocklist --no-pager"
