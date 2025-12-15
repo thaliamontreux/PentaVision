@@ -1396,6 +1396,22 @@ def storage_settings():
                     except Exception:  # noqa: BLE001
                         edit_module_config = {}
 
+                try:
+                    if edit_module_config is None:
+                        edit_module_config = {}
+                    provider_type = (row.provider_type or "").strip().lower()
+                    if provider_type == "local_drive":
+                        if (
+                            isinstance(edit_module_config, dict)
+                            and "base_dir" not in edit_module_config
+                            and "local_drive_path" in edit_module_config
+                        ):
+                            edit_module_config["base_dir"] = edit_module_config.get(
+                                "local_drive_path"
+                            )
+                except Exception:  # noqa: BLE001
+                    pass
+
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
 
@@ -1896,11 +1912,37 @@ def storage_settings():
                                     except Exception:  # noqa: BLE001
                                         current_cfg = {}
 
+                                    try:
+                                        if provider_type == "local_drive":
+                                            if (
+                                                isinstance(current_cfg, dict)
+                                                and "base_dir" not in current_cfg
+                                                and "local_drive_path" in current_cfg
+                                            ):
+                                                current_cfg["base_dir"] = current_cfg.get(
+                                                    "local_drive_path"
+                                                )
+                                    except Exception:  # noqa: BLE001
+                                        pass
+
                                     new_cfg = _build_module_config_from_form(
                                         provider_type
                                     )
                                     merged_cfg = dict(current_cfg)
                                     merged_cfg.update(new_cfg)
+
+                                    try:
+                                        if provider_type == "local_drive":
+                                            if (
+                                                isinstance(merged_cfg, dict)
+                                                and "base_dir" not in merged_cfg
+                                                and "local_drive_path" in merged_cfg
+                                            ):
+                                                merged_cfg["base_dir"] = merged_cfg.get(
+                                                    "local_drive_path"
+                                                )
+                                    except Exception:  # noqa: BLE001
+                                        pass
 
                                     fp_expected = _fingerprint_module_payload(
                                         provider_type,
@@ -1909,7 +1951,22 @@ def storage_settings():
                                         int(module.id),
                                     )
                                     last_test = _get_last_module_test() or {}
-                                    if not last_test or not last_test.get("ok"):
+
+                                    client_ok = (
+                                        request.form.get("module_test_ok") or ""
+                                    ).strip() == "1"
+                                    client_fp = (
+                                        request.form.get("module_test_fingerprint") or ""
+                                    ).strip()
+                                    client_matches = bool(
+                                        client_ok
+                                        and client_fp
+                                        and client_fp == fp_expected
+                                    )
+
+                                    if client_matches:
+                                        _set_last_module_test(client_fp, True)
+                                    elif not last_test or not last_test.get("ok"):
                                         errors.append(
                                             "Please test this storage provider successfully before saving."
                                         )

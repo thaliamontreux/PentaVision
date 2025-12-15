@@ -23,8 +23,11 @@
 
 - [x] Make existing-module Test on `/storage?edit_module=...` run via AJAX (no page reload) and show toast results.
 - [x] Persist Test -> Save proof reliably for both wizard and edit flows.
-- [ ] On app startup, run a test write for enabled storage modules and record it in `storage_module_write_stats`.
+- [x] On app startup, run a test write for enabled storage modules and record it in `storage_module_write_stats`.
 - [ ] Ensure Health/Last write/Last OK/Last error panels reflect `StorageModuleWriteStat` + `StorageModuleHealthCheck` correctly.
+- [x] Fix Local Drive Path provider: ensure `base_dir` persists and displays on edit.
+- [x] Make Configuration tab "Test Connection" run via AJAX without page refresh/resetting entered values.
+- [x] Toast auto-hide: bottom-right messages fade after 10 seconds.
 
 ## System setup & security
 

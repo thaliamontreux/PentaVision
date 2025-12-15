@@ -212,6 +212,8 @@
             <form method="post" class="pv-storage-form" id="pv-storage-form">
               <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
               <input type="hidden" name="action" id="pv-storage-action" value="{{ 'module_update' if edit_module else 'module_create' }}" />
+              <input type="hidden" name="module_test_fingerprint" id="pv-edit-test-fp" value="" />
+              <input type="hidden" name="module_test_ok" id="pv-edit-test-ok" value="" />
               {% if edit_module %}<input type="hidden" name="module_id" value="{{ edit_module.id }}" />{% endif %}
 
               <div class="pv-storage-config-grid">
@@ -681,7 +683,7 @@
         window.clearTimeout(showToast._t);
         showToast._t = window.setTimeout(function () {
           toastEl.style.display = 'none';
-        }, 6000);
+        }, 10000);
       }
 
       var moduleTestForms = document.querySelectorAll('.pv-module-test-form');
@@ -843,6 +845,11 @@
 
       var form = document.getElementById('pv-storage-form');
       if (form) {
+        var editActionInput = document.getElementById('pv-storage-action');
+        var editSaveBtn = form.querySelector('.pv-storage-save');
+        var editTestFp = document.getElementById('pv-edit-test-fp');
+        var editTestOk = document.getElementById('pv-edit-test-ok');
+
         form.addEventListener('click', function (ev) {
           var btn = ev.target;
           if (!btn || !btn.getAttribute) return;
@@ -850,6 +857,55 @@
           if (!action) return;
           var actionInput = document.getElementById('pv-storage-action');
           if (actionInput) actionInput.value = action;
+        });
+
+        form.addEventListener('submit', function (ev) {
+          var a = editActionInput ? String(editActionInput.value || '') : '';
+          if (a !== 'module_draft_test') return;
+          ev.preventDefault();
+
+          var testBtn = form.querySelector('button[data-pv-submit-action="module_draft_test"]');
+          if (testBtn) {
+            testBtn.disabled = true;
+            testBtn.textContent = 'Testing…';
+          }
+
+          if (editActionInput) editActionInput.value = 'module_draft_test';
+          var fd = new FormData(form);
+          fetch(window.location.pathname + window.location.search, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'Accept': 'application/json'
+            }
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              var ok = !!(data && data.ok);
+              var msg = 'Module ' + (data && data.module_name ? data.module_name : '') + ': ' + (data && data.message ? data.message : '');
+              showToast(msg, ok);
+
+              if (editSaveBtn) {
+                editSaveBtn.disabled = !(data && data.module_test_ready);
+              }
+              if (editTestFp) {
+                editTestFp.value = (data && data.fingerprint) ? String(data.fingerprint) : '';
+              }
+              if (editTestOk) {
+                editTestOk.value = (data && data.module_test_ready) ? '1' : '';
+              }
+            })
+            .catch(function (e) {
+              showToast('Test failed: ' + e, false);
+            })
+            .finally(function () {
+              if (testBtn) {
+                testBtn.disabled = false;
+                testBtn.textContent = 'Test Connection';
+              }
+            });
         });
       }
 
