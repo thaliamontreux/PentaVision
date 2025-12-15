@@ -544,7 +544,7 @@
               <button type="button" class="pv-button-secondary" id="pv-wiz-next">Next</button>
             </div>
             <div style="display: flex; gap: 0.5rem;">
-              <button type="submit" class="pv-button-secondary" id="pv-wiz-test" data-pv-submit-action="module_draft_test">Test</button>
+              <button type="button" class="pv-button-secondary" id="pv-wiz-test" data-pv-submit-action="module_draft_test">Test</button>
               <button type="submit" class="pv-storage-save" id="pv-wiz-save" data-pv-submit-action="module_create" {% if not module_test_ready %}disabled{% endif %}>Save</button>
             </div>
           </div>
@@ -649,12 +649,21 @@
 
       if (wizForm) {
         wizForm.addEventListener('click', function (ev) {
-          var btn = ev.target;
+          var btn = ev.target && ev.target.closest ? ev.target.closest('button') : ev.target;
           if (!btn || !btn.getAttribute) return;
           var action = btn.getAttribute('data-pv-submit-action');
           if (!action) return;
           if (wizAction) wizAction.value = action;
         });
+
+        wizForm.addEventListener('submit', function (ev) {
+          var a = wizAction ? String(wizAction.value || '') : '';
+          if (a === 'module_draft_test') {
+            ev.preventDefault();
+            runWizardTestAjax();
+          }
+        });
+
         setWizardStep(1);
         updateWizardProviderConfig();
       }
