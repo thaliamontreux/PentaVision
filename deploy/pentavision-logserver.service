@@ -6,7 +6,7 @@ After=network.target
 User=pentavision
 Group=pentavision
 WorkingDirectory=/opt/pentavision/app
-Environment="PATH=/opt/pentavision/venv/bin"
+Environment="PATH=/opt/pentavision/venv/bin:/usr/bin:/bin"
 Environment="PYTHONPATH=/opt/pentavision/app"
 EnvironmentFile=/opt/pentavision/app/.env
 SupplementaryGroups=systemd-journal

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from typing import Any
@@ -46,8 +47,17 @@ def _run_journalctl(unit: str, lines: int) -> str:
     if not unit:
         return ""
     lines = max(1, min(int(lines or 200), 5000))
+    journalctl = shutil.which("journalctl")
+    if not journalctl:
+        for cand in ("/usr/bin/journalctl", "/bin/journalctl"):
+            if os.path.exists(cand):
+                journalctl = cand
+                break
+    if not journalctl:
+        return "journalctl not found on this system"
+
     cmd = [
-        "journalctl",
+        journalctl,
         "-u",
         unit,
         "-n",
