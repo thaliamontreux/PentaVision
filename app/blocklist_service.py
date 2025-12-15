@@ -463,7 +463,6 @@ def create_blocklist_service() -> Flask:
       </div>
       <div class=\"actions\">
         <a class=\"btn\" href=\"/blocklist.csv\">Download CSV</a>
-        <a class=\"btn\" href=\"/healthz\">Health</a>
       </div>
     </div>
 
@@ -524,8 +523,8 @@ def create_blocklist_service() -> Flask:
     <span class=\"pv-status-label\">System:</span>
     <span id=\"pvStatusSystem\" style=\"white-space: nowrap;\">{health_text}</span>
     <span class=\"pv-status-sep\">|</span>
-    <span class=\"pv-status-label\">Last error:</span>
-    <span id=\"pvStatusLastError\" style=\"font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;\"></span>
+    <span class=\"pv-status-label\">Errors:</span>
+    <span style=\"font-weight: 600; white-space: nowrap;\">N/A</span>
   </div>
 
   <script>
@@ -544,20 +543,6 @@ def create_blocklist_service() -> Flask:
       }
       tick();
       window.setInterval(tick, 1000);
-    })();
-
-    (function () {
-      const lastEl = document.getElementById('pvStatusLastError');
-      if (!lastEl) return;
-      function setLastError(message) {
-        lastEl.textContent = String(message || '');
-        try { window.sessionStorage.setItem('pvBlocklistLastError', String(message || '')); } catch (e) {}
-      }
-      try {
-        const stored = window.sessionStorage.getItem('pvBlocklistLastError') || '';
-        if (stored) lastEl.textContent = stored;
-      } catch (e) {}
-      window.pvSetBlocklistLastError = setLastError;
     })();
 
     async function pollHealth() {{
@@ -580,11 +565,6 @@ def create_blocklist_service() -> Flask:
         if (sys) sys.textContent = msg.textContent;
         badge.style.background = '#ef4444';
         badge.style.color = '#000';
-        try {
-          if (window.pvSetBlocklistLastError) {
-            window.pvSetBlocklistLastError('health: ' + (e && e.message ? e.message : String(e || 'failed')));
-          }
-        } catch (err) {}
       }}
     }}
     pollHealth();
