@@ -1946,6 +1946,7 @@ def storage_settings():
                                     session_db.query(StorageModule)
                                     .filter(StorageModule.name == new_name)
                                     .first()
+                                )
 
                                 if existing is not None:
                                     errors.append(
