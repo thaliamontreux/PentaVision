@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Services · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Services</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if messages %}
+      <div class="pv-alert pv-alert-success" role="status">
+        <ul>
+          {% for msg in messages %}
+            <li>{{ msg }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="pv-card">
+      <h2>Systemd services</h2>
+      <p class="pv-card-subtitle">Restart allowlisted services. Only System Administrators can access this page.</p>
+
+      <table class="pv-table" style="margin-top: 0.75rem;">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Status</th>
+            <th>Enabled</th>
+            <th style="width: 1%; white-space: nowrap;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in services %}
+            <tr>
+              <td><code>{{ s.name }}</code></td>
+              <td>{{ s.active_state }}</td>
+              <td>{{ s.enabled_state }}</td>
+              <td>
+                <form method="post" class="pv-inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <input type="hidden" name="action" value="restart" />
+                  <input type="hidden" name="service" value="{{ s.name }}" />
+                  <button type="submit" class="pv-button-primary" style="padding: 0.15rem 0.6rem; font-size: 0.85rem; white-space: nowrap;">Restart</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

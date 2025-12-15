@@ -107,6 +107,26 @@ class User(UserBase):
     )
 
 
+class BlocklistDistributionSettings(UserBase):
+    __tablename__ = "blocklist_distribution_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    consumer_allow_cidrs: Mapped[Optional[str]] = mapped_column(
+        String(2048), nullable=True
+    )
+    token_enabled: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ttl_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rate_limit_per_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class CameraRtmpOutput(RecordBase):
     __tablename__ = "camera_rtmp_outputs"
 

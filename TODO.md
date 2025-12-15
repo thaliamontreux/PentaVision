@@ -15,6 +15,8 @@
 - [x] Implement Blocklist Publication Service on TCP port 7080 (`/blocklist.csv`) for pfSense/firewalls (strict CSV, read-only, deterministic ordering, short TTL/no-cache, request logging, rate limiting, optional token auth).
 - [x] Enforce never-block allowlist exclusions at generation time for blocklist publication (built-in 192.168.250.0/24 and 96.45.17.168-96.45.17.174, plus DB allowlist supersedes subnet blocks).
 - [x] Add systemd service integration for blocklist publication service (`pentavision-blocklist.service`) and install/enable it in Ubuntu installer.
+- [x] Add Admin pages for Blocklist Distribution settings (UserDB-backed) and Services management (restart allowlisted systemd units with CSRF + audit logging).
+- [x] Update the 7080 blocklist service to read distribution settings dynamically from UserDB (env fallback).
 - [x] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
 
 ## Pentastar-web UI rules / polish

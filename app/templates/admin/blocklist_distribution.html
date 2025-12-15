@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}Blocklist Distribution · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Blocklist Distribution</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if messages %}
+      <div class="pv-alert pv-alert-success" role="status">
+        <ul>
+          {% for msg in messages %}
+            <li>{{ msg }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.65fr); gap: 1.25rem; align-items: flex-start;">
+      <div class="pv-card">
+        <h2>Published endpoints</h2>
+        <p class="pv-card-subtitle">Use these URLs for downstream security platforms.</p>
+        <div class="pv-form-grid" style="grid-template-columns: minmax(0, 1fr); gap: 0.6rem; margin-top: 0.75rem;">
+          <div>
+            <div style="font-weight: 700;">CSV</div>
+            <div style="margin-top: 0.15rem;"><a href="{{ csv_url }}" target="_blank" rel="noopener">{{ csv_url }}</a></div>
+          </div>
+          <div>
+            <div style="font-weight: 700;">Dashboard</div>
+            <div style="margin-top: 0.15rem;"><a href="{{ root_url }}" target="_blank" rel="noopener">{{ root_url }}</a></div>
+          </div>
+          <div>
+            <div style="font-weight: 700;">Health</div>
+            <div style="margin-top: 0.15rem;"><a href="{{ health_url }}" target="_blank" rel="noopener">{{ health_url }}</a></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pv-card">
+        <h2>Effective status</h2>
+        <p class="pv-card-subtitle">Shows what the 7080 service reports right now.</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
+          <div>
+            <div style="font-weight: 700;">Health</div>
+            <div style="margin-top: 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{{ health_text }}</div>
+          </div>
+          <div>
+            <div style="font-weight: 700;">Published blocks</div>
+            <div style="margin-top: 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{{ published_count }}</div>
+          </div>
+          <form method="post" class="pv-inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <input type="hidden" name="action" value="restart_blocklist" />
+            <button type="submit" class="pv-button-primary" style="white-space: nowrap;">Restart blocklist service</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.25rem;">
+      <h2>Distribution settings</h2>
+      <p class="pv-card-subtitle">Stored in the UserDB and used by the 7080 service dynamically.</p>
+
+      <form method="post" class="pv-form-grid" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr); gap: 0.9rem; margin-top: 0.75rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <input type="hidden" name="action" value="save" />
+
+        <div style="grid-column: 1 / -1;">
+          <label style="display: inline-flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" name="enabled" value="1" {% if settings.enabled %}checked{% endif %} />
+            Enable blocklist distribution
+          </label>
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <label for="consumer_allow_cidrs">Consumer allow CIDRs</label>
+          <textarea id="consumer_allow_cidrs" name="consumer_allow_cidrs" rows="3" placeholder="192.168.250.1/32,192.168.250.2/32">{{ settings.consumer_allow_cidrs or '' }}</textarea>
+          <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">Comma-separated list of IPs/CIDRs allowed to access port 7080. Leave empty to allow any client IP (not recommended).</p>
+        </div>
+
+        <div>
+          <label for="ttl_seconds">Cache TTL seconds</label>
+          <input id="ttl_seconds" name="ttl_seconds" type="number" min="0" max="60" value="{{ settings.ttl_seconds }}" />
+        </div>
+
+        <div>
+          <label for="rate_limit_per_min">Rate limit (per minute)</label>
+          <input id="rate_limit_per_min" name="rate_limit_per_min" type="number" min="1" max="10000" value="{{ settings.rate_limit_per_min }}" />
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <label style="display: inline-flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" name="token_enabled" value="1" {% if settings.token_enabled %}checked{% endif %} />
+            Require Bearer token
+          </label>
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <label for="token">Bearer token</label>
+          <input id="token" name="token" type="text" value="{{ settings.token or '' }}" autocomplete="off" />
+          <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">Use: Authorization: Bearer &lt;token&gt;</p>
+        </div>
+
+        <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="submit" class="pv-button-primary">Save settings</button>
+          <button type="submit" name="action" value="rotate_token" class="pv-button-secondary">Rotate token</button>
+        </div>
+      </form>
+    </div>
+  </section>
+{% endblock %}

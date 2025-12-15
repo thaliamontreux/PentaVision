@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import secrets
+import subprocess
+from datetime import datetime, timezone
+from urllib.request import urlopen
+
 from typing import Dict, List, Sequence, Set
 
 from argon2 import PasswordHasher
@@ -18,6 +23,7 @@ from sqlalchemy.orm import Session
 from .db import get_user_engine
 from .logging_utils import log_event, _client_ip
 from .models import (
+    BlocklistDistributionSettings,
     CountryAccessPolicy,
     IpAllowlist,
     IpBlocklist,
@@ -91,6 +97,262 @@ def recording_settings_alias():
 def audit_alias():
     """Admin-scoped alias for the main audit log view."""
     return redirect(url_for("main.audit_events"))
+
+
+def _systemctl_available() -> bool:
+    try:
+        subprocess.run(
+            ["systemctl", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=3,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _systemctl_status(service: str) -> tuple[str, str]:
+    try:
+        active = subprocess.run(
+            ["systemctl", "is-active", service],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=3,
+        ).stdout.strip()
+    except Exception:  # noqa: BLE001
+        active = "unknown"
+
+    try:
+        enabled = subprocess.run(
+            ["systemctl", "is-enabled", service],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=3,
+        ).stdout.strip()
+    except Exception:  # noqa: BLE001
+        enabled = "unknown"
+
+    return active or "unknown", enabled or "unknown"
+
+
+def _systemctl_restart(service: str) -> tuple[bool, str]:
+    try:
+        proc = subprocess.run(
+            ["systemctl", "restart", service],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+        )
+        if proc.returncode == 0:
+            return True, ""
+        msg = (proc.stderr or proc.stdout or "restart failed").strip()
+        return False, msg
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+
+
+def _fetch_blocklist_health() -> str:
+    try:
+        with urlopen("http://127.0.0.1:7080/healthz", timeout=3) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            return (raw or "").strip() or "unknown"
+    except Exception as exc:  # noqa: BLE001
+        return f"not_ok: {type(exc).__name__}"
+
+
+def _fetch_blocklist_count() -> int:
+    try:
+        with urlopen("http://127.0.0.1:7080/blocklist.csv", timeout=5) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+        lines = [ln for ln in (raw or "").splitlines() if ln.strip()]
+        if not lines:
+            return 0
+        # Header + rows
+        return max(0, len(lines) - 1)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+@bp.route("/blocklist-distribution", methods=["GET", "POST"])
+def blocklist_distribution():
+    engine = get_user_engine()
+    errors: List[str] = []
+    messages: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        settings = BlocklistDistributionSettings(
+            enabled=1,
+            consumer_allow_cidrs="",
+            token_enabled=0,
+            token="",
+            ttl_seconds=5,
+            rate_limit_per_min=60,
+        )
+    else:
+        with Session(engine) as db:
+            BlocklistDistributionSettings.__table__.create(bind=engine, checkfirst=True)
+            settings = db.query(BlocklistDistributionSettings).order_by(BlocklistDistributionSettings.id.desc()).first()
+            if settings is None:
+                settings = BlocklistDistributionSettings(
+                    enabled=1,
+                    consumer_allow_cidrs="",
+                    token_enabled=0,
+                    token="",
+                    ttl_seconds=5,
+                    rate_limit_per_min=60,
+                )
+                db.add(settings)
+                db.commit()
+
+            if request.method == "POST":
+                if not _validate_csrf_token(request.form.get("csrf_token")):
+                    errors.append("Invalid or missing CSRF token.")
+                else:
+                    action = (request.form.get("action") or "").strip()
+                    if action == "save":
+                        enabled = 1 if request.form.get("enabled") else 0
+                        token_enabled = 1 if request.form.get("token_enabled") else 0
+                        consumer_allow_cidrs = (request.form.get("consumer_allow_cidrs") or "").strip()
+                        token = (request.form.get("token") or "").strip()
+
+                        try:
+                            ttl_seconds = int((request.form.get("ttl_seconds") or "5").strip())
+                        except ValueError:
+                            ttl_seconds = 5
+                        try:
+                            rate_limit_per_min = int((request.form.get("rate_limit_per_min") or "60").strip())
+                        except ValueError:
+                            rate_limit_per_min = 60
+
+                        settings.enabled = enabled
+                        settings.consumer_allow_cidrs = consumer_allow_cidrs
+                        settings.token_enabled = token_enabled
+                        settings.token = token
+                        settings.ttl_seconds = max(0, min(ttl_seconds, 60))
+                        settings.rate_limit_per_min = max(1, min(rate_limit_per_min, 10000))
+                        settings.updated_at = datetime.now(timezone.utc)
+                        db.commit()
+
+                        actor = get_current_user()
+                        log_event(
+                            "BLOCKLIST_DISTRIBUTION_SETTINGS_UPDATE",
+                            user_id=actor.id if actor else None,
+                            details=f"enabled={enabled}, token_enabled={token_enabled}",
+                        )
+                        messages.append("Blocklist Distribution settings saved.")
+                    elif action == "rotate_token":
+                        settings.token = secrets.token_urlsafe(32)
+                        settings.token_enabled = 1
+                        settings.updated_at = datetime.now(timezone.utc)
+                        db.commit()
+                        actor = get_current_user()
+                        log_event(
+                            "BLOCKLIST_DISTRIBUTION_TOKEN_ROTATE",
+                            user_id=actor.id if actor else None,
+                            details="token_rotated=1",
+                        )
+                        messages.append("Bearer token rotated.")
+                    elif action == "restart_blocklist":
+                        if not _systemctl_available():
+                            errors.append("systemctl is not available on this host.")
+                        else:
+                            ok, msg = _systemctl_restart("pentavision-blocklist.service")
+                            actor = get_current_user()
+                            log_event(
+                                "ADMIN_SERVICE_RESTART",
+                                user_id=actor.id if actor else None,
+                                details="service=pentavision-blocklist.service",
+                            )
+                            if ok:
+                                messages.append("Blocklist service restart requested.")
+                            else:
+                                errors.append(f"Restart failed: {msg}")
+
+    root_url = "http://127.0.0.1:7080/"
+    csv_url = "http://127.0.0.1:7080/blocklist.csv"
+    health_url = "http://127.0.0.1:7080/healthz"
+    health_text = _fetch_blocklist_health()
+    published_count = _fetch_blocklist_count()
+
+    return render_template(
+        "admin/blocklist_distribution.html",
+        errors=errors,
+        messages=messages,
+        csrf_token=csrf_token,
+        settings=settings,
+        root_url=root_url,
+        csv_url=csv_url,
+        health_url=health_url,
+        health_text=health_text,
+        published_count=published_count,
+    )
+
+
+@bp.route("/services", methods=["GET", "POST"])
+def services():
+    errors: List[str] = []
+    messages: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    allowed_services = [
+        "pentavision-web.service",
+        "pentavision-video.service",
+        "pentavision-logserver.service",
+        "pentavision-blocklist.service",
+    ]
+
+    if request.method == "POST":
+        if not _validate_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+        else:
+            action = (request.form.get("action") or "").strip()
+            target = (request.form.get("service") or "").strip()
+            if action == "restart" and target in allowed_services:
+                if not _systemctl_available():
+                    errors.append("systemctl is not available on this host.")
+                else:
+                    ok, msg = _systemctl_restart(target)
+                    actor = get_current_user()
+                    log_event(
+                        "ADMIN_SERVICE_RESTART",
+                        user_id=actor.id if actor else None,
+                        details=f"service={target}",
+                    )
+                    if ok:
+                        messages.append(f"Restart requested: {target}")
+                    else:
+                        errors.append(f"Restart failed for {target}: {msg}")
+            elif action:
+                abort(400)
+
+    services_rows = []
+    for name in allowed_services:
+        if _systemctl_available():
+            active_state, enabled_state = _systemctl_status(name)
+        else:
+            active_state, enabled_state = "unknown", "unknown"
+        services_rows.append(
+            {
+                "name": name,
+                "active_state": active_state,
+                "enabled_state": enabled_state,
+            }
+        )
+
+    return render_template(
+        "admin/services.html",
+        errors=errors,
+        messages=messages,
+        csrf_token=csrf_token,
+        services=services_rows,
+    )
 
 
 @bp.route("/access-control", methods=["GET", "POST"])

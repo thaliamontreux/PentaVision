@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from .config import load_config
 from .db import get_user_engine
 from .logging_utils import log_event
-from .models import IpAllowlist, IpBlocklist
+from .models import BlocklistDistributionSettings, IpAllowlist, IpBlocklist
 
 
 def _client_ip() -> str:
@@ -62,6 +62,38 @@ def _consumer_allow_networks() -> List[ipaddress._BaseNetwork]:
     # Always allow loopback callers.
     nets.extend(_parse_allowlist_networks(["127.0.0.1/32", "::1/128"]))
     return nets
+
+
+def _load_distribution_settings(engine) -> dict[str, object]:
+    settings: dict[str, object] = {
+        "enabled": True,
+        "consumer_allow_cidrs": "",
+        "token_enabled": False,
+        "token": "",
+        "ttl_seconds": None,
+        "rate_limit_per_min": None,
+    }
+
+    try:
+        BlocklistDistributionSettings.__table__.create(bind=engine, checkfirst=True)
+        with Session(engine) as session:
+            row = (
+                session.query(BlocklistDistributionSettings)
+                .order_by(BlocklistDistributionSettings.id.desc())
+                .first()
+            )
+        if row is None:
+            return settings
+
+        settings["enabled"] = bool(row.enabled) if row.enabled is not None else True
+        settings["consumer_allow_cidrs"] = str(row.consumer_allow_cidrs or "")
+        settings["token_enabled"] = bool(row.token_enabled) if row.token_enabled is not None else False
+        settings["token"] = str(row.token or "")
+        settings["ttl_seconds"] = row.ttl_seconds
+        settings["rate_limit_per_min"] = row.rate_limit_per_min
+        return settings
+    except Exception:  # noqa: BLE001
+        return settings
 
 
 def _client_allowed(ip: str, allow_nets: List[ipaddress._BaseNetwork]) -> bool:
@@ -171,32 +203,107 @@ def create_blocklist_service() -> Flask:
     app.config.from_mapping(load_config())
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-    allow_nets = _consumer_allow_networks()
-    token = (os.environ.get("PENTAVISION_BLOCKLIST_TOKEN") or "").strip()
-    ttl_raw = (os.environ.get("PENTAVISION_BLOCKLIST_TTL_SECONDS") or "5").strip()
-    try:
-        ttl = max(0, min(int(ttl_raw), 60))
-    except ValueError:
-        ttl = 5
+    # Dynamic settings cache (UserDB-backed, with env fallback).
+    _settings_cache: dict[str, object] = {}
+    _settings_cache_at: float = 0.0
 
-    rate_raw = (os.environ.get("PENTAVISION_BLOCKLIST_RATE_LIMIT_PER_MIN") or "60").strip()
-    try:
-        rate = int(rate_raw)
-    except ValueError:
-        rate = 60
-    limiter = _RateLimiter(rate)
+    def _effective_settings() -> dict[str, object]:
+        nonlocal _settings_cache, _settings_cache_at
+        now = time.time()
+        if _settings_cache and (now - _settings_cache_at) < 5.0:
+            return _settings_cache
+
+        engine = get_user_engine()
+        if engine is None:
+            db_settings: dict[str, object] = {
+                "enabled": True,
+                "consumer_allow_cidrs": "",
+                "token_enabled": False,
+                "token": "",
+                "ttl_seconds": None,
+                "rate_limit_per_min": None,
+            }
+        else:
+            db_settings = _load_distribution_settings(engine)
+
+        # Env fallback defaults.
+        env_allow = os.environ.get("PENTAVISION_BLOCKLIST_CONSUMER_ALLOW_CIDRS", "").strip()
+        env_token = (os.environ.get("PENTAVISION_BLOCKLIST_TOKEN") or "").strip()
+        ttl_raw = (os.environ.get("PENTAVISION_BLOCKLIST_TTL_SECONDS") or "5").strip()
+        rate_raw = (os.environ.get("PENTAVISION_BLOCKLIST_RATE_LIMIT_PER_MIN") or "60").strip()
+
+        try:
+            env_ttl = max(0, min(int(ttl_raw), 60))
+        except ValueError:
+            env_ttl = 5
+        try:
+            env_rate = int(rate_raw)
+        except ValueError:
+            env_rate = 60
+
+        ttl_seconds = db_settings.get("ttl_seconds")
+        if ttl_seconds is None:
+            ttl_seconds = env_ttl
+        else:
+            try:
+                ttl_seconds = max(0, min(int(ttl_seconds), 60))
+            except Exception:  # noqa: BLE001
+                ttl_seconds = env_ttl
+
+        rate_limit = db_settings.get("rate_limit_per_min")
+        if rate_limit is None:
+            rate_limit = env_rate
+        else:
+            try:
+                rate_limit = int(rate_limit)
+            except Exception:  # noqa: BLE001
+                rate_limit = env_rate
+
+        token_enabled = bool(db_settings.get("token_enabled"))
+        token = str(db_settings.get("token") or "").strip() if token_enabled else ""
+        if token_enabled and not token:
+            token = env_token
+
+        allow_raw = str(db_settings.get("consumer_allow_cidrs") or "").strip()
+        if not allow_raw:
+            allow_raw = env_allow
+
+        merged = {
+            "enabled": bool(db_settings.get("enabled", True)),
+            "consumer_allow_cidrs": allow_raw,
+            "token": token,
+            "ttl_seconds": ttl_seconds,
+            "rate_limit_per_min": max(1, int(rate_limit or 60)),
+        }
+        _settings_cache = merged
+        _settings_cache_at = now
+        return merged
+
+    limiter = _RateLimiter(60)
 
     @app.before_request
     def _guard() -> None:
+        settings = _effective_settings()
+        if not bool(settings.get("enabled")):
+            abort(503)
+
         ip = _client_ip()
+        allow_raw = str(settings.get("consumer_allow_cidrs") or "").strip()
+        allow_nets = _parse_allowlist_networks([c.strip() for c in allow_raw.split(",") if c.strip()])
+        allow_nets.extend(_parse_allowlist_networks(["127.0.0.1/32", "::1/128"]))
         if allow_nets and not _client_allowed(ip, allow_nets):
             abort(403)
 
+        token = str(settings.get("token") or "").strip()
         if token:
             auth = (request.headers.get("Authorization") or "").strip()
             if auth != f"Bearer {token}":
                 abort(401)
 
+        try:
+            limiter.per_minute = max(1, int(settings.get("rate_limit_per_min") or 60))
+        except Exception:  # noqa: BLE001
+            limiter.per_minute = 60
         if not limiter.allow(ip or "?"):
             abort(429)
 
@@ -517,6 +624,9 @@ def create_blocklist_service() -> Flask:
             )
         except Exception:  # noqa: BLE001
             pass
+
+        settings = _effective_settings()
+        ttl = int(settings.get("ttl_seconds") or 5)
 
         resp = Response(csv_text, mimetype="text/csv; charset=utf-8")
         resp.headers["Cache-Control"] = f"no-store, no-cache, max-age={ttl}, must-revalidate"

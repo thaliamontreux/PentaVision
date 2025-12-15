@@ -39,14 +39,29 @@
         <p class="pv-card-subtitle">Inspect configured storage targets (local filesystem, S3, database, and more).</p>
       </a>
 
-      <a href="{{ url_for('main.audit_events') }}" class="pv-card">
-        <h2 class="pv-card-title">Audit log</h2>
-        <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
+      <a href="{{ url_for('admin.access_control') }}" class="pv-card">
+        <h2 class="pv-card-title">Block / Allow</h2>
+        <p class="pv-card-subtitle">Manage IP exemptions, IP blocks, and country access policies.</p>
+      </a>
+
+      <a href="{{ url_for('admin.blocklist_distribution') }}" class="pv-card">
+        <h2 class="pv-card-title">Blocklist Distribution</h2>
+        <p class="pv-card-subtitle">Configure external blocklist publication for pfSense/firewalls and view current distribution health.</p>
+      </a>
+
+      <a href="{{ url_for('admin.services') }}" class="pv-card">
+        <h2 class="pv-card-title">Services</h2>
+        <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
       </a>
 
       <a href="{{ url_for('installer.install') }}" class="pv-card">
         <h2 class="pv-card-title">Installer & databases</h2>
         <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
+      </a>
+
+      <a href="{{ url_for('main.audit_events') }}" class="pv-card">
+        <h2 class="pv-card-title">Audit log</h2>
+        <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
       </a>
     </div>
   </section>
