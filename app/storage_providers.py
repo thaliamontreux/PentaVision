@@ -14,7 +14,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 from flask import Flask
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, func, insert
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, delete as sa_delete, func, insert
 from sqlalchemy.orm import Session
 from google.cloud import storage as gcs_storage
 from azure.storage.blob import BlobServiceClient
@@ -140,7 +140,35 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
         return None
 
     def delete(self, storage_key: str) -> None:
-        raise NotImplementedError
+        self._ensure_table()
+        raw = str(storage_key or "").strip()
+        if not raw:
+            return
+
+        table_name = "external_recording_data"
+        row_id: int | None = None
+        if ":" in raw:
+            parts = raw.split(":", 1)
+            if len(parts) == 2:
+                table_name = (parts[0] or "").strip() or table_name
+                try:
+                    row_id = int((parts[1] or "").strip())
+                except Exception:  # noqa: BLE001
+                    row_id = None
+        else:
+            try:
+                row_id = int(raw)
+            except Exception:  # noqa: BLE001
+                row_id = None
+
+        if table_name != "external_recording_data":
+            return
+        if row_id is None:
+            return
+
+        stmt = sa_delete(self._table).where(self._table.c.id == row_id)
+        with self._engine.begin() as conn:
+            conn.execute(stmt)
 
 
 class S3StorageProvider(StorageProvider):
