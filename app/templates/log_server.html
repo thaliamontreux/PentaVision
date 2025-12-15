@@ -49,6 +49,18 @@
       .pv-button-secondary:hover {
         background: rgba(255,255,255,0.12);
       }
+      .pv-log-line {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: pre;
+      }
+      .pv-log-line.is-new {
+        color: #86efac;
+      }
+      .pv-log-line.is-old {
+        color: #fca5a5;
+      }
       a { color: #93c5fd; text-decoration: none; }
       a:hover { text-decoration: underline; }
     </style>
@@ -91,7 +103,7 @@
             </div>
           </div>
         </div>
-        <pre id="pv-log-output" style="margin: 0; padding: 0.75rem; overflow: auto; font-size: 12px; line-height: 1.35; white-space: pre; flex: 1;"></pre>
+        <div id="pv-log-output" style="margin: 0; padding: 0.75rem; overflow: auto; flex: 1;"></div>
       </div>
 
       <div class="pv-card" style="height: calc(100vh - 210px); overflow: hidden; display: flex; flex-direction: column;">
@@ -118,6 +130,8 @@
       var intervalEl = document.getElementById('pv-log-interval');
       var intervalLabelEl = document.getElementById('pv-log-interval-label');
 
+      var lastTailLine = '';
+
       var auditOut = document.getElementById('pv-audit-output');
       var auditBtn = document.getElementById('pv-audit-refresh');
       var auditErrBtn = document.getElementById('pv-audit-errors');
@@ -133,8 +147,62 @@
         fetch('/api/journal?unit=' + encodeURIComponent(unit) + '&lines=' + encodeURIComponent(lines))
           .then(function (r) { return r.text(); })
           .then(function (txt) {
-            out.textContent = txt || '';
+            var raw = txt || '';
+            var formattedLines = raw.split('\n').map(function (line) {
+              line = String(line || '');
+              if (!line.trim()) return '';
+
+              var m = line.match(/^([^\s]+)\s+([^\s]+)\s+(.*)$/);
+              if (!m) return line;
+
+              var isoTs = m[1];
+              var rest = m[3];
+
+              var d = new Date(isoTs);
+              var tsText = isoTs;
+              if (!isNaN(d.getTime())) {
+                var mm = String(d.getMonth() + 1).padStart(2, '0');
+                var dd = String(d.getDate()).padStart(2, '0');
+                var hh = String(d.getHours()).padStart(2, '0');
+                var mi = String(d.getMinutes()).padStart(2, '0');
+                var ss = String(d.getSeconds()).padStart(2, '0');
+                tsText = mm + '-' + dd + ' ' + hh + ':' + mi + ':' + ss;
+              }
+
+              rest = rest.replace(/^\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{4}\]\s*/, '');
+
+              return tsText + ' ' + rest;
+            });
+
+            var lastLineNow = '';
+            for (var i = formattedLines.length - 1; i >= 0; i--) {
+              if (String(formattedLines[i] || '').trim()) {
+                lastLineNow = String(formattedLines[i] || '');
+                break;
+              }
+            }
+
+            var newStart = 0;
+            if (lastTailLine) {
+              for (var j = formattedLines.length - 1; j >= 0; j--) {
+                if (formattedLines[j] === lastTailLine) {
+                  newStart = j + 1;
+                  break;
+                }
+              }
+            }
+
+            var html = '';
+            for (var k = 0; k < formattedLines.length; k++) {
+              var l = String(formattedLines[k] || '');
+              if (!l.trim()) continue;
+              var cls = k >= newStart ? 'is-new' : 'is-old';
+              html += '<div class="pv-log-line ' + cls + '">' + esc(l) + '</div>';
+            }
+            out.innerHTML = html;
             out.scrollTop = out.scrollHeight;
+
+            lastTailLine = lastLineNow;
           })
           .catch(function (e) {
             out.textContent = 'Failed to load journal: ' + e;
