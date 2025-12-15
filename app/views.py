@@ -2365,6 +2365,25 @@ def storage_settings():
                                         duration_ms,
                                     )
 
+                            try:
+                                wants_json = False
+                                hdr = (request.headers.get("X-Requested-With") or "").strip().lower()
+                                if hdr == "xmlhttprequest":
+                                    wants_json = True
+                                accept = (request.headers.get("Accept") or "").lower()
+                                if "application/json" in accept:
+                                    wants_json = True
+                                if wants_json:
+                                    return jsonify(
+                                        {
+                                            "ok": bool(module_test_result.get("ok")) if isinstance(module_test_result, dict) else False,
+                                            "module_name": (str(module_test_result.get("module_name") or "") if isinstance(module_test_result, dict) else ""),
+                                            "message": (str(module_test_result.get("message") or "") if isinstance(module_test_result, dict) else ""),
+                                        }
+                                    )
+                            except Exception:  # noqa: BLE001
+                                pass
+
                         elif action == "module_write_test":
                             module_id_raw = (request.form.get("module_id") or "").strip()
                             try:
@@ -2474,6 +2493,25 @@ def storage_settings():
                                         f"Write test OK for '{module.name}'.",
                                         module_row=module,
                                     )
+
+                            try:
+                                wants_json = False
+                                hdr = (request.headers.get("X-Requested-With") or "").strip().lower()
+                                if hdr == "xmlhttprequest":
+                                    wants_json = True
+                                accept = (request.headers.get("Accept") or "").lower()
+                                if "application/json" in accept:
+                                    wants_json = True
+                                if wants_json:
+                                    return jsonify(
+                                        {
+                                            "ok": bool(module_test_result.get("ok")) if isinstance(module_test_result, dict) else False,
+                                            "module_name": (str(module_test_result.get("module_name") or "") if isinstance(module_test_result, dict) else ""),
+                                            "message": (str(module_test_result.get("message") or "") if isinstance(module_test_result, dict) else ""),
+                                        }
+                                    )
+                            except Exception:  # noqa: BLE001
+                                pass
 
                         elif action == "module_draft_write_test":
                             module_id_raw = (request.form.get("module_id") or "").strip()

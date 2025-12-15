@@ -940,7 +940,21 @@
             },
             body: fd
           })
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+              var ct = '';
+              try { ct = String(r.headers.get('content-type') || '').toLowerCase(); } catch (e) { ct = ''; }
+              if (ct.indexOf('application/json') >= 0) {
+                return r.json().catch(function () {
+                  return r.text().then(function (t) {
+                    throw new Error('Invalid JSON response (' + (r.status || 0) + '): ' + String(t || '').slice(0, 200));
+                  });
+                });
+              }
+              return r.text().then(function (t) {
+                var preview = String(t || '').replace(/\s+/g, ' ').slice(0, 200);
+                throw new Error('Non-JSON response (' + (r.status || 0) + '): ' + preview);
+              });
+            })
             .then(function (data) {
               var ok = !!(data && data.ok);
               var msg = 'Module ' + (data && data.module_name ? data.module_name : '') + ': ' + (data && data.message ? data.message : '');
