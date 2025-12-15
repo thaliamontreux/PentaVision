@@ -666,6 +666,39 @@
         }
       {% endif %}
 
+      {% if wizard_draft %}
+        try {
+          var draft = {{ wizard_draft|tojson }};
+          if (draft && wizForm) {
+            Object.keys(draft).forEach(function (k) {
+              if (!k || k === '_step') return;
+              var el = wizForm.querySelector('[name="' + k.replace(/"/g, '\\"') + '"]');
+              if (!el) return;
+              if (el.type === 'checkbox') {
+                var v = String(draft[k] || '');
+                el.checked = (v === '1' || v.toLowerCase() === 'true' || v.toLowerCase() === 'on' || v.toLowerCase() === 'yes');
+              } else {
+                el.value = String(draft[k] || '');
+              }
+            });
+            if (wizProvider) {
+              updateWizardProviderConfig();
+            }
+          }
+        } catch (e) {
+        }
+      {% endif %}
+
+      {% if wizard_step %}
+        try {
+          var stepVal = parseInt('{{ wizard_step }}', 10);
+          if (!isNaN(stepVal) && stepVal >= 1 && stepVal <= 4) {
+            setWizardStep(stepVal);
+          }
+        } catch (e) {
+        }
+      {% endif %}
+
       var select = document.getElementById('module_provider');
       function updateModuleConfig() {
         if (!select) return;

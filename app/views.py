@@ -1326,6 +1326,8 @@ def storage_settings():
     saved = False
     module_test_result: dict | None = None
     module_test_ready = False
+    wizard_draft: dict[str, object] | None = None
+    wizard_step = 1
 
     # Load any existing DB-backed storage settings so we can merge them with
     # environment defaults for the form and summaries.
@@ -1816,6 +1818,10 @@ def storage_settings():
                                 session_db.add(module)
                                 session_db.commit()
                                 saved = True
+                                try:
+                                    session.pop("storage_wizard_draft", None)
+                                except Exception:  # noqa: BLE001
+                                    pass
                                 _log_module_event(
                                     "info",
                                     "module_create",
@@ -2172,6 +2178,25 @@ def storage_settings():
                             except ValueError:
                                 module_id = None
 
+                            try:
+                                draft: dict[str, object] = {}
+                                for k in request.form.keys():
+                                    if not k:
+                                        continue
+                                    if k in {
+                                        "csrf_token",
+                                        "action",
+                                    }:
+                                        continue
+                                    if k.startswith("module_") or k.startswith("module_cfg_"):
+                                        draft[k] = request.form.get(k)
+                                draft["_step"] = 3
+                                session["storage_wizard_draft"] = draft
+                                wizard_draft = draft
+                                wizard_step = 3
+                            except Exception:  # noqa: BLE001
+                                pass
+
                             name = (request.form.get("module_name") or "").strip()
                             label = (request.form.get("module_label") or "").strip()
                             provider_type = (
@@ -2335,6 +2360,13 @@ def storage_settings():
                                     )
                                     _set_last_module_test(fp, ok)
                                     module_test_ready = bool(ok)
+                                    try:
+                                        if wizard_draft is not None and isinstance(wizard_draft, dict):
+                                            wizard_draft["_step"] = 4 if ok else 3
+                                            session["storage_wizard_draft"] = wizard_draft
+                                            wizard_step = int(wizard_draft.get("_step") or 3)
+                                    except Exception:  # noqa: BLE001
+                                        pass
                                     duration_ms = int((time.monotonic() - started) * 1000)
                                     _log_health_check(
                                         int(existing_module.id) if existing_module is not None else None,
@@ -2492,6 +2524,16 @@ def storage_settings():
         open_wizard = bool(request.args.get("wizard"))
     except Exception:  # noqa: BLE001
         open_wizard = False
+    try:
+        raw_draft = session.get("storage_wizard_draft")
+    except Exception:  # noqa: BLE001
+        raw_draft = None
+    if isinstance(raw_draft, dict):
+        wizard_draft = raw_draft
+        try:
+            wizard_step = int(raw_draft.get("_step") or 1)
+        except Exception:  # noqa: BLE001
+            wizard_step = 1
     if request.method == "POST":
         try:
             if (request.form.get("action") or "").strip() == "module_draft_test" and edit_module is None:
@@ -2675,6 +2717,8 @@ def storage_settings():
         module_test_result=module_test_result,
         module_test_ready=module_test_ready,
         open_wizard=open_wizard,
+        wizard_draft=wizard_draft,
+        wizard_step=wizard_step,
         selected_module=selected_module,
         selected_metrics=selected_metrics,
         streams_rows=streams_rows,
