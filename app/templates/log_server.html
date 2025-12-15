@@ -191,15 +191,20 @@
               }
             }
 
-            var newStart = 0;
+            var newStart = formattedLines.length;
             if (lastTailLine) {
+              var found = false;
               for (var j = formattedLines.length - 1; j >= 0; j--) {
                 var lj = formattedLines[j];
                 var tj = (lj && typeof lj === 'object') ? String(lj.text || '') : String(lj || '');
                 if (tj === lastTailLine) {
                   newStart = j + 1;
+                  found = true;
                   break;
                 }
+              }
+              if (!found) {
+                newStart = formattedLines.length;
               }
             }
 
@@ -231,6 +236,13 @@
           .catch(function (e) {
             out.textContent = 'Failed to load journal: ' + e;
           });
+      }
+
+      if (unitSel) {
+        unitSel.addEventListener('change', function () {
+          lastTailLine = '';
+          fetchJournal();
+        });
       }
 
       function fetchAudit(onlyErrors) {
