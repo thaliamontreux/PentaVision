@@ -179,6 +179,28 @@ def _fetch_blocklist_count() -> int:
         return 0
 
 
+def _public_blocklist_base_url() -> str:
+    # Prefer forwarded headers when running behind Apache/Nginx.
+    host = (
+        request.headers.get("X-Forwarded-Host")
+        or request.headers.get("Host")
+        or request.host
+        or "127.0.0.1"
+    )
+    # If multiple hosts are present (comma-separated), use the first.
+    host = host.split(",")[0].strip()
+    host_no_port = host.split(":")[0].strip() or "127.0.0.1"
+
+    scheme = (
+        request.headers.get("X-Forwarded-Proto")
+        or request.headers.get("X-Forwarded-Scheme")
+        or request.scheme
+        or "http"
+    )
+    scheme = scheme.split(",")[0].strip() or "http"
+    return f"{scheme}://{host_no_port}:7080"
+
+
 @bp.route("/blocklist-distribution", methods=["GET", "POST"])
 def blocklist_distribution():
     engine = get_user_engine()
@@ -304,9 +326,10 @@ def blocklist_distribution():
             except Exception:  # noqa: BLE001
                 pass
 
-    root_url = "http://127.0.0.1:7080/"
-    csv_url = "http://127.0.0.1:7080/blocklist.csv"
-    health_url = "http://127.0.0.1:7080/healthz"
+    base_url = _public_blocklist_base_url()
+    root_url = f"{base_url}/"
+    csv_url = f"{base_url}/blocklist.csv"
+    health_url = f"{base_url}/healthz"
     health_text = _fetch_blocklist_health()
     published_count = _fetch_blocklist_count()
 
@@ -457,7 +480,7 @@ def blocklist_audit():
 
 @bp.get("/blocklist-integration")
 def blocklist_integration():
-    csv_url = "http://127.0.0.1:7080/blocklist.csv"
+    csv_url = f"{_public_blocklist_base_url()}/blocklist.csv"
     return render_template(
         "admin/blocklist_integration.html",
         csv_url=csv_url,
