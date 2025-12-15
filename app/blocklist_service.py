@@ -11,6 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from flask import Flask, Response, abort, request
 from sqlalchemy.orm import Session
 
+from .config import load_config
 from .db import get_user_engine
 from .logging_utils import log_event
 from .models import IpAllowlist, IpBlocklist
@@ -147,6 +148,7 @@ def _exclude_by_allowlist(
 
 def create_blocklist_service() -> Flask:
     app = Flask(__name__)
+    app.config.from_mapping(load_config())
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     allow_nets = _consumer_allow_networks()
