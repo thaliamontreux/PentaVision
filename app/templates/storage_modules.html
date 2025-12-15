@@ -447,6 +447,8 @@
         <form method="post" id="pv-storage-wizard-form" style="margin-top: 0.9rem;">
           <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
           <input type="hidden" name="action" id="pv-storage-wizard-action" value="module_create" />
+          <input type="hidden" name="module_test_fingerprint" id="pv-wiz-test-fp" value="" />
+          <input type="hidden" name="module_test_ok" id="pv-wiz-test-ok" value="" />
 
           <div class="pv-storage-wizard-panel is-active" data-panel-step="1">
             <div class="pv-field-group">
@@ -604,6 +606,8 @@
       var wizTest = document.getElementById('pv-wiz-test');
       var wizSave = document.getElementById('pv-wiz-save');
       var toastEl = document.getElementById('pv-toast');
+      var wizTestFp = document.getElementById('pv-wiz-test-fp');
+      var wizTestOk = document.getElementById('pv-wiz-test-ok');
 
       var wizStep = 1;
       function setWizardStep(step) {
@@ -694,6 +698,7 @@
         fetch(window.location.pathname, {
           method: 'POST',
           body: fd,
+          credentials: 'same-origin',
           headers: {
             'X-Requested-With': 'XMLHttpRequest',
             'Accept': 'application/json'
@@ -709,6 +714,13 @@
 
             if (wizSave) {
               wizSave.disabled = !(data && data.module_test_ready);
+            }
+
+            if (wizTestFp) {
+              wizTestFp.value = (data && data.fingerprint) ? String(data.fingerprint) : '';
+            }
+            if (wizTestOk) {
+              wizTestOk.value = (data && data.module_test_ready) ? '1' : '';
             }
 
             if (data && data.module_test_ready) {
