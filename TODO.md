@@ -14,6 +14,16 @@
 - [x] Enhance Block/Allow: preload private LAN ranges (10.0.0.0/8, 172.16.0.0/12, etc.) and add a one-click "Exempt this IP" helper on the access-control page.
 - [x] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
 
+## Pentastar-web UI rules / polish
+
+- [ ] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.
+- [ ] Match Storage Modules UI to `docs\ui-references\storage-modules-manager-reference.png`.
+
+## Storage Modules Manager fixes
+
+- [ ] Make existing-module Test on `/storage?edit_module=...` run via AJAX (no page reload) and show toast results.
+- [ ] Persist Test -> Save proof reliably for both wizard and edit flows.
+
 ## System setup & security
 
 - [x] Provision Ubuntu 24.04 minimal server (see `deploy/install_ubuntu_24.sh` for automated setup steps).

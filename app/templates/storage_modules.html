@@ -88,7 +88,7 @@
                     </div>
                   </div>
                   <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <form method="post" class="pv-inline-form">
+                    <form method="post" class="pv-inline-form pv-module-test-form">
                       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
                       <input type="hidden" name="action" value="module_test" />
                       <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
@@ -676,12 +676,51 @@
         if (!toastEl) return;
         toastEl.textContent = String(message || '');
         toastEl.style.display = 'block';
-        toastEl.style.background = ok ? '#86efac' : '#fca5a5';
-        toastEl.style.color = ok ? '#111827' : '#111827';
+        toastEl.style.background = '#86efac';
+        toastEl.style.color = '#111827';
         window.clearTimeout(showToast._t);
         showToast._t = window.setTimeout(function () {
           toastEl.style.display = 'none';
         }, 6000);
+      }
+
+      var moduleTestForms = document.querySelectorAll('.pv-module-test-form');
+      if (moduleTestForms && moduleTestForms.length) {
+        moduleTestForms.forEach(function (f) {
+          f.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var btn = f.querySelector('button[type="submit"]');
+            if (btn) {
+              btn.disabled = true;
+              btn.textContent = 'Testing…';
+            }
+
+            var fd = new FormData(f);
+            fetch(window.location.pathname + window.location.search, {
+              method: 'POST',
+              body: fd,
+              credentials: 'same-origin',
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+              }
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                var msg = 'Module ' + (data && data.module_name ? data.module_name : '') + ': ' + (data && data.message ? data.message : '');
+                showToast(msg, !!(data && data.ok));
+              })
+              .catch(function (e) {
+                showToast('Test failed: ' + e, false);
+              })
+              .finally(function () {
+                if (btn) {
+                  btn.disabled = false;
+                  btn.textContent = 'Test';
+                }
+              });
+          });
+        });
       }
 
       function runWizardTestAjax() {
