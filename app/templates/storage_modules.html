@@ -288,7 +288,7 @@
               </div>
 
               <div class="pv-storage-actions">
-                <button type="submit" class="pv-button-secondary" data-pv-submit-action="module_draft_test" {% if cfg_readonly %}disabled{% endif %}>Test Connection</button>
+                <button type="button" class="pv-button-secondary" id="pv-edit-test" data-pv-submit-action="module_draft_test" {% if cfg_readonly %}disabled{% endif %}>Test Connection</button>
                 <button type="submit" class="pv-storage-save" data-pv-submit-action="{{ 'module_update' if edit_module else 'module_create' }}" {% if not module_test_ready or cfg_readonly %}disabled{% endif %}>Save</button>
               </div>
             </form>
@@ -849,9 +849,10 @@
         var editSaveBtn = form.querySelector('.pv-storage-save');
         var editTestFp = document.getElementById('pv-edit-test-fp');
         var editTestOk = document.getElementById('pv-edit-test-ok');
+        var editTestBtn = document.getElementById('pv-edit-test');
 
         form.addEventListener('click', function (ev) {
-          var btn = ev.target;
+          var btn = ev.target && ev.target.closest ? ev.target.closest('button') : ev.target;
           if (!btn || !btn.getAttribute) return;
           var action = btn.getAttribute('data-pv-submit-action');
           if (!action) return;
@@ -859,17 +860,11 @@
           if (actionInput) actionInput.value = action;
         });
 
-        form.addEventListener('submit', function (ev) {
-          var a = editActionInput ? String(editActionInput.value || '') : '';
-          if (a !== 'module_draft_test') return;
-          ev.preventDefault();
-
-          var testBtn = form.querySelector('button[data-pv-submit-action="module_draft_test"]');
-          if (testBtn) {
-            testBtn.disabled = true;
-            testBtn.textContent = 'Testing…';
+        function runEditTestAjax() {
+          if (editTestBtn) {
+            editTestBtn.disabled = true;
+            editTestBtn.textContent = 'Testing…';
           }
-
           if (editActionInput) editActionInput.value = 'module_draft_test';
           var fd = new FormData(form);
           fetch(window.location.pathname + window.location.search, {
@@ -901,11 +896,28 @@
               showToast('Test failed: ' + e, false);
             })
             .finally(function () {
-              if (testBtn) {
-                testBtn.disabled = false;
-                testBtn.textContent = 'Test Connection';
+              if (editTestBtn) {
+                editTestBtn.disabled = false;
+                editTestBtn.textContent = 'Test Connection';
               }
             });
+        }
+
+        if (editTestBtn) {
+          editTestBtn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            runEditTestAjax();
+          });
+        }
+
+        form.addEventListener('submit', function (ev) {
+          if (ev && ev.submitter && ev.submitter.getAttribute) {
+            var act = ev.submitter.getAttribute('data-pv-submit-action');
+            if (act === 'module_draft_test') {
+              ev.preventDefault();
+              runEditTestAjax();
+            }
+          }
         });
       }
 

@@ -80,6 +80,13 @@
       {% block content %}{% endblock %}
     </main>
 
+    <div
+      id="pv-global-toast"
+      role="status"
+      aria-live="polite"
+      style="position: fixed; right: 16px; bottom: 16px; z-index: 9999; display: none; max-width: 520px; padding: 0.75rem 1rem; border-radius: 10px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background: #86efac; color: #111827;"
+    ></div>
+
     <script>
       (function () {
         var splash = document.getElementById('pv-splash');
@@ -175,6 +182,63 @@
         // First visit in this tab: record and show splash once.
         window.sessionStorage.setItem('pvSplashSeen', '1');
         hideSoon();
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var toastEl = document.getElementById('pv-global-toast');
+        if (!toastEl) return;
+
+        function showToast(message) {
+          toastEl.textContent = String(message || '');
+          toastEl.style.display = 'block';
+          window.clearTimeout(showToast._t);
+          showToast._t = window.setTimeout(function () {
+            toastEl.style.display = 'none';
+          }, 10000);
+        }
+
+        var queue = [];
+        try {
+          {% set _pv_flash = get_flashed_messages(with_categories=true) %}
+          {% set _pv_errors = (errors if errors is defined else []) %}
+          queue = (
+            {{ _pv_flash|tojson }}
+              .map(function (pair) {
+                try {
+                  return String((pair && pair.length > 1 ? pair[1] : pair) || '');
+                } catch (e) {
+                  return '';
+                }
+              })
+              .filter(function (m) { return !!m; })
+          ).concat(
+            {{ _pv_errors|tojson }}
+              .map(function (m) { return String(m || ''); })
+              .filter(function (m) { return !!m; })
+          );
+        } catch (e) {
+          queue = [];
+        }
+
+        if (!queue || !queue.length) return;
+
+        function drain(i) {
+          if (!queue || i >= queue.length) return;
+          showToast(queue[i]);
+          window.setTimeout(function () {
+            drain(i + 1);
+          }, 10500);
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function () {
+            drain(0);
+          });
+        } else {
+          drain(0);
+        }
       })();
     </script>
   </body>
