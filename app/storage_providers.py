@@ -117,6 +117,21 @@ class LocalFilesystemStorageProvider(StorageProvider):
     def get_url(self, storage_key: str) -> Optional[str]:
         return None
 
+    def delete(self, storage_key: str) -> None:
+        try:
+            target = Path(str(storage_key)).expanduser()
+            if not target.is_absolute():
+                target = self.base_path / target
+            target = target.resolve()
+            try:
+                target.relative_to(self.base_path)
+            except ValueError:
+                return
+            if target.exists() and target.is_file():
+                target.unlink()
+        except Exception:  # noqa: BLE001
+            return
+
 
 class DatabaseStorageProvider(StorageProvider):
     def __init__(self) -> None:
