@@ -288,7 +288,7 @@
               </div>
 
               <div class="pv-storage-actions">
-                <button type="button" class="pv-button-secondary" id="pv-edit-test" data-pv-submit-action="module_draft_test" {% if cfg_readonly %}disabled{% endif %}>Test Connection</button>
+                <button type="button" class="pv-button-secondary" id="pv-edit-test" data-pv-submit-action="{{ 'module_test' if cfg_readonly else 'module_draft_test' }}">Test Connection</button>
                 <button type="submit" class="pv-storage-save" data-pv-submit-action="{{ 'module_update' if edit_module else 'module_create' }}" {% if not module_test_ready or cfg_readonly %}disabled{% endif %}>Save</button>
               </div>
             </form>
@@ -908,6 +908,12 @@
         function runEditTestAjax(triggerBtn) {
           if (!form) return;
           var btn = triggerBtn || editTestBtn;
+          var desiredAction = 'module_draft_test';
+          try {
+            if (btn && btn.getAttribute) {
+              desiredAction = String(btn.getAttribute('data-pv-submit-action') || 'module_draft_test');
+            }
+          } catch (e) { desiredAction = 'module_draft_test'; }
 
           try {
             if (editTestOk) editTestOk.value = '';
@@ -921,7 +927,7 @@
             } catch (e) {}
             btn.textContent = 'Testing…';
           }
-          if (editActionInput) editActionInput.value = 'module_draft_test';
+          if (editActionInput) editActionInput.value = desiredAction;
           var fd = new FormData(form);
           fetch(window.location.pathname + window.location.search, {
             method: 'POST',

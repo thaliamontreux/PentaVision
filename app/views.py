@@ -2437,8 +2437,34 @@ def storage_settings():
                                     )
                                     if provider is None:
                                         missing_bits: list[str] = []
+                                        debug_bits: list[str] = []
                                         try:
                                             if provider_type == "s3":
+                                                try:
+                                                    raw_bucket = request.form.get("module_cfg_s3_bucket")
+                                                    raw_ak = request.form.get("module_cfg_s3_access_key")
+                                                    raw_sk = request.form.get("module_cfg_s3_secret_key")
+                                                    debug_bits.append(
+                                                        "form_bucket="
+                                                        + ("1" if raw_bucket is not None else "0")
+                                                        + "/"
+                                                        + str(len(str(raw_bucket or "")))
+                                                    )
+                                                    debug_bits.append(
+                                                        "form_access_key="
+                                                        + ("1" if raw_ak is not None else "0")
+                                                        + "/"
+                                                        + str(len(str(raw_ak or "")))
+                                                    )
+                                                    debug_bits.append(
+                                                        "form_secret_key="
+                                                        + ("1" if raw_sk is not None else "0")
+                                                        + "/"
+                                                        + str(len(str(raw_sk or "")))
+                                                    )
+                                                except Exception:  # noqa: BLE001
+                                                    debug_bits = []
+
                                                 if not str(config.get("bucket") or "").strip():
                                                     missing_bits.append("bucket")
                                                 if not str(config.get("access_key") or "").strip():
@@ -2451,6 +2477,7 @@ def storage_settings():
                                             raise StorageError(
                                                 "Failed to build provider (missing: "
                                                 + ", ".join(missing_bits)
+                                                + ("; " + ", ".join(debug_bits) if debug_bits else "")
                                                 + ")"
                                             )
                                         raise StorageError("Failed to build provider")
