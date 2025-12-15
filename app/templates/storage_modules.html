@@ -682,6 +682,7 @@
 
       function runWizardTestAjax() {
         if (!wizForm) return;
+        setWizardStep(3);
         if (wizAction) wizAction.value = 'module_draft_test';
         var fd = new FormData(wizForm);
 
@@ -710,12 +711,15 @@
               wizSave.disabled = !(data && data.module_test_ready);
             }
 
-            if (data && data.wizard_step) {
-              setWizardStep(parseInt(data.wizard_step, 10) || 3);
+            if (data && data.module_test_ready) {
+              setWizardStep(4);
+            } else {
+              setWizardStep(3);
             }
           })
           .catch(function (e) {
             showToast('Test failed: ' + e, false);
+            setWizardStep(3);
           })
           .finally(function () {
             if (wizTest) {
