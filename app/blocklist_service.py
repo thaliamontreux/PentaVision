@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from flask import Flask, Response, abort, request
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .config import load_config
@@ -146,6 +147,25 @@ def _exclude_by_allowlist(
     return out
 
 
+def _load_blocks_for_publication(engine) -> Tuple[List[Tuple[str, Optional[datetime], Optional[str]]], List[ipaddress._BaseNetwork]]:
+    IpAllowlist.__table__.create(bind=engine, checkfirst=True)
+    IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+
+    with Session(engine) as session:
+        allow_rows = session.query(IpAllowlist.cidr).all()
+        block_rows = session.query(IpBlocklist.cidr, IpBlocklist.created_at, IpBlocklist.description).all()
+
+    dynamic_allow = [r[0] for r in allow_rows]
+    allow_nets_effective = _parse_allowlist_networks(dynamic_allow)
+    allow_nets_effective.extend(_builtin_never_block_networks())
+
+    blocks_in: List[Tuple[str, Optional[datetime], Optional[str]]] = [
+        (str(c), a, d) for (c, a, d) in block_rows
+    ]
+    blocks = _exclude_by_allowlist(blocks_in, allow_nets_effective)
+    return blocks, allow_nets_effective
+
+
 def create_blocklist_service() -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(load_config())
@@ -182,11 +202,220 @@ def create_blocklist_service() -> Flask:
 
     @app.get("/healthz")
     def healthz() -> Response:
-        return Response("ok\n", mimetype="text/plain; charset=utf-8")
+        engine = get_user_engine()
+        if engine is None:
+            return Response("not_ok: no_user_db\n", status=503, mimetype="text/plain; charset=utf-8")
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return Response("ok\n", mimetype="text/plain; charset=utf-8")
+        except Exception as exc:  # noqa: BLE001
+            return Response(
+                f"not_ok: db_error: {type(exc).__name__}\n",
+                status=503,
+                mimetype="text/plain; charset=utf-8",
+            )
 
     @app.get("/")
     def root() -> Response:
-        return blocklist_csv()
+        engine = get_user_engine()
+        health_text = "ok"
+        health_ok = True
+        blocks: List[Tuple[str, Optional[datetime], Optional[str]]] = []
+        if engine is None:
+            health_text = "not_ok: no_user_db"
+            health_ok = False
+        else:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                blocks, _ = _load_blocks_for_publication(engine)
+            except Exception as exc:  # noqa: BLE001
+                health_text = f"not_ok: db_error: {type(exc).__name__}"
+                health_ok = False
+
+        def _sort_key(row: Tuple[str, Optional[datetime], Optional[str]]):
+            cidr = row[0]
+            t = _determine_type(cidr)
+            try:
+                net = ipaddress.ip_network(cidr, strict=False)
+                addr_int = int(net.network_address)
+                plen = int(net.prefixlen)
+            except Exception:  # noqa: BLE001
+                addr_int = 0
+                plen = 0
+            return (0 if t == "host" else 1, addr_int, plen, cidr)
+
+        blocks.sort(key=_sort_key)
+
+        now = datetime.now(timezone.utc).isoformat()
+        badge_bg = "#22c55e" if health_ok and health_text.strip().lower() == "ok" else "#ef4444"
+
+        html = f"""<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+  <title>PentaVision Blocklist</title>
+  <style>
+    :root {{
+      --bg: #0b1220;
+      --panel: rgba(255, 255, 255, 0.06);
+      --panel2: rgba(255, 255, 255, 0.04);
+      --text: #e5e7eb;
+      --muted: rgba(229, 231, 235, 0.7);
+      --border: rgba(255, 255, 255, 0.12);
+      --accent: #60a5fa;
+    }}
+    body {{
+      margin: 0;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(96,165,250,0.18), transparent 60%), var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }}
+    .wrap {{ max-width: 1200px; margin: 0 auto; padding: 24px; }}
+    .header {{ display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }}
+    h1 {{ margin: 0; font-size: 1.6rem; letter-spacing: 0.2px; }}
+    .sub {{ margin-top: 6px; color: var(--muted); font-size: 0.95rem; }}
+    .actions {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
+    .btn {{
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+    }}
+    .btn:hover {{ border-color: rgba(96,165,250,0.6); }}
+    .panel {{
+      margin-top: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }}
+    .panel-top {{
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 16px;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--border);
+    }}
+    .kpis {{ display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 0.92rem; }}
+    .kpi strong {{ color: var(--text); font-weight: 700; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.92rem; }}
+    th {{ text-align: left; color: rgba(229,231,235,0.85); font-weight: 700; background: rgba(255,255,255,0.03); }}
+    tr:hover td {{ background: rgba(96,165,250,0.06); }}
+    .mono {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace; }}
+    .badge {{
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 9999;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: {badge_bg};
+      color: #000;
+      border: 1px solid rgba(0,0,0,0.15);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      min-width: 220px;
+    }}
+    .badge .title {{ font-weight: 800; font-size: 0.9rem; }}
+    .badge .msg {{ margin-top: 2px; font-size: 0.85rem; }}
+    .empty {{ padding: 18px; color: var(--muted); }}
+  </style>
+</head>
+<body>
+  <div class=\"wrap\">
+    <div class=\"header\">
+      <div>
+        <h1>Blocklist Publication Service</h1>
+        <div class=\"sub\">Generated at <span class=\"mono\">{now}</span>. This view matches published output after allowlist exclusions.</div>
+      </div>
+      <div class=\"actions\">
+        <a class=\"btn\" href=\"/blocklist.csv\">Download CSV</a>
+        <a class=\"btn\" href=\"/healthz\">Health</a>
+      </div>
+    </div>
+
+    <div class=\"panel\">
+      <div class=\"panel-top\">
+        <div class=\"kpis\">
+          <div class=\"kpi\"><strong>{len(blocks)}</strong> published blocks</div>
+          <div class=\"kpi\">Source: <strong class=\"mono\">USER_DB_URL</strong></div>
+        </div>
+        <div class=\"kpis\">Tip: point pfSense alias URL to <strong class=\"mono\">/blocklist.csv</strong></div>
+      </div>
+
+      <div style=\"overflow:auto;\">
+        <table>
+          <thead>
+            <tr>
+              <th style=\"width:110px;\">Type</th>
+              <th>IP / CIDR</th>
+              <th style=\"width:240px;\">Detected</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+"""
+
+        if not blocks:
+            html += "<tr><td colspan=\"4\" class=\"empty\">No blocks currently published.</td></tr>"
+        else:
+            for cidr, created_at, desc in blocks:
+                t = _determine_type(cidr)
+                detected = _dt_iso(created_at)
+                reason = (str(desc).strip() if desc else "BLOCKLIST")
+                reason = reason.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                html += (
+                    "<tr>"
+                    f"<td>{t}</td>"
+                    f"<td class=\"mono\">{cidr}</td>"
+                    f"<td class=\"mono\">{detected}</td>"
+                    f"<td>{reason}</td>"
+                    "</tr>"
+                )
+
+        html += f"""
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id=\"healthBadge\" class=\"badge\">
+    <div class=\"title\">System Health</div>
+    <div id=\"healthMsg\" class=\"msg\">{health_text}</div>
+  </div>
+
+  <script>
+    async function pollHealth() {{
+      try {{
+        const r = await fetch('/healthz', {{ cache: 'no-store' }});
+        const t = (await r.text()).trim();
+        const ok = r.ok && t.toLowerCase() === 'ok';
+        const badge = document.getElementById('healthBadge');
+        const msg = document.getElementById('healthMsg');
+        msg.textContent = t || (ok ? 'ok' : 'not_ok');
+        badge.style.background = ok ? '#22c55e' : '#ef4444';
+        badge.style.color = '#000';
+      }} catch (e) {{
+        const badge = document.getElementById('healthBadge');
+        const msg = document.getElementById('healthMsg');
+        msg.textContent = 'not_ok: health_check_failed';
+        badge.style.background = '#ef4444';
+        badge.style.color = '#000';
+      }}
+    }}
+    pollHealth();
+    setInterval(pollHealth, 5000);
+  </script>
+</body>
+</html>"""
+
+        return Response(html, mimetype="text/html; charset=utf-8")
 
     @app.get("/blocklist.csv")
     def blocklist_csv() -> Response:
@@ -194,21 +423,7 @@ def create_blocklist_service() -> Flask:
         if engine is None:
             abort(503)
 
-        IpAllowlist.__table__.create(bind=engine, checkfirst=True)
-        IpBlocklist.__table__.create(bind=engine, checkfirst=True)
-
-        with Session(engine) as session:
-            allow_rows = session.query(IpAllowlist.cidr).all()
-            block_rows = session.query(IpBlocklist.cidr, IpBlocklist.created_at, IpBlocklist.description).all()
-
-        dynamic_allow = [r[0] for r in allow_rows]
-        allow_nets_effective = _parse_allowlist_networks(dynamic_allow)
-        allow_nets_effective.extend(_builtin_never_block_networks())
-
-        blocks_in: List[Tuple[str, Optional[datetime], Optional[str]]] = [
-            (str(c), a, d) for (c, a, d) in block_rows
-        ]
-        blocks = _exclude_by_allowlist(blocks_in, allow_nets_effective)
+        blocks, _ = _load_blocks_for_publication(engine)
 
         # Deterministic ordering: type then ip/cidr text
         def _sort_key(row: Tuple[str, Optional[datetime], Optional[str]]):
