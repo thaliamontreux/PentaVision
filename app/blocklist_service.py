@@ -627,10 +627,12 @@ def create_blocklist_service() -> Flask:
 
         settings = _effective_settings()
         ttl = int(settings.get("ttl_seconds") or 5)
+        generated_at = datetime.now(timezone.utc).isoformat()
 
         resp = Response(csv_text, mimetype="text/csv; charset=utf-8")
         resp.headers["Cache-Control"] = f"no-store, no-cache, max-age={ttl}, must-revalidate"
         resp.headers["Pragma"] = "no-cache"
+        resp.headers["X-Blocklist-Generated-At"] = generated_at
         return resp
 
     return app

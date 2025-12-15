@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Blocklist Integration · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Blocklist Integration</h1>
+    {% include 'admin/_nav.html' %}
+
+    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: flex-start;">
+      <div class="pv-card">
+        <h2>pfSense / firewall consumption</h2>
+        <p class="pv-card-subtitle">Use the CSV endpoint as the single source of truth for downstream enforcement.</p>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">CSV URL</div>
+          <div style="margin-top: 0.25rem;"><code>{{ csv_url }}</code></div>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">Recommended polling</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Every <strong>30–60 seconds</strong> (tune to your environment). The response is deterministic and uses short TTL no-cache headers.</div>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">Token auth (optional)</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">If enabled, consumers must send:</div>
+          <div style="margin-top: 0.35rem;"><code>Authorization: Bearer &lt;token&gt;</code></div>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">Firewall usage pattern</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">
+            Create an alias/table fed by the URL, then reference that alias in WAN rules (block) and optionally IDS/IPS correlation.
+          </div>
+        </div>
+      </div>
+
+      <div class="pv-card">
+        <h2>Hardening & network controls</h2>
+        <p class="pv-card-subtitle">Recommended controls so port 7080 never becomes an attack vector.</p>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">Consumer IP allowlist</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Set this in Admin → Blocklist Distribution. Only the listed firewall/IDS IPs should be able to reach 7080.</div>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">UFW example</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Allow only your firewall subnet to reach 7080:</div>
+          <div style="margin-top: 0.35rem;"><code>sudo ufw allow from 192.168.250.0/24 to any port 7080 proto tcp</code></div>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">mTLS option (recommended for high assurance)</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">
+            Terminate TLS with client certificate authentication in front of port 7080 (Apache or Nginx reverse proxy). Keep the service itself read-only.
+          </div>
+          <div class="pv-card-subtitle" style="margin-top: 0.5rem;">
+            Example (Apache, sketch): enable <code>ssl</code> and <code>proxy</code>, then require client certs:
+          </div>
+          <div style="margin-top: 0.35rem;">
+            <code style="display: block; white-space: pre; overflow:auto; padding: 0.75rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);">
+&lt;VirtualHost *:443&gt;
+  ServerName blocklist.yourdomain
+  SSLEngine on
+  SSLCertificateFile /etc/letsencrypt/live/blocklist.yourdomain/fullchain.pem
+  SSLCertificateKeyFile /etc/letsencrypt/live/blocklist.yourdomain/privkey.pem
+
+  SSLVerifyClient require
+  SSLVerifyDepth 2
+  SSLCACertificateFile /etc/ssl/certs/your-ca.pem
+
+  ProxyPreserveHost On
+  ProxyPass / http://127.0.0.1:7080/
+  ProxyPassReverse / http://127.0.0.1:7080/
+&lt;/VirtualHost&gt;
+            </code>
+          </div>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
+          <div style="font-weight: 700;">Auditability</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">All publications are recorded as audit events. See Admin → Blocklist Audit.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

@@ -17,7 +17,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .db import get_user_engine
@@ -29,6 +29,7 @@ from .models import (
     IpBlocklist,
     Property,
     Role,
+    AuditEvent,
     User,
     UserProperty,
     UserRole,
@@ -211,6 +212,13 @@ def blocklist_distribution():
                 db.add(settings)
                 db.commit()
 
+            # Ensure settings is safe to use outside this Session (templates).
+            try:
+                db.refresh(settings)
+                db.expunge(settings)
+            except Exception:  # noqa: BLE001
+                pass
+
             if request.method == "POST":
                 if not _validate_csrf_token(request.form.get("csrf_token")):
                     errors.append("Invalid or missing CSRF token.")
@@ -240,6 +248,12 @@ def blocklist_distribution():
                         settings.updated_at = datetime.now(timezone.utc)
                         db.commit()
 
+                        try:
+                            db.refresh(settings)
+                            db.expunge(settings)
+                        except Exception:  # noqa: BLE001
+                            pass
+
                         actor = get_current_user()
                         log_event(
                             "BLOCKLIST_DISTRIBUTION_SETTINGS_UPDATE",
@@ -252,6 +266,12 @@ def blocklist_distribution():
                         settings.token_enabled = 1
                         settings.updated_at = datetime.now(timezone.utc)
                         db.commit()
+
+                        try:
+                            db.refresh(settings)
+                            db.expunge(settings)
+                        except Exception:  # noqa: BLE001
+                            pass
                         actor = get_current_user()
                         log_event(
                             "BLOCKLIST_DISTRIBUTION_TOKEN_ROTATE",
@@ -274,6 +294,15 @@ def blocklist_distribution():
                                 messages.append("Blocklist service restart requested.")
                             else:
                                 errors.append(f"Restart failed: {msg}")
+
+            # If any action committed after the initial detach, make sure we
+            # still have a detached instance for templates.
+            try:
+                if getattr(settings, "id", None) is not None:
+                    db.refresh(settings)
+                    db.expunge(settings)
+            except Exception:  # noqa: BLE001
+                pass
 
     root_url = "http://127.0.0.1:7080/"
     csv_url = "http://127.0.0.1:7080/blocklist.csv"
@@ -352,6 +381,86 @@ def services():
         messages=messages,
         csrf_token=csrf_token,
         services=services_rows,
+    )
+
+
+@bp.get("/blocklist-audit")
+def blocklist_audit():
+    engine = get_user_engine()
+    errors: List[str] = []
+    events: List[AuditEvent] = []
+
+    q = (request.args.get("q") or "").strip()
+    event_type = (request.args.get("event_type") or "").strip()
+    ip = (request.args.get("ip") or "").strip()
+    limit = 300
+
+    if engine is None:
+        errors.append("User database is not configured.")
+    else:
+        with Session(engine) as db:
+            AuditEvent.__table__.create(bind=engine, checkfirst=True)
+            qry = db.query(AuditEvent)
+
+            # Focus on blocklist distribution + related control-plane events.
+            type_prefixes = (
+                "BLOCKLIST_",
+                "BLOCKLIST_DISTRIBUTION_",
+                "ADMIN_SERVICE_RESTART",
+            )
+
+            qry = qry.filter(
+                or_(
+                    *[
+                        AuditEvent.event_type.like(f"{p}%")
+                        for p in type_prefixes
+                    ]
+                )
+            )
+
+            if event_type:
+                qry = qry.filter(AuditEvent.event_type == event_type)
+            if ip:
+                qry = qry.filter(AuditEvent.ip == ip)
+            if q:
+                like = f"%{q}%"
+                qry = qry.filter(or_(AuditEvent.details.like(like), AuditEvent.ip.like(like)))
+
+            events = qry.order_by(AuditEvent.when.desc()).limit(limit).all()
+
+            event_types = (
+                db.query(AuditEvent.event_type)
+                .filter(
+                    or_(
+                        *[
+                            AuditEvent.event_type.like(f"{p}%")
+                            for p in type_prefixes
+                        ]
+                    )
+                )
+                .distinct()
+                .order_by(AuditEvent.event_type)
+                .all()
+            )
+
+    return render_template(
+        "admin/blocklist_audit.html",
+        errors=errors,
+        events=events,
+        q=q,
+        event_type=event_type,
+        ip=ip,
+        limit=limit,
+        event_types=[t[0] for t in (event_types or [])],
+    )
+
+
+@bp.get("/blocklist-integration")
+def blocklist_integration():
+    csv_url = "http://127.0.0.1:7080/blocklist.csv"
+    return render_template(
+        "admin/blocklist_integration.html",
+        csv_url=csv_url,
     )
 
 

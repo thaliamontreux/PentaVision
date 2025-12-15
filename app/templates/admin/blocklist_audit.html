@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}Blocklist Audit · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Blocklist Audit</h1>
+    {% include 'admin/_nav.html' %}
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="pv-card" style="margin-top: 0.75rem;">
+      <h2>Filters</h2>
+      <form method="get" class="pv-form-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-top: 0.75rem;">
+        <div>
+          <label for="q">Search</label>
+          <input id="q" name="q" type="text" value="{{ q or '' }}" placeholder="ip=..., blocks=..., service=..." />
+        </div>
+        <div>
+          <label for="event_type">Event type</label>
+          <select id="event_type" name="event_type">
+            <option value="" {% if not event_type %}selected{% endif %}>All</option>
+            {% for t in event_types %}
+              <option value="{{ t }}" {% if event_type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="ip">Source IP</label>
+          <input id="ip" name="ip" type="text" value="{{ ip or '' }}" placeholder="192.168.250.10" />
+        </div>
+        <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="submit" class="pv-button-primary">Apply</button>
+          <a href="{{ url_for('admin.blocklist_audit') }}" class="pv-button pv-button-secondary" style="text-decoration: none;">Reset</a>
+        </div>
+      </form>
+    </div>
+
+    <div class="pv-card" style="margin-top: 1.25rem;">
+      <h2>Recent events</h2>
+      <p class="pv-card-subtitle">Showing up to {{ limit }} events.</p>
+
+      {% if events %}
+        <table class="pv-table" style="margin-top: 0.75rem;">
+          <thead>
+            <tr>
+              <th style="width: 210px;">When</th>
+              <th style="width: 260px;">Type</th>
+              <th style="width: 160px;">IP</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in events %}
+              <tr>
+                <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{{ e.when }}</td>
+                <td><code>{{ e.event_type }}</code></td>
+                <td><code>{{ e.ip or '' }}</code></td>
+                <td style="word-break: break-word;">{{ e.details or '' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No matching events.</p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}
