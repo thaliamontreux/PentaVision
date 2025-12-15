@@ -1,6 +1,59 @@
-{% extends 'base.html' %}
-
-{% block content %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PentaVision Log Server</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        background: #0b1020;
+        color: #e5e7eb;
+      }
+      .pv-page {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .pv-card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+      }
+      .pv-card-title {
+        font-weight: 650;
+        font-size: 14px;
+      }
+      .pv-card-subtitle {
+        color: #9ca3af;
+        font-size: 12px;
+      }
+      .pv-input {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 10px;
+        color: #e5e7eb;
+        padding: 0.45rem 0.55rem;
+      }
+      .pv-button-secondary {
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.12);
+        color: #e5e7eb;
+        border-radius: 10px;
+        padding: 0.45rem 0.7rem;
+        cursor: pointer;
+      }
+      .pv-button-secondary:hover {
+        background: rgba(255,255,255,0.12);
+      }
+      a { color: #93c5fd; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
   <section class="pv-page" style="padding: 1rem;">
     <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
       <div>
@@ -216,4 +269,5 @@
       startAutoRefresh();
     })();
   </script>
-{% endblock %}
+  </body>
+</html>
