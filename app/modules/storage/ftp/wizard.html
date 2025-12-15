@@ -10,10 +10,12 @@
   <input id="pv-wiz-ftp-user" name="module_cfg_ftp_username" type="text" />
   <label for="pv-wiz-ftp-pass" style="margin-top: 0.35rem;">Password</label>
   <input id="pv-wiz-ftp-pass" name="module_cfg_ftp_password" type="password" autocomplete="off" />
+  <input type="hidden" name="module_cfg_ftp_use_tls_present" value="1" />
   <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem;">
     <input type="checkbox" name="module_cfg_ftp_use_tls" value="1" />
     <span>Use TLS (FTPS)</span>
   </label>
+  <input type="hidden" name="module_cfg_ftp_passive_present" value="1" />
   <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem;">
     <input type="checkbox" name="module_cfg_ftp_passive" value="1" checked />
     <span>Passive mode</span>

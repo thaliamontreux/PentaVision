@@ -7,6 +7,7 @@
       "key": "access_token",
       "label": "pCloud access token",
       "type": "password",
+      "form_key": "module_cfg_pcloud_access_token",
       "required": true,
       "help": "OAuth token from your pCloud app.",
       "link": "https://docs.pcloud.com/"
@@ -15,6 +16,7 @@
       "key": "path",
       "label": "Path (optional)",
       "type": "text",
+      "form_key": "module_cfg_pcloud_path",
       "required": false,
       "help": "Optional destination folder path in your pCloud account."
     }

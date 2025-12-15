@@ -7,6 +7,7 @@
       "key": "bucket",
       "label": "GCS bucket",
       "type": "text",
+      "form_key": "module_cfg_gcs_bucket",
       "required": true,
       "help": "Bucket name for recordings. Authentication typically uses Application Default Credentials (ADC).",
       "link": "https://cloud.google.com/docs/authentication/provide-credentials-adc"

@@ -7,6 +7,7 @@
       "key": "base_dir",
       "label": "Base directory",
       "type": "text",
+      "form_key": "module_cfg_base_dir",
       "required": true,
       "help": "Choose a folder on the server where recordings will be written. Make sure the service has write permissions."
     }

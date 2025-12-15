@@ -7,6 +7,7 @@
       "key": "base_dir",
       "label": "Local drive path",
       "type": "text",
+      "form_key": "module_cfg_local_drive_path",
       "required": true,
       "help": "Path on the server machine (Windows/Linux). Examples: D:\\Recordings, E:\\PentaVision\\Archive, /mnt/storage/recordings."
     }

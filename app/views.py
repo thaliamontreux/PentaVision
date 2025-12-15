@@ -1551,303 +1551,100 @@ def storage_settings():
                             }
                             raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
                             return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+                        def _load_provider_definition(provider_type: str) -> dict:
+                            provider_type = (provider_type or "").strip().lower()
+                            if not provider_type:
+                                return {}
+                            try:
+                                from .modules.storage.registry import (  # noqa: PLC0415
+                                    _safe_read_json,
+                                )
+                            except Exception:  # noqa: BLE001
+                                return {}
+                            try:
+                                base_dir = os.path.join(
+                                    os.path.dirname(__file__),
+                                    "modules",
+                                    "storage",
+                                    provider_type,
+                                    "definition.json",
+                                )
+                                return _safe_read_json(base_dir)
+                            except Exception:  # noqa: BLE001
+                                return {}
+
+                        def _default_form_key(provider_type: str, key: str) -> str:
+                            provider_type = (provider_type or "").strip().lower()
+                            key = (key or "").strip()
+                            if provider_type == "local_fs" and key == "base_dir":
+                                return "module_cfg_base_dir"
+                            if provider_type == "local_drive" and key == "base_dir":
+                                return "module_cfg_local_drive_path"
+                            return f"module_cfg_{provider_type}_{key}"
+
+                        def _coerce_value(raw: str, field_type: str):
+                            field_type = (field_type or "text").strip().lower()
+                            if field_type in {"number", "int", "integer"}:
+                                try:
+                                    return int(str(raw).strip())
+                                except Exception:  # noqa: BLE001
+                                    return None
+                            if field_type in {"bool", "boolean"}:
+                                if raw is None:
+                                    return False
+                                sval = str(raw).strip().lower()
+                                if sval in {"1", "true", "on", "yes"}:
+                                    return True
+                                if sval in {"0", "false", "off", "no"}:
+                                    return False
+                                return bool(sval)
+                            return str(raw)
+
                         def _build_module_config_from_form(
                             provider_type: str,
                         ) -> dict[str, object]:
+                            provider_type = (provider_type or "").strip().lower()
+                            definition = _load_provider_definition(provider_type)
+                            fields = list(definition.get("fields") or [])
                             config: dict[str, object] = {}
-                            if provider_type == "local_fs":
-                                base_dir = (
-                                    request.form.get("module_cfg_base_dir") or ""
-                                ).strip()
-                                if base_dir:
-                                    config["base_dir"] = base_dir
-                            elif provider_type == "local_drive":
-                                base_dir = (
-                                    request.form.get("module_cfg_local_drive_path")
-                                    or ""
-                                ).strip()
-                                if base_dir:
-                                    config["base_dir"] = base_dir
-                            elif provider_type == "s3":
-                                bucket = (
-                                    request.form.get("module_cfg_s3_bucket") or ""
-                                ).strip()
-                                endpoint = (
-                                    request.form.get("module_cfg_s3_endpoint") or ""
-                                ).strip()
-                                region = (
-                                    request.form.get("module_cfg_s3_region") or ""
-                                ).strip()
-                                access_key = (
-                                    request.form.get("module_cfg_s3_access_key") or ""
-                                ).strip()
-                                secret_key = (
-                                    request.form.get("module_cfg_s3_secret_key") or ""
-                                ).strip()
-                                if bucket:
-                                    config["bucket"] = bucket
-                                if endpoint:
-                                    config["endpoint"] = endpoint
-                                if region:
-                                    config["region"] = region
-                                if access_key:
-                                    config["access_key"] = access_key
-                                if secret_key:
-                                    config["secret_key"] = secret_key
-                            elif provider_type == "gcs":
-                                bucket = (
-                                    request.form.get("module_cfg_gcs_bucket") or ""
-                                ).strip()
-                                if bucket:
-                                    config["bucket"] = bucket
-                            elif provider_type == "azure_blob":
-                                conn = (
-                                    request.form.get(
-                                        "module_cfg_azure_connection_string"
-                                    )
-                                    or ""
-                                ).strip()
-                                container = (
-                                    request.form.get("module_cfg_azure_container")
-                                    or ""
-                                ).strip()
-                                if conn:
-                                    config["connection_string"] = conn
-                                if container:
-                                    config["container"] = container
-                            elif provider_type == "dropbox":
-                                token = (
-                                    request.form.get(
-                                        "module_cfg_dropbox_access_token"
-                                    )
-                                    or ""
-                                ).strip()
-                                if token:
-                                    config["access_token"] = token
-                            elif provider_type == "webdav":
-                                base_url = (
-                                    request.form.get("module_cfg_webdav_base_url")
-                                    or ""
-                                ).strip()
-                                username = (
-                                    request.form.get("module_cfg_webdav_username")
-                                    or ""
-                                ).strip()
-                                password = (
-                                    request.form.get("module_cfg_webdav_password")
-                                    or ""
-                                ).strip()
-                                if base_url:
-                                    config["base_url"] = base_url
-                                if username:
-                                    config["username"] = username
-                                if password:
-                                    config["password"] = password
-                            elif provider_type == "ftp":
-                                host = (
-                                    request.form.get("module_cfg_ftp_host") or ""
-                                ).strip()
-                                port_raw = (
-                                    request.form.get("module_cfg_ftp_port") or ""
-                                ).strip()
-                                username = (
-                                    request.form.get("module_cfg_ftp_username") or ""
-                                ).strip()
-                                password = (
-                                    request.form.get("module_cfg_ftp_password") or ""
-                                ).strip()
-                                base_dir = (
-                                    request.form.get("module_cfg_ftp_base_dir")
-                                    or ""
-                                ).strip()
-                                use_tls = (
-                                    request.form.get("module_cfg_ftp_use_tls")
-                                    == "1"
-                                )
-                                passive = (
-                                    request.form.get("module_cfg_ftp_passive")
-                                    != "0"
-                                )
-                                if host:
-                                    config["host"] = host
-                                if port_raw:
-                                    try:
-                                        config["port"] = int(port_raw)
-                                    except ValueError:
-                                        pass
-                                if username:
-                                    config["username"] = username
-                                if password:
-                                    config["password"] = password
-                                if base_dir:
-                                    config["base_dir"] = base_dir
-                                config["use_tls"] = bool(use_tls)
-                                config["passive"] = bool(passive)
-                            elif provider_type == "sftp":
-                                host = (
-                                    request.form.get("module_cfg_sftp_host") or ""
-                                ).strip()
-                                port_raw = (
-                                    request.form.get("module_cfg_sftp_port") or ""
-                                ).strip()
-                                username = (
-                                    request.form.get("module_cfg_sftp_username") or ""
-                                ).strip()
-                                password = (
-                                    request.form.get("module_cfg_sftp_password") or ""
-                                ).strip()
-                                private_key = (
-                                    request.form.get("module_cfg_sftp_private_key")
-                                    or ""
-                                ).strip()
-                                base_dir = (
-                                    request.form.get("module_cfg_sftp_base_dir")
-                                    or ""
-                                ).strip()
-                                if host:
-                                    config["host"] = host
-                                if port_raw:
-                                    try:
-                                        config["port"] = int(port_raw)
-                                    except ValueError:
-                                        pass
-                                if username:
-                                    config["username"] = username
-                                if password:
-                                    config["password"] = password
-                                if private_key:
-                                    config["private_key"] = private_key
-                                if base_dir:
-                                    config["base_dir"] = base_dir
-                            elif provider_type == "scp":
-                                host = (
-                                    request.form.get("module_cfg_scp_host") or ""
-                                ).strip()
-                                port_raw = (
-                                    request.form.get("module_cfg_scp_port") or ""
-                                ).strip()
-                                username = (
-                                    request.form.get("module_cfg_scp_username") or ""
-                                ).strip()
-                                password = (
-                                    request.form.get("module_cfg_scp_password") or ""
-                                ).strip()
-                                private_key = (
-                                    request.form.get("module_cfg_scp_private_key")
-                                    or ""
-                                ).strip()
-                                base_dir = (
-                                    request.form.get("module_cfg_scp_base_dir")
-                                    or ""
-                                ).strip()
-                                if host:
-                                    config["host"] = host
-                                if port_raw:
-                                    try:
-                                        config["port"] = int(port_raw)
-                                    except ValueError:
-                                        pass
-                                if username:
-                                    config["username"] = username
-                                if password:
-                                    config["password"] = password
-                                if private_key:
-                                    config["private_key"] = private_key
-                                if base_dir:
-                                    config["base_dir"] = base_dir
-                            elif provider_type == "gdrive":
-                                access_token = (
-                                    request.form.get(
-                                        "module_cfg_gdrive_access_token"
-                                    )
-                                    or ""
-                                ).strip()
-                                folder_id = (
-                                    request.form.get("module_cfg_gdrive_folder_id")
-                                    or ""
-                                ).strip()
-                                if access_token:
-                                    config["access_token"] = access_token
-                                if folder_id:
-                                    config["folder_id"] = folder_id
-                            elif provider_type == "onedrive":
-                                access_token = (
-                                    request.form.get(
-                                        "module_cfg_onedrive_access_token"
-                                    )
-                                    or ""
-                                ).strip()
-                                root_path = (
-                                    request.form.get("module_cfg_onedrive_root_path")
-                                    or ""
-                                ).strip()
-                                if access_token:
-                                    config["access_token"] = access_token
-                                if root_path:
-                                    config["root_path"] = root_path
-                            elif provider_type == "box":
-                                access_token = (
-                                    request.form.get("module_cfg_box_access_token")
-                                    or ""
-                                ).strip()
-                                folder_id = (
-                                    request.form.get("module_cfg_box_folder_id")
-                                    or ""
-                                ).strip()
-                                if access_token:
-                                    config["access_token"] = access_token
-                                if folder_id:
-                                    config["folder_id"] = folder_id
-                            elif provider_type == "swift":
-                                storage_url = (
-                                    request.form.get("module_cfg_swift_storage_url")
-                                    or ""
-                                ).strip()
-                                auth_token = (
-                                    request.form.get("module_cfg_swift_auth_token")
-                                    or ""
-                                ).strip()
-                                container = (
-                                    request.form.get("module_cfg_swift_container")
-                                    or ""
-                                ).strip()
-                                if storage_url:
-                                    config["storage_url"] = storage_url
-                                if auth_token:
-                                    config["auth_token"] = auth_token
-                                if container:
-                                    config["container"] = container
-                            elif provider_type == "pcloud":
-                                access_token = (
-                                    request.form.get("module_cfg_pcloud_access_token")
-                                    or ""
-                                ).strip()
-                                path = (
-                                    request.form.get("module_cfg_pcloud_path")
-                                    or ""
-                                ).strip()
-                                if access_token:
-                                    config["access_token"] = access_token
-                                if path:
-                                    config["path"] = path
-                            elif provider_type == "mega":
-                                email_val = (
-                                    request.form.get("module_cfg_mega_email") or ""
-                                ).strip()
-                                password_val = (
-                                    request.form.get("module_cfg_mega_password")
-                                    or ""
-                                ).strip()
-                                folder_name = (
-                                    request.form.get("module_cfg_mega_folder_name")
-                                    or ""
-                                ).strip()
-                                if email_val:
-                                    config["email"] = email_val
-                                if password_val:
-                                    config["password"] = password_val
-                                if folder_name:
-                                    config["folder_name"] = folder_name
+
+                            for f in fields:
+                                if not isinstance(f, dict):
+                                    continue
+                                key = str(f.get("key") or "").strip()
+                                if not key:
+                                    continue
+                                form_key = str(f.get("form_key") or "").strip() or _default_form_key(provider_type, key)
+                                ftype = str(f.get("type") or "text").strip().lower()
+
+                                if ftype in {"bool", "boolean"}:
+                                    raw = request.form.get(form_key)
+                                    if raw is None:
+                                        present = request.form.get(f"{form_key}_present")
+                                        if present is None:
+                                            continue
+                                        config[key] = False
+                                        continue
+                                    config[key] = bool(_coerce_value(raw, ftype))
+                                    continue
+
+                                raw_val = request.form.get(form_key)
+                                if raw_val is None:
+                                    continue
+                                raw_val = str(raw_val).strip()
+                                if raw_val == "":
+                                    continue
+
+                                coerced = _coerce_value(raw_val, ftype)
+                                if coerced is None:
+                                    continue
+
+                                config[key] = coerced
+
+                            if not fields:
+                                return config
+
                             return config
 
                         def _get_last_module_test() -> dict[str, object] | None:
@@ -1899,65 +1696,26 @@ def storage_settings():
                             provider_type: str,
                             config: dict[str, object],
                         ) -> list[str]:
-                            missing: list[str] = []
                             provider_type = (provider_type or "").strip().lower()
-                            if provider_type == "local_fs":
-                                if not str(config.get("base_dir") or "").strip():
-                                    missing.append("Base directory")
-                            elif provider_type == "local_drive":
-                                if not str(config.get("base_dir") or "").strip():
-                                    missing.append("Local drive path")
-                            elif provider_type == "s3":
-                                if not str(config.get("bucket") or "").strip():
-                                    missing.append("S3 bucket")
-                            elif provider_type == "gcs":
-                                if not str(config.get("bucket") or "").strip():
-                                    missing.append("GCS bucket")
-                            elif provider_type == "azure_blob":
-                                if not str(config.get("container") or "").strip():
-                                    missing.append("Container")
-                            elif provider_type == "dropbox":
-                                if not str(config.get("access_token") or "").strip():
-                                    missing.append("Access token")
-                            elif provider_type == "webdav":
-                                if not str(config.get("base_url") or "").strip():
-                                    missing.append("Base URL")
-                                if not str(config.get("username") or "").strip():
-                                    missing.append("Username")
-                                if not str(config.get("password") or "").strip():
-                                    missing.append("Password / app token")
-                            elif provider_type == "ftp":
-                                if not str(config.get("host") or "").strip():
-                                    missing.append("FTP host")
-                            elif provider_type in {"sftp", "scp"}:
-                                if not str(config.get("host") or "").strip():
-                                    missing.append("Host")
-                                if not str(config.get("username") or "").strip():
-                                    missing.append("Username")
-                            elif provider_type == "gdrive":
-                                if not str(config.get("access_token") or "").strip():
-                                    missing.append("Google Drive access token")
-                            elif provider_type == "onedrive":
-                                if not str(config.get("access_token") or "").strip():
-                                    missing.append("OneDrive access token")
-                            elif provider_type == "box":
-                                if not str(config.get("access_token") or "").strip():
-                                    missing.append("Box access token")
-                            elif provider_type == "swift":
-                                if not str(config.get("storage_url") or "").strip():
-                                    missing.append("Storage URL")
-                                if not str(config.get("auth_token") or "").strip():
-                                    missing.append("Auth token")
-                                if not str(config.get("container") or "").strip():
-                                    missing.append("Container")
-                            elif provider_type == "pcloud":
-                                if not str(config.get("access_token") or "").strip():
-                                    missing.append("pCloud access token")
-                            elif provider_type == "mega":
-                                if not str(config.get("email") or "").strip():
-                                    missing.append("MEGA email")
-                                if not str(config.get("password") or "").strip():
-                                    missing.append("MEGA password")
+                            definition = _load_provider_definition(provider_type)
+                            fields = list(definition.get("fields") or [])
+                            missing: list[str] = []
+                            for f in fields:
+                                if not isinstance(f, dict):
+                                    continue
+                                if not f.get("required"):
+                                    continue
+                                key = str(f.get("key") or "").strip()
+                                if not key:
+                                    continue
+                                ftype = str(f.get("type") or "text").strip().lower()
+                                val = config.get(key)
+                                if ftype in {"bool", "boolean"}:
+                                    if val is None:
+                                        missing.append(str(f.get("label") or key))
+                                    continue
+                                if not str(val or "").strip():
+                                    missing.append(str(f.get("label") or key))
                             return missing
 
                         StorageModuleEvent.__table__.create(
@@ -2881,12 +2639,17 @@ def storage_settings():
                 )
 
             for r in rows:
+                try:
+                    def_obj = json.loads(r.definition_json) if getattr(r, "definition_json", None) else {}
+                except Exception:  # noqa: BLE001
+                    def_obj = {}
+                fields = list(def_obj.get("fields") or []) if isinstance(def_obj, dict) else []
                 module_definitions.append(
                     StorageModuleDefinition(
                         provider_type=str(r.provider_type),
                         display_name=str(r.display_name or r.provider_type),
                         category=str(r.category or "Custom"),
-                        fields=[],
+                        fields=fields,
                         template=str(r.template_path or ""),
                         module_dir="",
                     )

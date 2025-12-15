@@ -7,6 +7,7 @@
       "key": "container",
       "label": "Container",
       "type": "text",
+      "form_key": "module_cfg_azure_container",
       "required": true,
       "help": "Blob container name where recordings will be stored.",
       "link": "https://learn.microsoft.com/azure/storage/blobs/storage-quickstart-blobs-portal"
@@ -15,6 +16,7 @@
       "key": "connection_string",
       "label": "Connection string",
       "type": "password",
+      "form_key": "module_cfg_azure_connection_string",
       "required": true,
       "help": "From the Storage Account Access keys section.",
       "link": "https://learn.microsoft.com/azure/storage/common/storage-account-keys-manage"

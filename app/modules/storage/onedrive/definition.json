@@ -7,6 +7,7 @@
       "key": "access_token",
       "label": "OneDrive access token",
       "type": "password",
+      "form_key": "module_cfg_onedrive_access_token",
       "required": true,
       "help": "OAuth token for Microsoft Graph.",
       "link": "https://learn.microsoft.com/graph/auth/"
@@ -15,6 +16,7 @@
       "key": "root_path",
       "label": "Root path (optional)",
       "type": "text",
+      "form_key": "module_cfg_onedrive_root_path",
       "required": false,
       "help": "Optional subfolder path inside your drive (e.g. Recordings)."
     }

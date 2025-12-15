@@ -7,6 +7,7 @@
       "key": "base_url",
       "label": "Base URL",
       "type": "text",
+      "form_key": "module_cfg_webdav_base_url",
       "required": true,
       "help": "Example: https://example.com/dav",
       "link": "https://en.wikipedia.org/wiki/WebDAV"
@@ -15,6 +16,7 @@
       "key": "username",
       "label": "Username",
       "type": "text",
+      "form_key": "module_cfg_webdav_username",
       "required": true,
       "help": "Often your WebDAV account username (sometimes an email address)."
     },
@@ -22,6 +24,7 @@
       "key": "password",
       "label": "Password / app token",
       "type": "password",
+      "form_key": "module_cfg_webdav_password",
       "required": true,
       "help": "Use an app password/token if your provider supports it."
     }

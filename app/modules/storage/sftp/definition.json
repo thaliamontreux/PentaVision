@@ -3,11 +3,11 @@
   "display_name": "SFTP",
   "category": "Network / protocol-based",
   "fields": [
-    {"key": "host", "label": "Host", "type": "text", "required": true},
-    {"key": "port", "label": "Port", "type": "number", "required": false, "help": "Default: 22"},
-    {"key": "base_dir", "label": "Base directory", "type": "text", "required": false},
-    {"key": "username", "label": "Username", "type": "text", "required": true},
-    {"key": "password", "label": "Password (optional)", "type": "password", "required": false},
-    {"key": "private_key", "label": "Private key (optional)", "type": "textarea", "required": false, "link": "https://www.ssh.com/academy/ssh/keygen"}
+    {"key": "host", "label": "Host", "type": "text", "form_key": "module_cfg_sftp_host", "required": true},
+    {"key": "port", "label": "Port", "type": "number", "form_key": "module_cfg_sftp_port", "required": false, "help": "Default: 22"},
+    {"key": "base_dir", "label": "Base directory", "type": "text", "form_key": "module_cfg_sftp_base_dir", "required": false},
+    {"key": "username", "label": "Username", "type": "text", "form_key": "module_cfg_sftp_username", "required": true},
+    {"key": "password", "label": "Password (optional)", "type": "password", "form_key": "module_cfg_sftp_password", "required": false},
+    {"key": "private_key", "label": "Private key (optional)", "type": "textarea", "form_key": "module_cfg_sftp_private_key", "required": false, "link": "https://www.ssh.com/academy/ssh/keygen"}
   ]
 }

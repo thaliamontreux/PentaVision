@@ -7,6 +7,7 @@
       "key": "storage_url",
       "label": "Storage URL",
       "type": "text",
+      "form_key": "module_cfg_swift_storage_url",
       "required": true,
       "help": "Swift endpoint URL from your provider.",
       "link": "https://docs.openstack.org/api-ref/object-store/"
@@ -15,6 +16,7 @@
       "key": "auth_token",
       "label": "Auth token",
       "type": "password",
+      "form_key": "module_cfg_swift_auth_token",
       "required": true,
       "help": "Provider-issued auth token (often via Keystone)."
     },
@@ -22,6 +24,7 @@
       "key": "container",
       "label": "Container",
       "type": "text",
+      "form_key": "module_cfg_swift_container",
       "required": true,
       "help": "Container (bucket-equivalent) for recordings."
     }

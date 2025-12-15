@@ -3,12 +3,12 @@
   "display_name": "FTP / FTPS",
   "category": "Network / protocol-based",
   "fields": [
-    {"key": "host", "label": "Host", "type": "text", "required": true, "help": "Example: ftp.yourdomain.com or 10.0.0.20"},
-    {"key": "port", "label": "Port", "type": "number", "required": false, "help": "Default: 21"},
-    {"key": "base_dir", "label": "Base directory", "type": "text", "required": false, "help": "Remote base directory path (e.g. /uploads/pentavision)."},
-    {"key": "username", "label": "Username", "type": "text", "required": false, "help": "FTP username."},
-    {"key": "password", "label": "Password", "type": "password", "required": false, "help": "FTP password."},
-    {"key": "use_tls", "label": "Use TLS (FTPS)", "type": "bool", "required": false, "help": "Enable encrypted transport if supported."},
-    {"key": "passive", "label": "Passive mode", "type": "bool", "required": false, "help": "Usually required behind NAT/firewalls."}
+    {"key": "host", "label": "Host", "type": "text", "form_key": "module_cfg_ftp_host", "required": true, "help": "Example: ftp.yourdomain.com or 10.0.0.20"},
+    {"key": "port", "label": "Port", "type": "number", "form_key": "module_cfg_ftp_port", "required": false, "help": "Default: 21"},
+    {"key": "base_dir", "label": "Base directory", "type": "text", "form_key": "module_cfg_ftp_base_dir", "required": false, "help": "Remote base directory path (e.g. /uploads/pentavision)."},
+    {"key": "username", "label": "Username", "type": "text", "form_key": "module_cfg_ftp_username", "required": false, "help": "FTP username."},
+    {"key": "password", "label": "Password", "type": "password", "form_key": "module_cfg_ftp_password", "required": false, "help": "FTP password."},
+    {"key": "use_tls", "label": "Use TLS (FTPS)", "type": "bool", "form_key": "module_cfg_ftp_use_tls", "required": false, "help": "Enable encrypted transport if supported."},
+    {"key": "passive", "label": "Passive mode", "type": "bool", "form_key": "module_cfg_ftp_passive", "required": false, "help": "Usually required behind NAT/firewalls."}
   ]
 }
