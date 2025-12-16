@@ -4,38 +4,39 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>
-      {% if is_edit %}
-        Edit Camera
-      {% else %}
-        New Camera
-      {% endif %}
-    </h1>
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <h1>
+          {% if is_edit %}
+            Edit Camera
+          {% else %}
+            New Camera
+          {% endif %}
+        </h1>
 
-    {% include 'admin/_nav.html' %}
+        {% if errors %}
+          <div class="pv-alert pv-alert-error">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    {% if errors %}
-      <div class="pv-alert pv-alert-error">
-        <ul>
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+        <div
+          id="camera-client-errors"
+          class="pv-alert pv-alert-error"
+          style="display: none;"
+          aria-live="polite"
+        >
+          <ul id="camera-client-errors-list"></ul>
+        </div>
 
-    <div
-      id="camera-client-errors"
-      class="pv-alert pv-alert-error"
-      style="display: none;"
-      aria-live="polite"
-    >
-      <ul id="camera-client-errors-list"></ul>
-    </div>
-
-    {% if form is not none %}
-      <form method="post" class="pv-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        {% if form is not none %}
+          <form method="post" class="pv-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
         <div class="pv-field-group">
           <label for="name">Name</label>
@@ -380,14 +381,13 @@
     {% else %}
       <p>Nothing to edit.</p>
     {% endif %}
-  </section>
-  <script>
-    (function () {
-      var form = document.querySelector('.pv-form');
+
+        <script>
+          (function () {
+      var form = document.querySelector('form');
       if (!form) {
         return;
       }
-
       var clientBox = document.getElementById('camera-client-errors');
       var clientList = document.getElementById('camera-client-errors-list');
       var requiredParamNames = [];
@@ -947,6 +947,9 @@
             btn.disabled = false;
           });
       });
-    })();
-  </script>
+          })();
+        </script>
+      </div>
+    </div>
+  </section>
 {% endblock %}

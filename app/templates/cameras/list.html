@@ -4,133 +4,137 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Camera URL Patterns</h1>
-    {% include 'admin/_nav.html' %}
-    <p>Manage RTSP URL patterns for different camera manufacturers and models.</p>
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <h1>Camera URL Patterns</h1>
+        <p>Manage RTSP URL patterns for different camera manufacturers and models.</p>
 
-    {% if errors %}
-      <div class="pv-alert pv-alert-error">
-        <ul>
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
+        {% if errors %}
+          <div class="pv-alert pv-alert-error">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+          <a class="pv-button-primary" href="{{ url_for('camera_admin.create_pattern') }}">
+            Add camera pattern
+          </a>
+          <form
+            method="post"
+            action="{{ url_for('camera_admin.import_csv') }}"
+            enctype="multipart/form-data"
+            style="display: inline-flex; align-items: center; gap: 0.5rem;"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <label style="font-size: 0.85rem;">
+              Import CSV
+              <input type="file" name="file" accept=".csv" required />
+            </label>
+            <label style="font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+              <input type="checkbox" name="clear_existing" value="1" />
+              Replace existing
+            </label>
+            <button type="submit" class="pv-button-secondary">Upload</button>
+          </form>
+        </div>
+
+        {% if patterns %}
+          <div style="overflow-x: auto;">
+            <table class="pv-table">
+              <thead>
+                <tr>
+                  <th>Manufacturer</th>
+                  <th>Model / Note</th>
+                  <th>Device type</th>
+                  <th>OUI regex</th>
+                  <th>Protocol</th>
+                  <th>URL pattern</th>
+                  <th>Streams / Channels</th>
+                  <th>Defaults</th>
+                  <th>Active</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in patterns %}
+                  <tr>
+                    <td>{{ p.manufacturer }}</td>
+                    <td>{{ p.model_or_note or '' }}</td>
+                    <td>{{ p.device_type or '' }}</td>
+                    <td>
+                      {% set oui = p.oui_regex or '' %}
+                      {% if oui %}
+                        <code>{{ oui.replace('|', '<br>')|safe }}</code>
+                      {% endif %}
+                    </td>
+                    <td>{{ p.protocol or 'RTSP' }}</td>
+                    <td>
+                      <code>{{ p.rtsp_url_pattern }}</code>
+                    </td>
+                    <td style="min-width: 14rem;">
+                      {% if p.streams_raw %}
+                        <div><strong>Streams:</strong> {{ p.streams_raw }}</div>
+                      {% endif %}
+                      {% if p.stream_names_raw %}
+                        <div><strong>Names:</strong> {{ p.stream_names_raw }}</div>
+                      {% endif %}
+                      {% if p.low_res_stream or p.high_res_stream %}
+                        <div>
+                          <strong>Low/High:</strong>
+                          {{ p.low_res_stream or '-' }}/{{ p.high_res_stream or '-' }}
+                        </div>
+                      {% endif %}
+                    </td>
+                    <td style="min-width: 14rem;">
+                      {% if p.default_port is not none %}
+                        <div><strong>Port:</strong> {{ p.default_port }}</div>
+                      {% endif %}
+                      {% if p.video_encoding %}
+                        <div><strong>Codec:</strong> {{ p.video_encoding }}</div>
+                      {% endif %}
+                      {% if p.default_username or p.default_password %}
+                        <div>
+                          <strong>Creds:</strong>
+                          {{ p.default_username or '' }} / {{ p.default_password or '' }}
+                        </div>
+                      {% endif %}
+                      {% if p.digest_auth_supported %}
+                        <div>Digest auth supported</div>
+                      {% endif %}
+                      {% if p.manual_url %}
+                        <div style="max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                          <code>{{ p.manual_url }}</code>
+                        </div>
+                      {% endif %}
+                    </td>
+                    <td>{{ 'Yes' if p.is_active else 'No' }}</td>
+                    <td style="white-space: nowrap;">
+                      <a href="{{ url_for('camera_admin.edit_pattern', pattern_id=p.id) }}">Edit</a>
+                      <form
+                        method="post"
+                        action="{{ url_for('camera_admin.delete_pattern', pattern_id=p.id) }}"
+                        style="display: inline; margin-left: 0.5rem;"
+                      >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" style="background: none; border: none; color: #fca5a5; cursor: pointer;">
+                          Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p>No camera URL patterns found.</p>
+        {% endif %}
       </div>
-    {% endif %}
-
-    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-      <a class="pv-button-primary" href="{{ url_for('camera_admin.create_pattern') }}">
-        Add camera pattern
-      </a>
-      <form
-        method="post"
-        action="{{ url_for('camera_admin.import_csv') }}"
-        enctype="multipart/form-data"
-        style="display: inline-flex; align-items: center; gap: 0.5rem;"
-      >
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        <label style="font-size: 0.85rem;">
-          Import CSV
-          <input type="file" name="file" accept=".csv" required />
-        </label>
-        <label style="font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.25rem;">
-          <input type="checkbox" name="clear_existing" value="1" />
-          Replace existing
-        </label>
-        <button type="submit" class="pv-button-secondary">Upload</button>
-      </form>
     </div>
-
-    {% if patterns %}
-      <div style="overflow-x: auto;">
-        <table class="pv-table">
-          <thead>
-            <tr>
-              <th>Manufacturer</th>
-              <th>Model / Note</th>
-              <th>Device type</th>
-              <th>OUI regex</th>
-              <th>Protocol</th>
-              <th>URL pattern</th>
-              <th>Streams / Channels</th>
-              <th>Defaults</th>
-              <th>Active</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in patterns %}
-              <tr>
-                <td>{{ p.manufacturer }}</td>
-                <td>{{ p.model_or_note or '' }}</td>
-                <td>{{ p.device_type or '' }}</td>
-                <td>
-                  {% set oui = p.oui_regex or '' %}
-                  {% if oui %}
-                    <code>{{ oui.replace('|', '<br>')|safe }}</code>
-                  {% endif %}
-                </td>
-                <td>{{ p.protocol or 'RTSP' }}</td>
-                <td>
-                  <code>{{ p.rtsp_url_pattern }}</code>
-                </td>
-                <td style="min-width: 14rem;">
-                  {% if p.streams_raw %}
-                    <div><strong>Streams:</strong> {{ p.streams_raw }}</div>
-                  {% endif %}
-                  {% if p.stream_names_raw %}
-                    <div><strong>Names:</strong> {{ p.stream_names_raw }}</div>
-                  {% endif %}
-                  {% if p.low_res_stream or p.high_res_stream %}
-                    <div>
-                      <strong>Low/High:</strong>
-                      {{ p.low_res_stream or '-' }}/{{ p.high_res_stream or '-' }}
-                    </div>
-                  {% endif %}
-                </td>
-                <td style="min-width: 14rem;">
-                  {% if p.default_port is not none %}
-                    <div><strong>Port:</strong> {{ p.default_port }}</div>
-                  {% endif %}
-                  {% if p.video_encoding %}
-                    <div><strong>Codec:</strong> {{ p.video_encoding }}</div>
-                  {% endif %}
-                  {% if p.default_username or p.default_password %}
-                    <div>
-                      <strong>Creds:</strong>
-                      {{ p.default_username or '' }} / {{ p.default_password or '' }}
-                    </div>
-                  {% endif %}
-                  {% if p.digest_auth_supported %}
-                    <div>Digest auth supported</div>
-                  {% endif %}
-                  {% if p.manual_url %}
-                    <div style="max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                      <code>{{ p.manual_url }}</code>
-                    </div>
-                  {% endif %}
-                </td>
-                <td>{{ 'Yes' if p.is_active else 'No' }}</td>
-                <td style="white-space: nowrap;">
-                  <a href="{{ url_for('camera_admin.edit_pattern', pattern_id=p.id) }}">Edit</a>
-                  <form
-                    method="post"
-                    action="{{ url_for('camera_admin.delete_pattern', pattern_id=p.id) }}"
-                    style="display: inline; margin-left: 0.5rem;"
-                  >
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <button type="submit" style="background: none; border: none; color: #fca5a5; cursor: pointer;">
-                      Delete
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p>No camera URL patterns found.</p>
-    {% endif %}
   </section>
 {% endblock %}

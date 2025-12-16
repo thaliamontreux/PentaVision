@@ -4,35 +4,37 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Scan for Network Cameras</h1>
-    {% include 'admin/_nav.html' %}
-    <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
-      Enter a network to scan for RTSP-compatible cameras. Discovered cameras will be
-      added automatically with generic names (CAM1, CAM2, ...).
-    </p>
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <h1>Scan for Network Cameras</h1>
+        <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
+          Enter a network to scan for RTSP-compatible cameras. Discovered cameras will be
+          added automatically with generic names (CAM1, CAM2, ...).
+        </p>
 
-    {% if errors %}
-      <div class="pv-alert pv-alert-error">
-        <ul>
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+        {% if errors %}
+          <div class="pv-alert pv-alert-error">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    {% if messages %}
-      <div class="pv-alert pv-alert-success">
-        <ul>
-          {% for msg in messages %}
-            <li>{{ msg }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+        {% if messages %}
+          <div class="pv-alert pv-alert-success">
+            <ul>
+              {% for msg in messages %}
+                <li>{{ msg }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    <form id="scan-form" method="post" class="pv-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <form id="scan-form" method="post" class="pv-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
       <div class="pv-field-group">
         <label for="base_ip">Base IP address</label>
@@ -77,28 +79,33 @@
       >
         Cancel scan
       </button>
-    </form>
-    <div style="margin-top: 1.5rem;">
-      <h2>Scan progress</h2>
-      <div style="overflow-x: auto; margin-top: 0.5rem;">
-        <table class="pv-table">
-          <thead>
-            <tr>
-              <th>Host</th>
-              <th>Port</th>
-              <th>Current action</th>
-              <th>Result</th>
-            </tr>
-          </thead>
-          <tbody id="scan-progress-body">
-          </tbody>
-        </table>
-      </div>
-    </div>
+        </form>
 
-    <div id="scan-summary" style="margin-top: 1rem; display: none;"></div>
-  </section>
-  <script>
+        <div style="margin-top: 1.5rem;">
+          <h2>Scan progress</h2>
+          <div style="overflow-x: auto; margin-top: 0.5rem;">
+            <table class="pv-table">
+              <thead>
+                <tr>
+                  <th>Host</th>
+                  <th>Port</th>
+                  <th>Current action</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody id="scan-progress-body"></tbody>
+            </table>
+          </div>
+          <div
+            id="scan-summary"
+            class="pv-alert pv-alert-success"
+            style="display: none; margin-top: 0.75rem;"
+          ></div>
+        </div>
+
+        <div id="scan-results" style="margin-top: 1.25rem;"></div>
+
+        <script>
     (function () {
       var form = document.getElementById('scan-form');
       if (!form) {
@@ -354,5 +361,8 @@
         });
       }
     })();
-  </script>
+        </script>
+      </div>
+    </div>
+  </section>
 {% endblock %}
