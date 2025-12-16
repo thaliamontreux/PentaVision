@@ -1,5 +1,6 @@
 <nav class="pv-admin-sidebar" aria-label="Admin navigation">
   {% set current_path = request.path if request else '' %}
+  {% set current_endpoint = request.endpoint if request else '' %}
 
   {% if is_system_admin %}
     {% set href = url_for('admin.index') %}
@@ -12,11 +13,11 @@
 
   {% if is_system_admin or is_technician %}
     {% set href = url_for('camera_admin.list_devices') %}
-    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Cameras</a>
+    <a class="pv-admin-navbtn{% if current_endpoint in ['camera_admin.list_devices', 'camera_admin.create_device', 'camera_admin.edit_device', 'camera_admin.scan'] %} is-active{% endif %}" href="{{ href }}">Cameras</a>
     {% set href = url_for('camera_admin.list_patterns') %}
-    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Camera URL templates</a>
+    <a class="pv-admin-navbtn{% if current_endpoint in ['camera_admin.list_patterns', 'camera_admin.create_pattern', 'camera_admin.edit_pattern', 'camera_admin.import_csv'] %} is-active{% endif %}" href="{{ href }}">Camera URL templates</a>
     {% set href = url_for('camera_admin.rtmp_list') %}
-    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">RTMP outputs</a>
+    <a class="pv-admin-navbtn{% if current_endpoint in ['camera_admin.rtmp_list', 'camera_admin.rtmp_create', 'camera_admin.rtmp_edit'] %} is-active{% endif %}" href="{{ href }}">RTMP outputs</a>
   {% endif %}
 
   {% if is_system_admin %}
