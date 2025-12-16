@@ -40,6 +40,15 @@
   </div>
 
   <div class="pv-field-group">
+    <input type="hidden" name="module_cfg_ftp_ignore_cert_present" value="1" />
+    <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
+      <input type="checkbox" name="module_cfg_ftp_ignore_cert" value="1" {% if edit_module and edit_cfg.get('ignore_cert') %}checked{% endif %} {% if cfg_readonly %}disabled{% endif %} />
+      <span>Ignore certificate</span>
+    </label>
+    <div class="pv-help">FTPS only. Allows connecting even if the server certificate cannot be validated.</div>
+  </div>
+
+  <div class="pv-field-group">
     <input type="hidden" name="module_cfg_ftp_passive_present" value="1" />
     <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
       <input type="checkbox" name="module_cfg_ftp_passive" value="1" {% if not edit_module or edit_cfg.get('passive', True) %}checked{% endif %} {% if cfg_readonly %}disabled{% endif %} />

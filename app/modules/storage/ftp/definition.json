@@ -9,6 +9,7 @@
     {"key": "username", "label": "Username", "type": "text", "form_key": "module_cfg_ftp_username", "required": false, "help": "FTP username."},
     {"key": "password", "label": "Password", "type": "password", "form_key": "module_cfg_ftp_password", "required": false, "help": "FTP password."},
     {"key": "use_tls", "label": "Use TLS (FTPS)", "type": "bool", "form_key": "module_cfg_ftp_use_tls", "required": false, "help": "Enable encrypted transport if supported."},
+    {"key": "ignore_cert", "label": "Ignore certificate", "type": "bool", "form_key": "module_cfg_ftp_ignore_cert", "required": false, "help": "Only applies when using FTPS (TLS). Enables connection even if the server certificate cannot be validated."},
     {"key": "passive", "label": "Passive mode", "type": "bool", "form_key": "module_cfg_ftp_passive", "required": false, "help": "Usually required behind NAT/firewalls."}
   ]
 }

@@ -34,4 +34,13 @@
     <textarea id="module_cfg_sftp_private_key" name="module_cfg_sftp_private_key" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" {% if cfg_readonly %}disabled{% endif %}>{{ edit_cfg.get('private_key', '') if edit_module else '' }}</textarea>
     <div class="pv-help">Paste the PEM/OpenSSH private key. <a href="https://www.ssh.com/academy/ssh/keygen" target="_blank" rel="noopener">How to generate an SSH key</a></div>
   </div>
+
+  <div class="pv-field-group">
+    <input type="hidden" name="module_cfg_sftp_ignore_cert_present" value="1" />
+    <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
+      <input type="checkbox" name="module_cfg_sftp_ignore_cert" value="1" {% if edit_module and edit_cfg.get('ignore_cert') %}checked{% endif %} {% if cfg_readonly %}disabled{% endif %} />
+      <span>Ignore certificate</span>
+    </label>
+    <div class="pv-help">SSH host key verification. Enable only if you trust the server and cannot validate its host key.</div>
+  </div>
 </div>

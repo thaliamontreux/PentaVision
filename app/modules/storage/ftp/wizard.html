@@ -38,6 +38,15 @@
   </div>
 
   <div class="pv-field-group">
+    <input type="hidden" name="module_cfg_ftp_ignore_cert_present" value="1" />
+    <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
+      <input type="checkbox" name="module_cfg_ftp_ignore_cert" value="1" />
+      <span>Ignore certificate</span>
+    </label>
+    <div class="pv-help">FTPS only. Allows connecting even if the server certificate cannot be validated.</div>
+  </div>
+
+  <div class="pv-field-group">
     <input type="hidden" name="module_cfg_ftp_passive_present" value="1" />
     <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
       <input type="checkbox" name="module_cfg_ftp_passive" value="1" checked />

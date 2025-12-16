@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import ftplib
+import ssl
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
@@ -586,6 +587,7 @@ class FTPStorageProvider(StorageProvider):
         password: Optional[str] = None,
         base_dir: str = "/",
         use_tls: bool = False,
+        ignore_cert: Optional[bool] = None,
         passive: bool = True,
     ) -> None:
         self.name = "ftp"
@@ -595,11 +597,16 @@ class FTPStorageProvider(StorageProvider):
         self.password = password or ""
         self.base_dir = (base_dir or "/").rstrip("/") or "/"
         self.use_tls = bool(use_tls)
+        self.ignore_cert = ignore_cert
         self.passive = bool(passive)
 
     def _connect(self):
         if self.use_tls:
-            ftp = ftplib.FTP_TLS()
+            if self.ignore_cert is True:
+                ctx = ssl._create_unverified_context()
+                ftp = ftplib.FTP_TLS(context=ctx)
+            else:
+                ftp = ftplib.FTP_TLS()
         else:
             ftp = ftplib.FTP()
         ftp.connect(self.host, self.port, timeout=20)
@@ -673,6 +680,7 @@ class SFTPStorageProvider(StorageProvider):
         password: Optional[str] = None,
         private_key: Optional[str] = None,
         base_dir: str = "/",
+        ignore_cert: Optional[bool] = None,
     ) -> None:
         self.name = "sftp"
         self.host = host
@@ -681,10 +689,19 @@ class SFTPStorageProvider(StorageProvider):
         self.password = password or None
         self.private_key = private_key or None
         self.base_dir = (base_dir or "/").rstrip("/") or "/"
+        self.ignore_cert = ignore_cert
 
     def _connect(self):
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if self.ignore_cert is False:
+            try:
+                client.load_system_host_keys()
+            except Exception:  # noqa: BLE001
+                pass
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            # Backward compatible default: accept and cache host keys.
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         pkey = None
         if self.private_key:
             try:
@@ -770,6 +787,7 @@ class SCPStorageProvider(StorageProvider):
         password: Optional[str] = None,
         private_key: Optional[str] = None,
         base_dir: str = "/",
+        ignore_cert: Optional[bool] = None,
     ) -> None:
         self.name = "scp"
         self.host = host
@@ -778,10 +796,19 @@ class SCPStorageProvider(StorageProvider):
         self.password = password or None
         self.private_key = private_key or None
         self.base_dir = (base_dir or "/").rstrip("/") or "/"
+        self.ignore_cert = ignore_cert
 
     def _connect(self):
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if self.ignore_cert is False:
+            try:
+                client.load_system_host_keys()
+            except Exception:  # noqa: BLE001
+                pass
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            # Backward compatible default: accept and cache host keys.
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         pkey = None
         if self.private_key:
             try:
@@ -1492,9 +1519,12 @@ def _build_provider_for_module(
         password = str(cfg.get("password") or "").strip() or None
         base_dir = str(cfg.get("base_dir") or "/").strip() or "/"
         use_tls = bool(cfg.get("use_tls") or False)
+        ignore_cert = None
+        if "ignore_cert" in cfg:
+            ignore_cert = bool(cfg.get("ignore_cert"))
         passive = bool(cfg.get("passive") if "passive" in cfg else True)
         if host:
-            provider = FTPStorageProvider(host, port, username, password, base_dir, use_tls, passive)
+            provider = FTPStorageProvider(host, port, username, password, base_dir, use_tls, ignore_cert, passive)
     elif ptype == "sftp":
         host = str(cfg.get("host") or "").strip()
         port = int(cfg.get("port") or 22)
@@ -1503,7 +1533,10 @@ def _build_provider_for_module(
         private_key = str(cfg.get("private_key") or "").strip() or None
         base_dir = str(cfg.get("base_dir") or "/").strip() or "/"
         if host:
-            provider = SFTPStorageProvider(host, port, username, password, private_key, base_dir)
+            ignore_cert = None
+            if "ignore_cert" in cfg:
+                ignore_cert = bool(cfg.get("ignore_cert"))
+            provider = SFTPStorageProvider(host, port, username, password, private_key, base_dir, ignore_cert)
     elif ptype == "scp":
         host = str(cfg.get("host") or "").strip()
         port = int(cfg.get("port") or 22)
@@ -1512,7 +1545,10 @@ def _build_provider_for_module(
         private_key = str(cfg.get("private_key") or "").strip() or None
         base_dir = str(cfg.get("base_dir") or "/").strip() or "/"
         if host:
-            provider = SCPStorageProvider(host, port, username, password, private_key, base_dir)
+            ignore_cert = None
+            if "ignore_cert" in cfg:
+                ignore_cert = bool(cfg.get("ignore_cert"))
+            provider = SCPStorageProvider(host, port, username, password, private_key, base_dir, ignore_cert)
     elif ptype == "onedrive":
         access_token = str(cfg.get("access_token") or "").strip()
         root_path = str(cfg.get("root_path") or "").strip() or None

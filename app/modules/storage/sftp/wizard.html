@@ -31,4 +31,13 @@
     <label for="pv-wiz-sftp-key">Private key (optional)</label>
     <textarea id="pv-wiz-sftp-key" name="module_cfg_sftp_private_key" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
   </div>
+
+  <div class="pv-field-group">
+    <input type="hidden" name="module_cfg_sftp_ignore_cert_present" value="1" />
+    <label style="display: inline-flex; align-items: center; gap: 0.45rem;">
+      <input type="checkbox" name="module_cfg_sftp_ignore_cert" value="1" />
+      <span>Ignore certificate</span>
+    </label>
+    <div class="pv-help">SSH host key verification. Enable only if you trust the server and cannot validate its host key.</div>
+  </div>
 </div>

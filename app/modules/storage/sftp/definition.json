@@ -8,6 +8,7 @@
     {"key": "base_dir", "label": "Base directory", "type": "text", "form_key": "module_cfg_sftp_base_dir", "required": false},
     {"key": "username", "label": "Username", "type": "text", "form_key": "module_cfg_sftp_username", "required": true},
     {"key": "password", "label": "Password (optional)", "type": "password", "form_key": "module_cfg_sftp_password", "required": false},
-    {"key": "private_key", "label": "Private key (optional)", "type": "textarea", "form_key": "module_cfg_sftp_private_key", "required": false, "link": "https://www.ssh.com/academy/ssh/keygen"}
+    {"key": "private_key", "label": "Private key (optional)", "type": "textarea", "form_key": "module_cfg_sftp_private_key", "required": false, "link": "https://www.ssh.com/academy/ssh/keygen"},
+    {"key": "ignore_cert", "label": "Ignore certificate", "type": "bool", "form_key": "module_cfg_sftp_ignore_cert", "required": false, "help": "Ignores SSH host key verification (useful for first-time setup or ephemeral servers)."}
   ]
 }
