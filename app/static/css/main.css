@@ -655,7 +655,9 @@ body {
   width: 90%;
   box-sizing: border-box;
   max-height: calc(100vh - 2.5rem);
+  max-height: calc(100dvh - 2.5rem);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pv-camera-footer {
