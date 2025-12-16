@@ -8,6 +8,18 @@
   </div>
 
   <div class="pv-field-group">
+    <label for="pv-wiz-az-account">Storage account name</label>
+    <input id="pv-wiz-az-account" name="module_cfg_azure_account_name" type="text" placeholder="mystorageaccount" />
+    <div class="pv-help"><a href="https://learn.microsoft.com/azure/storage/common/storage-account-overview" target="_blank" rel="noopener">Storage account overview</a></div>
+  </div>
+
+  <div class="pv-field-group">
+    <label for="pv-wiz-az-key">Account key</label>
+    <input id="pv-wiz-az-key" name="module_cfg_azure_account_key" type="password" autocomplete="off" />
+    <div class="pv-help"><a href="https://learn.microsoft.com/azure/storage/common/storage-account-keys-manage" target="_blank" rel="noopener">Find account keys / connection strings</a></div>
+  </div>
+
+  <div class="pv-field-group">
     <label for="pv-wiz-az-conn">Connection string</label>
     <input id="pv-wiz-az-conn" name="module_cfg_azure_connection_string" type="password" autocomplete="off" />
     <div class="pv-help"><a href="https://learn.microsoft.com/azure/storage/common/storage-account-keys-manage" target="_blank" rel="noopener">Find connection string</a></div>
