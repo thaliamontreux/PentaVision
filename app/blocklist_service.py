@@ -535,6 +535,9 @@ def create_blocklist_service() -> Flask:
     <span class=\"pv-status-sep\">|</span>
     <span class=\"pv-status-label\">System:</span>
     <span id=\"pvStatusSystem\" style=\"white-space: nowrap;\">unknown</span>
+    <span class=\"pv-status-sep\">|</span>
+    <span class=\"pv-status-label\">Last error:</span>
+    <span style=\"font-weight: 600; white-space: nowrap;\">None</span>
   </div>
 
   <script>
