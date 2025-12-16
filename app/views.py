@@ -2532,10 +2532,64 @@ def storage_settings():
                                             except Exception:  # noqa: BLE001
                                                 pass
                                             message = "Health check OK + write test OK."
+                                        if status_text == "ok" and provider_type == "azure_blob":
+                                            from .storage_providers import (  # noqa: PLC0415
+                                                _LegacyProviderAdapter,
+                                                _build_provider_for_module,
+                                            )
+
+                                            cfg = {}
+                                            try:
+                                                cfg = json.loads(module.config_json) if module.config_json else {}
+                                            except Exception:  # noqa: BLE001
+                                                cfg = {}
+
+                                            provider = _build_provider_for_module(
+                                                current_app,
+                                                module,
+                                                cfg,
+                                            )
+                                            if provider is None:
+                                                raise StorageError("Failed to build provider")
+                                            adapter = _LegacyProviderAdapter(provider)
+
+                                            payload = b"pv-write-test"
+                                            res = adapter.write(io.BytesIO(payload), {"key_hint": "pv_write_test"})
+                                            object_id = None
+                                            if isinstance(res, dict):
+                                                object_id = res.get("object_id")
+                                            object_id = str(object_id or "").strip()
+                                            if not object_id:
+                                                raise StorageError("Write test did not return an object id.")
+                                            adapter.delete(object_id)
+
+                                            try:
+                                                _log_write_stat(
+                                                    int(getattr(module, "id", 0) or 0),
+                                                    str(getattr(module, "name", "") or ""),
+                                                    provider_type,
+                                                    True,
+                                                    str(object_id)[:512] if object_id else None,
+                                                    int(len(payload)),
+                                                    None,
+                                                )
+                                            except Exception:  # noqa: BLE001
+                                                pass
+                                            message = "Health check OK + write test OK."
                                     except Exception as exc:  # noqa: BLE001
                                         try:
                                             provider_type = (str(getattr(module, "provider_type", "") or "").strip().lower())
                                             if provider_type == "db":
+                                                _log_write_stat(
+                                                    int(getattr(module, "id", 0) or 0),
+                                                    str(getattr(module, "name", "") or ""),
+                                                    provider_type,
+                                                    False,
+                                                    None,
+                                                    1,
+                                                    str(exc)[:512],
+                                                )
+                                            if provider_type == "azure_blob":
                                                 _log_write_stat(
                                                     int(getattr(module, "id", 0) or 0),
                                                     str(getattr(module, "name", "") or ""),
