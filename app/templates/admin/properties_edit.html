@@ -12,21 +12,23 @@
       {% endif %}
     </h1>
 
-    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
 
-    {% if errors %}
-      <div class="pv-alert pv-alert-error" role="alert">
-        <ul>
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+        {% if errors %}
+          <div class="pv-alert pv-alert-error" role="alert">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    {% if form is not none %}
-      <form method="post" class="pv-form" style="max-width: 480px;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        {% if form is not none %}
+          <form method="post" class="pv-form" style="max-width: 480px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
         <div class="pv-field-group">
           <label for="name">Name</label>
@@ -122,20 +124,20 @@
         <a href="{{ url_for('admin.properties_list') }}" class="pv-button" style="margin-left: 0.5rem;">
           Cancel
         </a>
-      </form>
-    {% else %}
-      <p>Nothing to edit.</p>
-    {% endif %}
+          </form>
+        {% else %}
+          <p>Nothing to edit.</p>
+        {% endif %}
 
-    {% if is_edit and users %}
-      <hr style="margin: 2rem 0;" />
-      <h2>Users at this property</h2>
-      <p class="pv-card-subtitle">
-        Link users to this property and define residency status, zones, and camera
-        scope. These settings will be used by future per-property RBAC checks.
-      </p>
+        {% if is_edit and users %}
+          <hr style="margin: 2rem 0;" />
+          <h2>Users at this property</h2>
+          <p class="pv-card-subtitle">
+            Link users to this property and define residency status, zones, and camera
+            scope. These settings will be used by future per-property RBAC checks.
+          </p>
 
-      <table class="pv-table">
+          <table class="pv-table">
         <thead>
           <tr>
             <th scope="col">User</th>
@@ -220,7 +222,10 @@
             </tr>
           {% endfor %}
         </tbody>
-      </table>
-    {% endif %}
+          </table>
+        {% endif %}
+
+      </div>
+    </div>
   </section>
 {% endblock %}

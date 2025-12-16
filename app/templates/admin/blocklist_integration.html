@@ -5,10 +5,13 @@
 {% block content %}
   <section class="pv-section">
     <h1>Blocklist Integration</h1>
-    {% include 'admin/_nav.html' %}
 
-    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: flex-start;">
-      <div class="pv-card">
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+
+        <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: flex-start;">
+          <div class="pv-card">
         <h2>pfSense / firewall consumption</h2>
         <p class="pv-card-subtitle">Use the CSV endpoint as the single source of truth for downstream enforcement.</p>
 
@@ -34,9 +37,9 @@
             Create an alias/table fed by the URL, then reference that alias in WAN rules (block) and optionally IDS/IPS correlation.
           </div>
         </div>
-      </div>
+          </div>
 
-      <div class="pv-card">
+          <div class="pv-card">
         <h2>Hardening & network controls</h2>
         <p class="pv-card-subtitle">Recommended controls so port 7080 never becomes an attack vector.</p>
 
@@ -83,6 +86,9 @@
           <div style="font-weight: 700;">Auditability</div>
           <div class="pv-card-subtitle" style="margin-top: 0.25rem;">All publications are recorded as audit events. See Admin → Blocklist Audit.</div>
         </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>

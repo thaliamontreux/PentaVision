@@ -5,19 +5,22 @@
 {% block content %}
   <section class="pv-section">
     <h1>Blocklist Audit</h1>
-    {% include 'admin/_nav.html' %}
 
-    {% if errors %}
-      <div class="pv-alert pv-alert-error" role="alert">
-        <ul>
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
 
-    <div class="pv-card" style="margin-top: 0.75rem;">
+        {% if errors %}
+          <div class="pv-alert pv-alert-error" role="alert">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <div class="pv-card" style="margin-top: 0.75rem;">
       <h2>Filters</h2>
       <form method="get" class="pv-form-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-top: 0.75rem;">
         <div>
@@ -42,9 +45,9 @@
           <a href="{{ url_for('admin.blocklist_audit') }}" class="pv-button pv-button-secondary" style="text-decoration: none;">Reset</a>
         </div>
       </form>
-    </div>
+        </div>
 
-    <div class="pv-card" style="margin-top: 1.25rem;">
+        <div class="pv-card" style="margin-top: 1.25rem;">
       <h2>Recent events</h2>
       <p class="pv-card-subtitle">Showing up to {{ limit }} events.</p>
 
@@ -72,6 +75,9 @@
       {% else %}
         <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No matching events.</p>
       {% endif %}
+        </div>
+
+      </div>
     </div>
   </section>
 {% endblock %}

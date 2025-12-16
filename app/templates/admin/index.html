@@ -6,9 +6,10 @@
   <section class="pv-section pv-admin">
     <h1>Administration</h1>
 
-    {% include 'admin/_nav.html' %}
-
-    <div class="pv-grid pv-admin-grid">
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <div class="pv-grid pv-admin-grid">
       <a href="{{ url_for('admin.users_list') }}" class="pv-card">
         <h2 class="pv-card-title">Users</h2>
         <p class="pv-card-subtitle">Create, edit, and deactivate user accounts. Manage global roles such as System Administrator and Technician.</p>
@@ -63,6 +64,8 @@
         <h2 class="pv-card-title">Audit log</h2>
         <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
       </a>
+        </div>
+      </div>
     </div>
   </section>
 {% endblock %}

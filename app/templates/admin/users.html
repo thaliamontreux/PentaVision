@@ -6,28 +6,30 @@
   <section class="pv-section">
     <h1>Users</h1>
 
-    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
 
-    {% if errors %}
-      <div class="pv-alert pv-alert-error" role="alert">
-        <ul>
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+        {% if errors %}
+          <div class="pv-alert pv-alert-error" role="alert">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    <p style="margin-bottom: 1rem;">
-      <a href="{{ url_for('admin.user_create') }}" class="pv-button pv-button-primary">
-        New user
-      </a>
-    </p>
+        <p style="margin-bottom: 1rem;">
+          <a href="{{ url_for('admin.user_create') }}" class="pv-button pv-button-primary">
+            New user
+          </a>
+        </p>
 
-    {% if not users %}
-      <p>No users found in the system.</p>
-    {% else %}
-      <table class="pv-table">
+        {% if not users %}
+          <p>No users found in the system.</p>
+        {% else %}
+          <table class="pv-table">
         <thead>
           <tr>
             <th scope="col">ID</th>
@@ -112,7 +114,10 @@
             </tr>
           {% endfor %}
         </tbody>
-      </table>
-    {% endif %}
+          </table>
+        {% endif %}
+
+      </div>
+    </div>
   </section>
 {% endblock %}

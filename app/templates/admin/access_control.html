@@ -5,30 +5,33 @@
 {% block content %}
   <section class="pv-section">
     <h1>Block / Allow</h1>
-    {% include 'admin/_nav.html' %}
 
-    {% if errors %}
-      <div class="pv-alert pv-alert-error" role="alert">
-        <ul>
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
 
-    {% if messages %}
-      <div class="pv-alert pv-alert-success" role="status">
-        <ul>
-          {% for msg in messages %}
-            <li>{{ msg }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+        {% if errors %}
+          <div class="pv-alert pv-alert-error" role="alert">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.7fr); gap: 1.25rem; align-items: flex-start;">
-      <div class="pv-card">
+        {% if messages %}
+          <div class="pv-alert pv-alert-success" role="status">
+            <ul>
+              {% for msg in messages %}
+                <li>{{ msg }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.7fr); gap: 1.25rem; align-items: flex-start;">
+          <div class="pv-card">
         <h2>Current session IP</h2>
         <p class="pv-card-subtitle">
           This is the IP address seen by the server for your current session.
@@ -57,9 +60,9 @@
         <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.75rem;">
           Private LAN ranges such as <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code> and <code>192.168.0.0/16</code> are preloaded into the allowlist on first use.
         </p>
-      </div>
+          </div>
 
-      <div class="pv-card">
+          <div class="pv-card">
         <h2>Country access policy</h2>
         <p class="pv-card-subtitle">
           Control which countries may access the system. Allowlist and blocklist
@@ -121,11 +124,11 @@
             <button type="submit" class="pv-button-primary">Save country policy</button>
           </div>
         </form>
-      </div>
-    </div>
+          </div>
+        </div>
 
-    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; margin-top: 1.25rem; align-items: flex-start;">
-      <div class="pv-card">
+        <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; margin-top: 1.25rem; align-items: flex-start;">
+          <div class="pv-card">
         <h2>IP allowlist (exemptions)</h2>
         <p class="pv-card-subtitle">
           Requests from these IPs or networks bypass lockout, IP blocklist, and
@@ -171,9 +174,9 @@
         {% else %}
           <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No exemptions configured.</p>
         {% endif %}
-      </div>
+          </div>
 
-      <div class="pv-card">
+          <div class="pv-card">
         <h2>IP / network blocklist</h2>
         <p class="pv-card-subtitle">
           Requests from these IPs or networks are rejected before authentication,
@@ -219,6 +222,9 @@
         {% else %}
           <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No IP or network blocks configured.</p>
         {% endif %}
+          </div>
+        </div>
+
       </div>
     </div>
   </section>

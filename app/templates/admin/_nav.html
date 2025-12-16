@@ -1,29 +1,44 @@
-<nav class="pv-subnav" aria-label="Admin navigation">
-  {# Global admin overview and management for System Administrators only #}
+<nav class="pv-admin-sidebar" aria-label="Admin navigation">
+  {% set current_path = request.path if request else '' %}
+
   {% if is_system_admin %}
-    <a href="{{ url_for('admin.index') }}">Overview</a>
-    <a href="{{ url_for('admin.users_list') }}">Users</a>
-    <a href="{{ url_for('admin.properties_list') }}">Properties</a>
+    {% set href = url_for('admin.index') %}
+    <a class="pv-admin-navbtn{% if current_path == href %} is-active{% endif %}" href="{{ href }}">Overview</a>
+    {% set href = url_for('admin.users_list') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Users</a>
+    {% set href = url_for('admin.properties_list') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Properties</a>
   {% endif %}
 
-  {# Camera administration for System Administrators and Technicians #}
   {% if is_system_admin or is_technician %}
-    <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
-    <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URL templates</a>
-    <a href="{{ url_for('camera_admin.rtmp_list') }}">RTMP outputs</a>
+    {% set href = url_for('camera_admin.list_devices') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Cameras</a>
+    {% set href = url_for('camera_admin.list_patterns') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Camera URL templates</a>
+    {% set href = url_for('camera_admin.rtmp_list') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">RTMP outputs</a>
   {% endif %}
 
-  {# Advanced system configuration for System Administrators only #}
   {% if is_system_admin %}
-    <a href="{{ url_for('admin.recordings_alias') }}">Recordings</a>
-    <a href="{{ url_for('admin.recording_settings_alias') }}">Recording settings</a>
-    <a href="{{ url_for('admin.storage_alias') }}">Storage</a>
-    <a href="{{ url_for('admin.access_control') }}">Block / Allow</a>
-    <a href="{{ url_for('admin.blocklist_distribution') }}">Blocklist Distribution</a>
-    <a href="{{ url_for('admin.blocklist_integration') }}">Blocklist Integration</a>
-    <a href="{{ url_for('admin.blocklist_audit') }}">Blocklist Audit</a>
-    <a href="{{ url_for('admin.services') }}">Services</a>
-    <a href="{{ url_for('admin.audit_alias') }}">Audit log</a>
-    <a href="{{ url_for('installer.install') }}">Installer & databases</a>
+    {% set href = url_for('admin.recordings_alias') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Recordings</a>
+    {% set href = url_for('admin.recording_settings_alias') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Recording settings</a>
+    {% set href = url_for('admin.storage_alias') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Storage</a>
+    {% set href = url_for('admin.access_control') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Block / Allow</a>
+    {% set href = url_for('admin.blocklist_distribution') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Blocklist Distribution</a>
+    {% set href = url_for('admin.blocklist_integration') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Blocklist Integration</a>
+    {% set href = url_for('admin.blocklist_audit') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Blocklist Audit</a>
+    {% set href = url_for('admin.services') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Services</a>
+    {% set href = url_for('admin.audit_alias') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Audit log</a>
+    {% set href = url_for('installer.install') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Installer & databases</a>
   {% endif %}
 </nav>
