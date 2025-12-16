@@ -2463,8 +2463,34 @@ def storage_settings():
                                             )
 
                                             DatabaseStorageProvider().record_write_test()
+                                            try:
+                                                _log_write_stat(
+                                                    int(getattr(module, "id", 0) or 0),
+                                                    str(getattr(module, "name", "") or ""),
+                                                    provider_type,
+                                                    True,
+                                                    None,
+                                                    1,
+                                                    None,
+                                                )
+                                            except Exception:  # noqa: BLE001
+                                                pass
                                             message = "Health check OK + write test OK."
                                     except Exception as exc:  # noqa: BLE001
+                                        try:
+                                            provider_type = (str(getattr(module, "provider_type", "") or "").strip().lower())
+                                            if provider_type == "db":
+                                                _log_write_stat(
+                                                    int(getattr(module, "id", 0) or 0),
+                                                    str(getattr(module, "name", "") or ""),
+                                                    provider_type,
+                                                    False,
+                                                    None,
+                                                    1,
+                                                    str(exc)[:512],
+                                                )
+                                        except Exception:  # noqa: BLE001
+                                            pass
                                         status_text = "not_ok"
                                         message = f"Write test failed: {str(exc)[:240]}"
 
