@@ -3713,6 +3713,7 @@ def recording_settings():
 
     errors: list[str] = []
     saved = False
+    test_result = None
     record_engine = get_record_engine()
     if record_engine is None:
         errors.append("Record database is not configured.")
