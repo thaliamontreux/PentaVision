@@ -1727,6 +1727,42 @@ def storage_settings():
 
                                 config[key] = coerced
 
+                            # Fallback for providers where the UI field names may
+                            # not exactly match the schema (e.g. older templates).
+                            if provider_type == "azure_blob":
+                                try:
+                                    for key_name, form_keys in {
+                                        "container": [
+                                            "module_cfg_azure_container",
+                                            "module_cfg_azure_blob_container",
+                                        ],
+                                        "account_name": [
+                                            "module_cfg_azure_account_name",
+                                            "module_cfg_azure_blob_account_name",
+                                        ],
+                                        "account_key": [
+                                            "module_cfg_azure_account_key",
+                                            "module_cfg_azure_blob_account_key",
+                                        ],
+                                        "connection_string": [
+                                            "module_cfg_azure_connection_string",
+                                            "module_cfg_azure_blob_connection_string",
+                                        ],
+                                    }.items():
+                                        if key_name in config and str(config.get(key_name) or "").strip():
+                                            continue
+                                        for fk in form_keys:
+                                            raw_val = request.form.get(fk)
+                                            if raw_val is None:
+                                                continue
+                                            raw_val = str(raw_val).strip()
+                                            if raw_val == "":
+                                                continue
+                                            config[key_name] = raw_val
+                                            break
+                                except Exception:  # noqa: BLE001
+                                    pass
+
                             if not fields:
                                 try:
                                     if provider_type == "s3":
