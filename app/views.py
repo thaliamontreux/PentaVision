@@ -5,9 +5,12 @@ import base64
 import hashlib
 import io
 import json
-import pickle
+import os
+import platform
+import subprocess
 import secrets
 import time
+from collections import defaultdict
 
 from flask import (
     Blueprint,
@@ -271,19 +274,74 @@ def index():
                 int(link.device_id): int(link.property_id) for link in links
             }
 
-        now = datetime.now(timezone.utc)
-        threshold = now - timedelta(minutes=3)
         for device_id, last_time in rows:
             if last_time is None:
                 continue
             camera_last_seen[device_id] = last_time
-            if last_time >= threshold:
-                camera_status[device_id] = "online"
-            else:
-                camera_status[device_id] = "offline"
 
-        for device in devices:
-            camera_status.setdefault(device.id, "unknown")
+    def _ping_host(host: str) -> bool:
+        host = str(host or "").strip()
+        if not host:
+            return False
+        sysname = (platform.system() or "").strip().lower()
+        if "windows" in sysname:
+            cmd = ["ping", "-n", "1", "-w", "750", host]
+        else:
+            cmd = ["ping", "-c", "1", "-W", "1", host]
+        try:
+            res = subprocess.run(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+                check=False,
+            )
+            return res.returncode == 0
+        except Exception:  # noqa: BLE001
+            return False
+
+    # Dashboard camera status should be ONLINE/OFFLINE based on reachability.
+    # Use a short in-memory cache so we don't ping every camera on every request.
+    try:
+        cache = current_app.extensions.setdefault("pv_ping_cache", {})
+    except Exception:  # noqa: BLE001
+        cache = {}
+    now_ts = time.time()
+    ttl_seconds = 10.0
+    for device in devices:
+        try:
+            device_id = int(getattr(device, "id", 0) or 0)
+        except Exception:  # noqa: BLE001
+            continue
+
+        ip = str(getattr(device, "ip_address", "") or "").strip()
+        is_active = bool(getattr(device, "is_active", 0))
+        if not ip:
+            camera_status[device_id] = "unknown"
+            continue
+        if not is_active:
+            camera_status[device_id] = "offline"
+            continue
+
+        key = f"{device_id}:{ip}"
+        cached = cache.get(key)
+        if isinstance(cached, dict):
+            ts = cached.get("ts")
+            ok = cached.get("ok")
+            try:
+                ts_val = float(ts) if ts is not None else None
+            except (TypeError, ValueError):
+                ts_val = None
+            if ts_val is not None and (now_ts - ts_val) <= ttl_seconds:
+                camera_status[device_id] = "online" if bool(ok) else "offline"
+                continue
+
+        ok = _ping_host(ip)
+        try:
+            cache[key] = {"ts": now_ts, "ok": bool(ok)}
+        except Exception:  # noqa: BLE001
+            pass
+        camera_status[device_id] = "online" if ok else "offline"
 
     # Apply property-level RBAC: unauthenticated users see no cameras; non-admin
     # users only see cameras for properties they are associated with.
