@@ -44,6 +44,12 @@ class StorageProvider:
     def get_url(self, storage_key: str) -> Optional[str]:
         return None
 
+    def delete(self, storage_key: str) -> None:
+        raise NotImplementedError
+
+    def record_write_test(self, at: datetime | None = None) -> None:
+        raise NotImplementedError
+
 
 class ExternalSQLDatabaseStorageProvider(StorageProvider):
     def __init__(
@@ -351,6 +357,68 @@ class DatabaseStorageProvider(StorageProvider):
 
     def get_url(self, storage_key: str) -> Optional[str]:
         return None
+
+    def delete(self, storage_key: str) -> None:
+        raw = str(storage_key or "").strip()
+        if not raw or ":" not in raw:
+            return
+        prefix, rid = raw.split(":", 1)
+        if (prefix or "").strip() != "recording_data":
+            return
+        try:
+            row_id = int((rid or "").strip())
+        except Exception:  # noqa: BLE001
+            return
+
+        engine = get_record_engine()
+        if engine is None:
+            return
+
+        try:
+            RecordingData.__table__.create(bind=engine, checkfirst=True)
+            with Session(engine) as session:
+                row = session.get(RecordingData, row_id)
+                if row is None:
+                    return
+                session.delete(row)
+                session.commit()
+        except Exception:  # noqa: BLE001
+            return
+
+    def record_write_test(self, at: datetime | None = None) -> None:
+        engine = get_record_engine()
+        if engine is None:
+            raise RuntimeError("Record database is not configured")
+
+        now_dt = at or datetime.now(timezone.utc)
+        metadata = MetaData()
+        test_table = Table(
+            "TestRDB",
+            metadata,
+            Column("id", Integer, primary_key=True, autoincrement=False),
+            Column("test_date_old", DateTime(timezone=True), nullable=True),
+            Column("test_date", DateTime(timezone=True), nullable=True),
+        )
+        metadata.create_all(engine)
+
+        with engine.begin() as conn:
+            prev = None
+            row = conn.execute(select(test_table.c.test_date).where(test_table.c.id == 1)).first()
+            if row is not None:
+                prev = row[0]
+
+            exists = conn.execute(select(test_table.c.id).where(test_table.c.id == 1)).first()
+            if exists is None:
+                conn.execute(
+                    insert(test_table).values({"id": 1, "test_date_old": None, "test_date": now_dt})
+                )
+                return
+
+            conn.execute(
+                sa_update(test_table)
+                .where(test_table.c.id == 1)
+                .values({"test_date_old": prev, "test_date": now_dt})
+            )
 
 
 class GCSStorageProvider(StorageProvider):

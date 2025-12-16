@@ -2452,6 +2452,22 @@ def storage_settings():
                                     message = status.get("message") or (
                                         f"Health check status: {status_text}"
                                     )
+
+                                    # For RecordDB modules, also perform a write test.
+                                    # This verifies that the app can create/modify tables in RecordDB.
+                                    try:
+                                        provider_type = (str(getattr(module, "provider_type", "") or "").strip().lower())
+                                        if status_text == "ok" and provider_type == "db":
+                                            from .storage_providers import (  # noqa: PLC0415
+                                                DatabaseStorageProvider,
+                                            )
+
+                                            DatabaseStorageProvider().record_write_test()
+                                            message = "Health check OK + write test OK."
+                                    except Exception as exc:  # noqa: BLE001
+                                        status_text = "not_ok"
+                                        message = f"Write test failed: {str(exc)[:240]}"
+
                                     module_test_result = {
                                         "ok": status_text == "ok",
                                         "module_name": module.name,
