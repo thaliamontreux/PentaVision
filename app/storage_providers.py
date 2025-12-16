@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 import ftplib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
 from urllib.parse import quote_plus
@@ -132,11 +132,11 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
         self._ensure_engine()
         metadata = MetaData()
         self._test_table = Table(
-            "test",
+            "pv_sql_write_test",
             metadata,
             Column("id", Integer, primary_key=True, autoincrement=False),
-            Column("last_testdate", DateTime(timezone=True), nullable=True),
-            Column("currennt_testdate", DateTime(timezone=True), nullable=True),
+            Column("old_test_date", DateTime(timezone=True), nullable=True),
+            Column("latest_test_date", DateTime(timezone=True), nullable=True),
         )
         metadata.create_all(self._engine)
 
@@ -151,25 +151,26 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
                     insert(self._test_table).values(
                         {
                             "id": 1,
-                            "last_testdate": None,
-                            "currennt_testdate": None,
+                            "old_test_date": None,
+                            "latest_test_date": None,
                         }
                     )
                 )
 
     def record_write_test(self, at: datetime | None = None) -> None:
         self._ensure_test_table()
-        now_dt = at or datetime.utcnow()
+        # Use timezone-aware UTC timestamps to keep behavior consistent.
+        now_dt = at or datetime.now(timezone.utc)
         with self._engine.begin() as conn:
-            prev_current = None
+            prev_latest = None
             try:
                 row = conn.execute(
-                    select(self._test_table.c.currennt_testdate).where(self._test_table.c.id == 1)
+                    select(self._test_table.c.latest_test_date).where(self._test_table.c.id == 1)
                 ).first()
                 if row is not None:
-                    prev_current = row[0]
+                    prev_latest = row[0]
             except Exception:  # noqa: BLE001
-                prev_current = None
+                prev_latest = None
 
             # Ensure row exists.
             try:
@@ -184,8 +185,8 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
                     insert(self._test_table).values(
                         {
                             "id": 1,
-                            "last_testdate": None,
-                            "currennt_testdate": now_dt,
+                            "old_test_date": None,
+                            "latest_test_date": now_dt,
                         }
                     )
                 )
@@ -194,7 +195,7 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
             conn.execute(
                 sa_update(self._test_table)
                 .where(self._test_table.c.id == 1)
-                .values({"last_testdate": prev_current, "currennt_testdate": now_dt})
+                .values({"old_test_date": prev_latest, "latest_test_date": now_dt})
             )
 
     def upload(self, data: bytes, key_hint: str) -> str:

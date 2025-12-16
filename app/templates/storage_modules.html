@@ -289,8 +289,8 @@
 
               <div class="pv-storage-actions">
                 <button type="button" class="pv-button-secondary" id="pv-edit-test" data-pv-submit-action="{{ 'module_test' if cfg_readonly else 'module_draft_test' }}">Test Connection</button>
-                {% if edit_module and edit_module.provider_type == 's3' %}
-                  <button type="button" class="pv-button-secondary" id="pv-edit-write-test" data-pv-submit-action="{{ 'module_write_test' if cfg_readonly else 'module_draft_write_test' }}">Write Test</button>
+                {% if edit_module and edit_module.provider_type in ['s3', 'sql_db'] %}
+                  <button type="button" class="pv-button-secondary" id="pv-edit-write-test" data-pv-submit-action="{{ 'module_write_test' if cfg_readonly else 'module_draft_write_test' }}">Test Write</button>
                 {% endif %}
                 <button type="submit" class="pv-storage-save" data-pv-submit-action="{{ 'module_update' if edit_module else 'module_create' }}" {% if not module_test_ready or cfg_readonly %}disabled{% endif %}>Save</button>
               </div>
