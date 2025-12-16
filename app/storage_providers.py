@@ -471,6 +471,12 @@ class AzureBlobStorageProvider(StorageProvider):
             endpoint = parts.get("BlobEndpoint", "").strip()
             if endpoint:
                 base_url = endpoint.rstrip("/")
+            if not base_url:
+                account_name = parts.get("AccountName", "").strip()
+                if account_name:
+                    protocol = parts.get("DefaultEndpointsProtocol", "https").strip() or "https"
+                    suffix = parts.get("EndpointSuffix", "core.windows.net").strip() or "core.windows.net"
+                    base_url = f"{protocol}://{account_name}.blob.{suffix}"
         except Exception:  # noqa: BLE001
             base_url = None
         self._base_url = base_url
@@ -1457,6 +1463,16 @@ def _build_provider_for_module(
     elif ptype == "azure_blob":
         conn = str(cfg.get("connection_string") or "").strip()
         container = str(cfg.get("container") or "").strip()
+        if not conn:
+            account_name = str(cfg.get("account_name") or "").strip()
+            account_key = str(cfg.get("account_key") or "").strip()
+            if account_name and account_key:
+                conn = (
+                    "DefaultEndpointsProtocol=https;"
+                    f"AccountName={account_name};"
+                    f"AccountKey={account_key};"
+                    "EndpointSuffix=core.windows.net"
+                )
         if conn and container:
             provider = AzureBlobStorageProvider(conn, container)
     elif ptype == "dropbox":

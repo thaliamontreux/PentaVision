@@ -1883,6 +1883,26 @@ def storage_settings():
                                     continue
                                 if not str(val or "").strip():
                                     missing.append(str(f.get("label") or key))
+
+                            # Some providers have conditional requirements that are
+                            # not expressible in the JSON schema.
+                            if provider_type == "azure_blob":
+                                try:
+                                    container = str(config.get("container") or "").strip()
+                                    conn = str(config.get("connection_string") or "").strip()
+                                    account_name = str(config.get("account_name") or "").strip()
+                                    account_key = str(config.get("account_key") or "").strip()
+                                except Exception:  # noqa: BLE001
+                                    container = ""
+                                    conn = ""
+                                    account_name = ""
+                                    account_key = ""
+
+                                if not container and "Container" not in missing:
+                                    missing.append("Container")
+
+                                if not conn and not (account_name and account_key):
+                                    missing.append("Connection string or account name + account key")
                             return missing
 
                         StorageModuleEvent.__table__.create(

@@ -13,11 +13,29 @@
       "link": "https://learn.microsoft.com/azure/storage/blobs/storage-quickstart-blobs-portal"
     },
     {
+      "key": "account_name",
+      "label": "Storage account name",
+      "type": "text",
+      "form_key": "module_cfg_azure_account_name",
+      "required": false,
+      "help": "The Storage Account (resource) name.",
+      "link": "https://learn.microsoft.com/azure/storage/common/storage-account-overview"
+    },
+    {
+      "key": "account_key",
+      "label": "Account key",
+      "type": "password",
+      "form_key": "module_cfg_azure_account_key",
+      "required": false,
+      "help": "An access key from the Storage Account Access keys section.",
+      "link": "https://learn.microsoft.com/azure/storage/common/storage-account-keys-manage"
+    },
+    {
       "key": "connection_string",
       "label": "Connection string",
       "type": "password",
       "form_key": "module_cfg_azure_connection_string",
-      "required": true,
+      "required": false,
       "help": "From the Storage Account Access keys section.",
       "link": "https://learn.microsoft.com/azure/storage/common/storage-account-keys-manage"
     }
