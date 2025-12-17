@@ -29,14 +29,17 @@ import requests
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-try:
-    import face_recognition  # type: ignore[import]
-    _face_recognition_error = None
-except (SystemExit, ImportError, Exception) as exc:  # noqa: BLE001
-    # Some environments may lack the face_recognition models or native deps.
-    # In that case, we disable recognition endpoints but keep the app running.
-    face_recognition = None  # type: ignore[assignment]
-    _face_recognition_error = exc
+
+def _get_face_recognition_lib():
+    # face_recognition can call sys.exit() if face_recognition_models is missing.
+    # To avoid killing gunicorn workers during app import, we only import it
+    # inside request handlers.
+    try:
+        import face_recognition  # type: ignore[import]
+
+        return face_recognition, None
+    except (SystemExit, ImportError, Exception) as exc:  # noqa: BLE001
+        return None, exc
 
 from .auth import _authenticate_primary_factor, _authenticate_user, _verify_totp
 from .db import get_face_engine, get_record_engine, get_user_engine
@@ -1058,6 +1061,11 @@ def set_user_display_size():
 
 @bp.post("/api/face/enroll")
 def face_enroll():
+    face_recognition, fr_err = _get_face_recognition_lib()
+    if face_recognition is None:
+        msg = str(fr_err) if fr_err is not None else "face recognition unavailable"
+        return jsonify({"error": msg[:200]}), 503
+
     face_engine = get_face_engine()
     user_engine = get_user_engine()
     if face_engine is None or user_engine is None:
@@ -1109,6 +1117,11 @@ def face_enroll():
 
 @bp.post("/api/face/recognize")
 def face_recognize():
+    face_recognition, fr_err = _get_face_recognition_lib()
+    if face_recognition is None:
+        msg = str(fr_err) if fr_err is not None else "face recognition unavailable"
+        return jsonify({"error": msg[:200]}), 503
+
     face_engine = get_face_engine()
     user_engine = get_user_engine()
     if face_engine is None or user_engine is None:
@@ -1201,6 +1214,11 @@ def face_recognize():
 
 @bp.post("/api/face/privacy/opt-out")
 def face_opt_out():
+    face_recognition, fr_err = _get_face_recognition_lib()
+    if face_recognition is None:
+        msg = str(fr_err) if fr_err is not None else "face recognition unavailable"
+        return jsonify({"error": msg[:200]}), 503
+
     face_engine = get_face_engine()
     user_engine = get_user_engine()
     if face_engine is None or user_engine is None:
@@ -1251,6 +1269,11 @@ def face_opt_out():
 
 @bp.post("/api/face/privacy/opt-in")
 def face_opt_in():
+    face_recognition, fr_err = _get_face_recognition_lib()
+    if face_recognition is None:
+        msg = str(fr_err) if fr_err is not None else "face recognition unavailable"
+        return jsonify({"error": msg[:200]}), 503
+
     face_engine = get_face_engine()
     user_engine = get_user_engine()
     if face_engine is None or user_engine is None:
@@ -1293,6 +1316,11 @@ def face_opt_in():
 
 @bp.post("/api/cameras/<int:device_id>/face-recognize")
 def camera_face_recognize(device_id: int):
+    face_recognition, fr_err = _get_face_recognition_lib()
+    if face_recognition is None:
+        msg = str(fr_err) if fr_err is not None else "face recognition unavailable"
+        return jsonify({"error": msg[:200]}), 503
+
     """Run face recognition against the latest preview frame for a camera.
 
     This uses the shared CameraStreamManager to grab the last JPEG frame, so we
