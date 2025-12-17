@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import io
+import hashlib
+import json
+import os
 import signal
 import subprocess
 import threading
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -306,6 +310,7 @@ class CameraWorker(threading.Thread):
         self.providers = providers
         self.segment_seconds = segment_seconds
         self.retry_delay = 10
+        self._ingest_session_id = uuid.uuid4().hex
 
     def run(self) -> None:
         with self.app.app_context():
@@ -391,7 +396,10 @@ class CameraWorker(threading.Thread):
                 # Logging must not crash the worker.
                 pass
             raise RuntimeError("recording command failed")
-        data = temp_path.read_bytes()
+        segment_meta = self._validate_segment(temp_path)
+        if not segment_meta:
+            temp_path.unlink(missing_ok=True)
+            raise RuntimeError("segment validation failed")
         key_hint = f"camera{self.config.device_id}_{timestamp}"
         router = get_storage_router(self.app)
         providers_sorted = sorted(
@@ -407,7 +415,7 @@ class CameraWorker(threading.Thread):
             # Primary path: route through CSAL when an instance exists.
             if instance_key:
                 try:
-                    stream = io.BytesIO(data)
+                    stream = io.BytesIO(temp_path.read_bytes())
                     result = router.write(instance_key, stream, {"key_hint": key_hint})
                     storage_key = str(result.get("object_id") or "")
                 except Exception:  # noqa: BLE001
@@ -416,33 +424,43 @@ class CameraWorker(threading.Thread):
             # Fallback path: call the legacy provider directly if CSAL write failed.
             if not storage_key:
                 try:
-                    storage_key = provider.upload(data, key_hint)
+                    storage_key = provider.upload(temp_path.read_bytes(), key_hint)
                 except Exception as exc:  # noqa: BLE001
                     self._enqueue_upload_failure(
                         provider.name,
                         key_hint,
-                        data,
+                        temp_path.read_bytes(),
                         str(exc),
                     )
                     self._write_stat(
                         provider.name,
                         None,
-                        len(data),
+                        int(segment_meta.get("size_bytes") or 0),
                         False,
                         str(exc),
                     )
                     continue
 
             self._create_camera_recording(provider.name, storage_key)
+            self._append_ingest_index(
+                {
+                    **segment_meta,
+                    "provider": str(provider.name or ""),
+                    "storage_key": str(storage_key or ""),
+                    "key_hint": key_hint,
+                    "committed": True,
+                }
+            )
             self._write_stat(
                 provider.name,
                 storage_key,
-                len(data),
+                int(segment_meta.get("size_bytes") or 0),
                 True,
                 None,
             )
             break
         temp_path.unlink(missing_ok=True)
+        self._cleanup_ingest_dirs()
 
     def _record_segment_gstreamer(self) -> None:
         base_dir = self._segment_temp_dir()
@@ -516,7 +534,10 @@ class CameraWorker(threading.Thread):
                 # Logging must not crash the worker.
                 pass
             raise RuntimeError("recording command failed")
-        data = temp_path.read_bytes()
+        segment_meta = self._validate_segment(temp_path)
+        if not segment_meta:
+            temp_path.unlink(missing_ok=True)
+            raise RuntimeError("segment validation failed")
         key_hint = f"camera{self.config.device_id}_{timestamp}"
         providers_sorted = sorted(
             self.providers,
@@ -527,38 +548,222 @@ class CameraWorker(threading.Thread):
         )
         for provider in providers_sorted:
             try:
-                storage_key = provider.upload(data, key_hint)
+                storage_key = provider.upload(temp_path.read_bytes(), key_hint)
             except Exception as exc:  # noqa: BLE001
                 self._enqueue_upload_failure(
                     provider.name,
                     key_hint,
-                    data,
+                    temp_path.read_bytes(),
                     str(exc),
                 )
                 self._write_stat(
                     provider.name,
                     None,
-                    len(data),
+                    int(segment_meta.get("size_bytes") or 0),
                     False,
                     str(exc),
                 )
                 continue
             self._create_camera_recording(provider.name, storage_key)
+            self._append_ingest_index(
+                {
+                    **segment_meta,
+                    "provider": str(provider.name or ""),
+                    "storage_key": str(storage_key or ""),
+                    "key_hint": key_hint,
+                    "committed": True,
+                }
+            )
             self._write_stat(
                 provider.name,
                 storage_key,
-                len(data),
+                int(segment_meta.get("size_bytes") or 0),
                 True,
                 None,
             )
             break
         temp_path.unlink(missing_ok=True)
+        self._cleanup_ingest_dirs()
 
     def _segment_temp_dir(self) -> Path:
+        ingest_root = self._ingest_root_dir()
+        if ingest_root is not None:
+            return ingest_root / "segments"
         base = self.app.config.get("RECORDING_BASE_DIR") or ""
         if base:
             return Path(str(base)) / "tmp" / f"camera_{self.config.device_id}"
         return Path(self.app.instance_path) / "recording_tmp" / f"camera_{self.config.device_id}"
+
+    def _ingest_root_dir(self) -> Optional[Path]:
+        try:
+            enabled = self.app.config.get("USE_SHM_INGEST")
+            if enabled is None:
+                enabled = True
+            if not bool(enabled):
+                return None
+        except Exception:  # noqa: BLE001
+            return None
+
+        shm_base = Path("/dev/shm")
+        if not shm_base.exists() or not shm_base.is_dir():
+            return None
+
+        root = shm_base / "pentavision" / "ingest" / f"camera_{self.config.device_id}" / f"session_{self._ingest_session_id}"
+        try:
+            # Quota/backpressure check before creating more data.
+            if not self._shm_quota_allows_write(root.parent):
+                return None
+            (root / "segments").mkdir(parents=True, exist_ok=True)
+            return root
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _shm_quota_allows_write(self, camera_root: Path) -> bool:
+        """Basic backpressure: if /dev/shm usage is above limits, skip recording."""
+
+        try:
+            per_cam_limit_mb = int(self.app.config.get("SHM_INGEST_CAMERA_LIMIT_MB", 256) or 256)
+        except Exception:  # noqa: BLE001
+            per_cam_limit_mb = 256
+        try:
+            global_limit_mb = int(self.app.config.get("SHM_INGEST_GLOBAL_LIMIT_MB", 2048) or 2048)
+        except Exception:  # noqa: BLE001
+            global_limit_mb = 2048
+
+        per_cam_limit_mb = max(16, per_cam_limit_mb)
+        global_limit_mb = max(per_cam_limit_mb, global_limit_mb)
+
+        cam_bytes = self._dir_size_bytes(camera_root)
+        if cam_bytes >= (per_cam_limit_mb * 1024 * 1024):
+            return False
+
+        global_root = Path("/dev/shm") / "pentavision" / "ingest"
+        global_bytes = self._dir_size_bytes(global_root)
+        if global_bytes >= (global_limit_mb * 1024 * 1024):
+            return False
+        return True
+
+    def _dir_size_bytes(self, path: Path) -> int:
+        try:
+            if not path.exists():
+                return 0
+        except Exception:  # noqa: BLE001
+            return 0
+        total = 0
+        try:
+            for root, _, files in os.walk(str(path)):
+                for name in files:
+                    try:
+                        fp = os.path.join(root, name)
+                        total += os.path.getsize(fp)
+                    except Exception:  # noqa: BLE001
+                        continue
+        except Exception:  # noqa: BLE001
+            return total
+        return total
+
+    def _validate_segment(self, path: Path) -> Optional[dict]:
+        try:
+            if not path.exists() or not path.is_file():
+                return None
+            size = path.stat().st_size
+            if size <= 0:
+                return None
+        except Exception:  # noqa: BLE001
+            return None
+
+        sha256_hex = None
+        try:
+            h = hashlib.sha256()
+            with open(path, "rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    h.update(chunk)
+            sha256_hex = h.hexdigest()
+        except Exception:  # noqa: BLE001
+            sha256_hex = None
+
+        duration_s = None
+        try:
+            if bool(self.app.config.get("SHM_INGEST_PROBE_DURATION", False)):
+                result = subprocess.run(
+                    [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "default=nw=1:nk=1",
+                        str(path),
+                    ],
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    raw = (result.stdout or "").strip()
+                    if raw:
+                        duration_s = float(raw)
+        except Exception:  # noqa: BLE001
+            duration_s = None
+
+        return {
+            "segment_file": path.name,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "size_bytes": int(size),
+            "sha256": sha256_hex,
+            "duration_s": duration_s,
+        }
+
+    def _ingest_index_path(self) -> Optional[Path]:
+        root = self._ingest_root_dir()
+        if root is None:
+            return None
+        return root / "index.json"
+
+    def _append_ingest_index(self, entry: dict) -> None:
+        index_path = self._ingest_index_path()
+        if index_path is None:
+            return
+        payload = {
+            "camera_id": int(self.config.device_id),
+            "session_id": str(self._ingest_session_id),
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "segments": [],
+        }
+        try:
+            if index_path.exists():
+                payload = json.loads(index_path.read_text(encoding="utf-8") or "{}")
+                if not isinstance(payload, dict):
+                    payload = {}
+        except Exception:  # noqa: BLE001
+            payload = {}
+        if "segments" not in payload or not isinstance(payload.get("segments"), list):
+            payload["segments"] = []
+        payload.setdefault("camera_id", int(self.config.device_id))
+        payload.setdefault("session_id", str(self._ingest_session_id))
+        payload["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        try:
+            payload["segments"].append(entry)
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            index_path.write_text(json.dumps(payload, indent=2)[:2_000_000], encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            return
+
+    def _cleanup_ingest_dirs(self) -> None:
+        root = self._ingest_root_dir()
+        if root is None:
+            return
+        seg_dir = root / "segments"
+        try:
+            if seg_dir.exists() and seg_dir.is_dir() and not any(seg_dir.iterdir()):
+                # Keep index.json but remove empty segment dir to reduce inode churn.
+                seg_dir.rmdir()
+        except Exception:  # noqa: BLE001
+            return
 
     def _create_camera_recording(
         self,
