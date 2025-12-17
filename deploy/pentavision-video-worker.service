@@ -1,0 +1,16 @@
+[Unit]
+Description=PentaVision Video Worker (Recording/Streams/RTMP)
+After=network.target
+
+[Service]
+User=pentavision
+Group=pentavision
+WorkingDirectory=/opt/pentavision/app
+Environment="PATH=/opt/pentavision/venv/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/pentavision/app"
+EnvironmentFile=/opt/pentavision/app/.env
+ExecStart=/opt/pentavision/venv/bin/python /opt/pentavision/app/video_worker.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

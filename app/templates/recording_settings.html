@@ -44,58 +44,7 @@
       </p>
     </div>
 
-    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); gap: 1.5rem; align-items: flex-start;">
-      <div class="pv-card">
-        <h2>Storage modules</h2>
-        <p class="pv-card-subtitle">
-          These modules define where recordings are stored. Multiple modules can use the same provider type (for example, several Google Cloud Storage buckets or Google Drive folders).
-        </p>
-        {% if modules %}
-          <table class="pv-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Label</th>
-                <th>Provider</th>
-                <th>Status</th>
-                <th style="width: 1%; white-space: nowrap;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for m in modules %}
-                <tr>
-                  <td><code>{{ m.name }}</code></td>
-                  <td>{{ m.label or '\u00a0' }}</td>
-                  <td>{{ m.provider_type }}</td>
-                  <td>
-                    {% if m.is_enabled %}
-                      <span style="color: #16a34a;">Enabled</span>
-                    {% else %}
-                      <span style="color: #6b7280;">Disabled</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <form method="post" class="pv-inline-form">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="test_module" />
-                      <input type="hidden" name="module_id" value="{{ m.id }}" />
-                      <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
-                        Test
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <p class="pv-card-subtitle">
-            No storage modules are configured yet. The system will fall back to the legacy global storage settings.
-          </p>
-        {% endif %}
-      </div>
-
-      <div class="pv-card">
+    <div class="pv-card" style="margin-bottom: 1.5rem;">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
           <div>
             <h2 style="margin-bottom: 0.15rem;">Storage schedules</h2>
@@ -180,7 +129,6 @@
         {% else %}
           <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No storage schedules yet.</p>
         {% endif %}
-      </div>
     </div>
   </section>
 
