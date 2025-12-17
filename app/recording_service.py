@@ -25,6 +25,7 @@ from .models import (
     CameraRecording,
     CameraRecordingSchedule,
     CameraRecordingWindow,
+    CameraStorageScheduleEntry,
     CameraStoragePolicy,
     CameraUrlPattern,
     Property,
@@ -115,10 +116,28 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
         return True
     now_utc = datetime.now(timezone.utc)
     with Session(engine) as session:
+        CameraStorageScheduleEntry.__table__.create(bind=engine, checkfirst=True)
         CameraRecordingSchedule.__table__.create(bind=engine, checkfirst=True)
         CameraRecordingWindow.__table__.create(bind=engine, checkfirst=True)
         CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
         Property.__table__.create(bind=engine, checkfirst=True)
+
+        active_entry = _get_active_storage_schedule_entry(session, app, device_id, now_utc)
+        if active_entry is not None:
+            return True
+
+        # If schedule entries exist for this camera but none are active, do not record.
+        try:
+            any_entries = (
+                session.query(CameraStorageScheduleEntry)
+                .filter(CameraStorageScheduleEntry.device_id == device_id)
+                .count()
+            )
+        except Exception:  # noqa: BLE001
+            any_entries = 0
+        if any_entries:
+            return False
+
         schedule = (
             session.query(CameraRecordingSchedule)
             .filter(CameraRecordingSchedule.device_id == device_id)
@@ -207,6 +226,105 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
     if start_minutes is None or end_minutes is None:
         return True
     return _is_time_in_window(now_minutes, start_minutes, end_minutes)
+
+
+def _get_active_storage_schedule_entry(
+    session: Session,
+    app: Flask,
+    device_id: int,
+    now_utc: datetime,
+) -> Optional[CameraStorageScheduleEntry]:
+    try:
+        entries = (
+            session.query(CameraStorageScheduleEntry)
+            .filter(CameraStorageScheduleEntry.device_id == device_id)
+            .order_by(
+                getattr(CameraStorageScheduleEntry, "priority", CameraStorageScheduleEntry.id),
+                CameraStorageScheduleEntry.id,
+            )
+            .all()
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    if not entries:
+        return None
+
+    # Use the camera schedule timezone if configured, otherwise fall back.
+    sched_tz_name = None
+    try:
+        schedule = (
+            session.query(CameraRecordingSchedule)
+            .filter(CameraRecordingSchedule.device_id == device_id)
+            .first()
+        )
+        if schedule is not None:
+            sched_tz_name = getattr(schedule, "timezone", None)
+    except Exception:  # noqa: BLE001
+        sched_tz_name = None
+    if not sched_tz_name:
+        sched_tz_name = str(app.config.get("DEFAULT_TIMEZONE") or "UTC")
+    try:
+        tz = ZoneInfo(str(sched_tz_name))
+    except Exception:  # noqa: BLE001
+        tz = timezone.utc
+    now_local = now_utc.astimezone(tz)
+    weekday = now_local.weekday()
+    now_minutes = now_local.hour * 60 + now_local.minute
+
+    for entry in entries:
+        try:
+            if not bool(getattr(entry, "is_enabled", 1)):
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+
+        mode = (getattr(entry, "mode", None) or "always").strip().lower()
+        if mode in {"always", "motion_only"}:
+            return entry
+
+        days_raw = (getattr(entry, "days_of_week", None) or "*").strip()
+        if days_raw and days_raw != "*":
+            allowed_days: set[int] = set()
+            for token in days_raw.split(","):
+                token = token.strip()
+                if not token:
+                    continue
+                try:
+                    day_idx = int(token)
+                except ValueError:
+                    continue
+                if 0 <= day_idx <= 6:
+                    allowed_days.add(day_idx)
+            if allowed_days and weekday not in allowed_days:
+                continue
+
+        start_minutes = _parse_time_str(getattr(entry, "start_time", "") or "")
+        end_minutes = _parse_time_str(getattr(entry, "end_time", "") or "")
+        if start_minutes is None or end_minutes is None:
+            # If scheduled without times, treat as active.
+            return entry
+        if _is_time_in_window(now_minutes, start_minutes, end_minutes):
+            return entry
+    return None
+
+
+def _get_active_storage_targets(app: Flask, device_id: int) -> Optional[set[str]]:
+    engine = get_record_engine()
+    if engine is None:
+        return None
+    now_utc = datetime.now(timezone.utc)
+    with Session(engine) as session:
+        try:
+            CameraStorageScheduleEntry.__table__.create(bind=engine, checkfirst=True)
+        except Exception:  # noqa: BLE001
+            return None
+        entry = _get_active_storage_schedule_entry(session, app, device_id, now_utc)
+        if entry is None:
+            return None
+        raw = (getattr(entry, "storage_targets", None) or "").strip()
+        if not raw:
+            return set()
+        return {name.strip() for name in raw.split(",") if name.strip()}
 
 
 def _get_schedule_mode(app: Flask, device_id: int) -> str:
@@ -904,29 +1022,60 @@ class RecordingManager:
             patterns = session.query(CameraUrlPattern).all()
             CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
             policies = session.query(CameraStoragePolicy).all()
+            CameraStorageScheduleEntry.__table__.create(bind=engine, checkfirst=True)
+            schedule_entries = session.query(CameraStorageScheduleEntry).all()
         patterns_index = {item.id: item for item in patterns}
         policies_index = {p.device_id: p for p in policies}
         providers_index = {p.name: p for p in self.providers}
+        entries_by_device: dict[int, list[CameraStorageScheduleEntry]] = {}
+        for entry in schedule_entries:
+            try:
+                dev_id = int(getattr(entry, "device_id", 0) or 0)
+            except Exception:  # noqa: BLE001
+                continue
+            if dev_id <= 0:
+                continue
+            entries_by_device.setdefault(dev_id, []).append(entry)
         for device in devices:
             if not getattr(device, "is_active", 1):
                 continue
-            policy = policies_index.get(device.id)
             device_providers: List[StorageProvider] = list(self.providers)
-            if policy and policy.storage_targets:
-                targets = {
-                    name.strip()
-                    for name in policy.storage_targets.split(",")
-                    if name.strip()
-                }
+
+            # Prefer new schedule entries (multiple per camera) when present.
+            if device.id in entries_by_device:
+                active_targets = _get_active_storage_targets(self.app, int(device.id))
+                if active_targets is None:
+                    # schedule entries exist but none are active
+                    continue
+                if not active_targets:
+                    continue
                 selected = [
                     providers_index[name]
-                    for name in targets
+                    for name in active_targets
                     if name in providers_index
                 ]
                 if selected:
                     device_providers = selected
                 else:
                     continue
+            else:
+                # Legacy per-camera policy fallback.
+                policy = policies_index.get(device.id)
+                if policy and policy.storage_targets:
+                    targets = {
+                        name.strip()
+                        for name in policy.storage_targets.split(",")
+                        if name.strip()
+                    }
+                    selected = [
+                        providers_index[name]
+                        for name in targets
+                        if name in providers_index
+                    ]
+                    if selected:
+                        device_providers = selected
+                    else:
+                        continue
             if not device_providers:
                 continue
             if (

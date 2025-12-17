@@ -107,6 +107,24 @@ class User(UserBase):
     )
 
 
+class CameraStorageScheduleEntry(RecordBase):
+    __tablename__ = "camera_storage_schedule_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(Integer, index=True)
+    storage_targets: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    retention_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mode: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    days_of_week: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    start_time: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    end_time: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    is_enabled: Mapped[int] = mapped_column(Integer, server_default="1")
+    priority: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class BlocklistDistributionSettings(UserBase):
     __tablename__ = "blocklist_distribution_settings"
 

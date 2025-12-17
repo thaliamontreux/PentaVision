@@ -47,6 +47,7 @@ from .models import (
     CameraPropertyLink,
     CameraRecording,
     CameraRecordingSchedule,
+    CameraStorageScheduleEntry,
     CameraStoragePolicy,
     CameraUrlPattern,
     DlnaSettings,
@@ -3808,6 +3809,104 @@ def recording_settings():
                         session_db.commit()
                         saved = True
 
+            elif action == "create_storage_schedule":
+                device_id_raw = request.form.get("device_id") or ""
+                try:
+                    device_id = int(device_id_raw)
+                except ValueError:
+                    device_id = None
+
+                targets = request.form.getlist("targets")
+                clean_targets = [name.strip() for name in targets if name.strip()]
+                targets_str = ",".join(sorted(set(clean_targets))) if clean_targets else None
+
+                retention_raw = (request.form.get("retention_days") or "").strip()
+                retention_days = None
+                if retention_raw:
+                    try:
+                        retention_days = int(retention_raw)
+                    except ValueError:
+                        retention_days = None
+
+                mode = (request.form.get("mode") or "always").strip().lower() or "always"
+                start_time = (request.form.get("start_time") or "").strip() or None
+                end_time = (request.form.get("end_time") or "").strip() or None
+
+                valid_modes = {
+                    "always",
+                    "scheduled",
+                    "motion_only",
+                    "scheduled_motion",
+                }
+                if mode not in valid_modes:
+                    mode = "always"
+                if mode == "always":
+                    start_time = None
+                    end_time = None
+
+                if device_id is not None:
+                    with Session(record_engine) as session_db:
+                        CameraStorageScheduleEntry.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        entry = CameraStorageScheduleEntry(
+                            device_id=device_id,
+                            storage_targets=targets_str,
+                            retention_days=retention_days,
+                            mode=mode,
+                            days_of_week="*",
+                            start_time=start_time,
+                            end_time=end_time,
+                            is_enabled=1,
+                            priority=None,
+                        )
+                        session_db.add(entry)
+                        session_db.commit()
+                        saved = True
+
+            elif action == "toggle_storage_schedule":
+                entry_id_raw = request.form.get("entry_id") or ""
+                enable_raw = request.form.get("enable") or ""
+                try:
+                    entry_id = int(entry_id_raw)
+                except ValueError:
+                    entry_id = None
+                try:
+                    enable = int(enable_raw)
+                except ValueError:
+                    enable = None
+                if entry_id is not None and enable is not None:
+                    with Session(record_engine) as session_db:
+                        CameraStorageScheduleEntry.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        row = session_db.get(CameraStorageScheduleEntry, entry_id)
+                        if row is not None:
+                            row.is_enabled = 1 if enable else 0
+                            session_db.add(row)
+                            session_db.commit()
+                            saved = True
+
+            elif action == "delete_storage_schedule":
+                entry_id_raw = request.form.get("entry_id") or ""
+                try:
+                    entry_id = int(entry_id_raw)
+                except ValueError:
+                    entry_id = None
+                if entry_id is not None:
+                    with Session(record_engine) as session_db:
+                        CameraStorageScheduleEntry.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        row = session_db.get(CameraStorageScheduleEntry, entry_id)
+                        if row is not None:
+                            session_db.delete(row)
+                            session_db.commit()
+                            saved = True
+
             else:
                 device_id_raw = request.form.get("device_id") or ""
                 mode = (request.form.get("mode") or "").strip().lower()
@@ -3887,11 +3986,16 @@ def recording_settings():
             )
 
     camera_rows: list[dict] = []
+    schedule_rows: list[dict] = []
     if record_engine is not None:
         with Session(record_engine) as session_db:
             CameraDevice.__table__.create(bind=record_engine, checkfirst=True)
             CameraStoragePolicy.__table__.create(bind=record_engine, checkfirst=True)
             CameraRecordingSchedule.__table__.create(
+                bind=record_engine,
+                checkfirst=True,
+            )
+            CameraStorageScheduleEntry.__table__.create(
                 bind=record_engine,
                 checkfirst=True,
             )
@@ -3902,9 +4006,27 @@ def recording_settings():
             )
             policies = session_db.query(CameraStoragePolicy).all()
             schedules = session_db.query(CameraRecordingSchedule).all()
+            schedule_entries = session_db.query(CameraStorageScheduleEntry).all()
 
         policies_index = {int(p.device_id): p for p in policies}
         schedules_index = {int(s.device_id): s for s in schedules}
+
+        devices_index = {int(d.id): d for d in devices}
+        for entry in schedule_entries:
+            dev = devices_index.get(int(getattr(entry, "device_id", 0) or 0))
+            schedule_rows.append(
+                {
+                    "id": int(entry.id),
+                    "device_id": int(getattr(entry, "device_id", 0) or 0),
+                    "camera_name": (getattr(dev, "name", None) or f"#{getattr(entry, 'device_id', '')}"),
+                    "storage_targets": getattr(entry, "storage_targets", None) or "",
+                    "retention_days": getattr(entry, "retention_days", None),
+                    "mode": (getattr(entry, "mode", None) or "always"),
+                    "start_time": getattr(entry, "start_time", None) or "",
+                    "end_time": getattr(entry, "end_time", None) or "",
+                    "is_enabled": bool(getattr(entry, "is_enabled", 1)),
+                }
+            )
 
         for dev in devices:
             pol = policies_index.get(int(dev.id))
@@ -3949,6 +4071,7 @@ def recording_settings():
         saved=saved,
         modules=modules,
         cameras=camera_rows,
+        storage_schedules=schedule_rows,
         test_result=test_result,
         current_time_local=now_local,
         current_timezone=tz_name,
