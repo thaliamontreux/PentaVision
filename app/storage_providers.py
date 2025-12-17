@@ -19,7 +19,7 @@ from flask import Flask
 from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, delete as sa_delete, func, insert, select, update as sa_update
 from sqlalchemy.orm import Session
 from google.cloud import storage as gcs_storage
-from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import BlobServiceClient, ContentSettings
 import dropbox
 import requests
 import paramiko
