@@ -40,6 +40,13 @@ echo "==> Enabling and starting services"
 systemctl enable --now pentavision-web.service
 systemctl enable --now pentavision-video-worker.service
 
+# If Apache is used as a reverse proxy (typical install), restart it so it
+# reconnects to the backend in case the bind/port changed.
+if systemctl list-unit-files | awk '{print $1}' | grep -qx "apache2.service"; then
+  echo "==> Restarting apache2 (if active)"
+  systemctl restart apache2 >/dev/null 2>&1 || true
+fi
+
 echo "==> Done"
 echo "Web:    systemctl status pentavision-web --no-pager"
 echo "Worker: systemctl status pentavision-video-worker --no-pager"
