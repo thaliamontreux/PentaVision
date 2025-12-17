@@ -44,81 +44,6 @@
       </p>
     </div>
 
-    <div class="pv-card" style="margin-bottom: 1.5rem;">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
-        <div>
-          <h2 style="margin-bottom: 0.15rem;">Storage schedules</h2>
-          <p class="pv-card-subtitle" style="margin-top: 0;">
-            Programmed schedules control both when cameras record and which storage modules receive segments.
-          </p>
-        </div>
-        <button type="button" class="pv-button-primary" id="pv-add-storage-schedule">+ Add Storage Schedule</button>
-      </div>
-
-      {% if storage_schedules %}
-        <table class="pv-table" style="margin-top: 0.75rem;">
-          <thead>
-            <tr>
-              <th>Camera</th>
-              <th>Storage modules</th>
-              <th>Retention (days)</th>
-              <th>Mode</th>
-              <th>Window</th>
-              <th style="width: 1%; white-space: nowrap;">Status</th>
-              <th style="width: 1%; white-space: nowrap;">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for s in storage_schedules %}
-              <tr>
-                <td>{{ s.camera_name }}</td>
-                <td style="font-size: 0.85rem;"><code>{{ s.storage_targets or 'Global default' }}</code></td>
-                <td>{{ s.retention_days if s.retention_days is not none else '\u2013' }}</td>
-                <td>{{ s.mode }}</td>
-                <td>
-                  {% if s.mode == 'always' %}
-                    24 hours
-                  {% else %}
-                    {{ s.start_time or '\u2013' }} to {{ s.end_time or '\u2013' }}
-                  {% endif %}
-                </td>
-                <td>
-                  {% if s.is_enabled %}
-                    <span style="color: #16a34a;">Enabled</span>
-                  {% else %}
-                    <span style="color: #6b7280;">Disabled</span>
-                  {% endif %}
-                </td>
-                <td style="white-space: nowrap;">
-                  <form method="post" class="pv-inline-form" style="display: inline-flex;">
-                    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                    <input type="hidden" name="action" value="toggle_storage_schedule" />
-                    <input type="hidden" name="entry_id" value="{{ s.id }}" />
-                    <input type="hidden" name="enable" value="{% if s.is_enabled %}0{% else %}1{% endif %}" />
-                    <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
-                      {% if s.is_enabled %}Disable{% else %}Enable{% endif %}
-                    </button>
-                  </form>
-                  <form method="post" class="pv-inline-form" style="display: inline-flex;" onsubmit="return confirm('Delete this schedule entry?');">
-                    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                    <input type="hidden" name="action" value="delete_storage_schedule" />
-                    <input type="hidden" name="entry_id" value="{{ s.id }}" />
-                    <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
-                      Delete
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="pv-card-subtitle" style="margin-top: 0.75rem;">
-          No storage schedules yet. Click <strong>Add Storage Schedule</strong> to create your first programmed schedule.
-        </p>
-      {% endif %}
-    </div>
-
     <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr); gap: 1.5rem; align-items: flex-start;">
       <div class="pv-card">
         <h2>Storage modules</h2>
@@ -171,98 +96,80 @@
       </div>
 
       <div class="pv-card">
-        <h2>Legacy per-camera overrides</h2>
-        <p class="pv-card-subtitle">
-          These settings are used only when no storage schedule entries exist for a camera.
-        </p>
-        {% if cameras %}
-          <table class="pv-table">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+          <div>
+            <h2 style="margin-bottom: 0.15rem;">Storage schedules</h2>
+            <p class="pv-card-subtitle" style="margin-top: 0;">
+              Schedules define camera, storage location(s), retention, mode, and time window. If no time is specified, it records 24 hours.
+            </p>
+          </div>
+          <button type="button" class="pv-button-primary" id="pv-add-storage-schedule">+ Add Storage Schedule</button>
+        </div>
+
+        {% if storage_schedules %}
+          <table class="pv-table" style="margin-top: 0.75rem;">
             <thead>
               <tr>
                 <th>Camera</th>
-                <th>Storage modules</th>
-                <th>Retention (days)</th>
+                <th>Storage</th>
+                <th>Retention</th>
                 <th>Mode</th>
                 <th>Window</th>
-                <th></th>
+                <th style="width: 1%; white-space: nowrap;">Status</th>
+                <th style="width: 1%; white-space: nowrap;">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {% for c in cameras %}
+              {% for s in storage_schedules %}
                 <tr>
-                  <td>{{ c.name }}</td>
-                  <td style="font-size: 0.85rem;">
-                    <form method="post" class="pv-inline-form" style="align-items: flex-start; gap: 0.5rem;">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="update_storage" />
-                      <input type="hidden" name="device_id" value="{{ c.id }}" />
-                      <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
-                        {% for m in modules %}
-                          {% if m.is_enabled %}
-                            <label style="display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid #e5e7eb; font-size: 0.75rem; white-space: nowrap;">
-                              <input
-                                type="checkbox"
-                                name="targets"
-                                value="{{ m.name }}"
-                                {% if m.name in c.selected_targets %}checked{% endif %}
-                              />
-                              <span>{{ m.label or m.name }}</span>
-                            </label>
-                          {% endif %}
-                        {% endfor %}
-                      </div>
-                      <button type="submit" class="pv-button-primary" style="padding: 0.15rem 0.75rem; font-size: 0.8rem; white-space: nowrap;">
-                        Save modules
-                      </button>
-                    </form>
-                    <p class="pv-card-subtitle" style="font-size: 0.7rem; margin-top: 0.1rem;">
-                      Effective targets: {{ c.storage_targets or 'Global default' }}
-                    </p>
-                  </td>
-                  <td>{{ c.retention_days if c.retention_days is not none else '\u2013' }}</td>
+                  <td>{{ s.camera_name }}</td>
+                  <td style="font-size: 0.85rem;"><code>{{ s.storage_targets or 'Global default' }}</code></td>
+                  <td>{{ s.retention_days if s.retention_days is not none else '\u2013' }}</td>
+                  <td>{{ s.mode }}</td>
                   <td>
-                    <form method="post" class="pv-inline-form">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="update_schedule" />
-                      <input type="hidden" name="device_id" value="{{ c.id }}" />
-                      <select name="mode">
-                        <option value="always" {% if c.mode == 'always' %}selected{% endif %}>Always</option>
-                        <option value="scheduled" {% if c.mode == 'scheduled' %}selected{% endif %}>Scheduled</option>
-                        <option value="motion_only" {% if c.mode == 'motion_only' %}selected{% endif %}>Motion only</option>
-                        <option value="scheduled_motion" {% if c.mode == 'scheduled_motion' %}selected{% endif %}>Scheduled + motion</option>
-                      </select>
+                    {% if s.mode == 'always' or (not s.start_time and not s.end_time) %}
+                      24 hours
+                    {% else %}
+                      {{ s.start_time or '\u2013' }} to {{ s.end_time or '\u2013' }}
+                    {% endif %}
                   </td>
                   <td>
-                      <div style="display: flex; gap: 0.25rem; align-items: center;">
-                        <input
-                          type="time"
-                          name="start_time"
-                          value="{{ c.start_time }}"
-                          style="max-width: 6.5rem;"
-                        />
-                        <span style="font-size: 0.8rem; color: #9ca3af;">to</span>
-                        <input
-                          type="time"
-                          name="end_time"
-                          value="{{ c.end_time }}"
-                          style="max-width: 6.5rem;"
-                        />
-                      </div>
-                      <p class="pv-card-subtitle" style="font-size: 0.75rem; margin-top: 0.25rem;">
-                        {{ c.schedule_summary }}
-                      </p>
+                    {% if s.is_enabled %}
+                      <span style="color: #16a34a;">Enabled</span>
+                    {% else %}
+                      <span style="color: #6b7280;">Disabled</span>
+                    {% endif %}
                   </td>
                   <td style="white-space: nowrap;">
-                      <button type="submit" class="pv-button-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">
-                        Save schedule
+                    <button
+                      type="button"
+                      class="pv-button-secondary pv-ss-edit"
+                      data-entry-id="{{ s.id }}"
+                      data-device-id="{{ s.device_id }}"
+                      data-storage-targets="{{ s.storage_targets }}"
+                      data-retention-days="{{ s.retention_days if s.retention_days is not none else '' }}"
+                      data-mode="{{ s.mode }}"
+                      data-start-time="{{ s.start_time }}"
+                      data-end-time="{{ s.end_time }}"
+                      style="padding: 0.2rem 0.6rem; font-size: 0.8rem;"
+                    >
+                      Edit
+                    </button>
+                    <form method="post" class="pv-inline-form" style="display: inline-flex;">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="toggle_storage_schedule" />
+                      <input type="hidden" name="entry_id" value="{{ s.id }}" />
+                      <input type="hidden" name="enable" value="{% if s.is_enabled %}0{% else %}1{% endif %}" />
+                      <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
+                        {% if s.is_enabled %}Disable{% else %}Enable{% endif %}
                       </button>
-                      <button
-                        type="button"
-                        class="pv-button-secondary rs-24h-btn"
-                        data-device-id="{{ c.id }}"
-                        style="padding: 0.25rem 0.6rem; font-size: 0.8rem; margin-left: 0.25rem;"
-                      >
-                        24h
+                    </form>
+                    <form method="post" class="pv-inline-form" style="display: inline-flex;" onsubmit="return confirm('Delete this schedule entry?');">
+                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                      <input type="hidden" name="action" value="delete_storage_schedule" />
+                      <input type="hidden" name="entry_id" value="{{ s.id }}" />
+                      <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
+                        Delete
                       </button>
                     </form>
                   </td>
@@ -271,7 +178,7 @@
             </tbody>
           </table>
         {% else %}
-          <p class="pv-card-subtitle">No cameras are configured.</p>
+          <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No storage schedules yet.</p>
         {% endif %}
       </div>
     </div>
@@ -280,26 +187,43 @@
   <script>
     (function () {
       var addBtn = document.getElementById('pv-add-storage-schedule');
-      var modal = document.getElementById('pv-storage-schedule-modal');
-      var modalClose = document.getElementById('pv-storage-schedule-close');
-      var cameraSel = document.getElementById('pv-ss-camera');
-      var previewImg = document.getElementById('pv-ss-preview');
-      var modeSel = document.getElementById('pv-ss-mode');
-      var timeBlock = document.getElementById('pv-ss-time-block');
 
-      function openModal() {
-        if (!modal) return;
-        modal.classList.add('is-visible');
-        if (cameraSel) {
-          updatePreview();
+      function getEl(id) {
+        return document.getElementById(id);
+      }
+
+      function clearTargets() {
+        var checks = document.querySelectorAll('#pv-storage-schedule-modal input[name="targets"]');
+        if (checks && checks.length) {
+          checks.forEach(function (el) {
+            el.checked = false;
+          });
         }
-        updateTimeBlock();
       }
-      function closeModal() {
-        if (!modal) return;
-        modal.classList.remove('is-visible');
+
+      function setTargetsFromCsv(csv) {
+        clearTargets();
+        var raw = String(csv || '').trim();
+        if (!raw) return;
+        var set = {};
+        raw.split(',').forEach(function (t) {
+          var name = String(t || '').trim();
+          if (!name) return;
+          set[name] = true;
+        });
+        var checks = document.querySelectorAll('#pv-storage-schedule-modal input[name="targets"]');
+        if (checks && checks.length) {
+          checks.forEach(function (el) {
+            try {
+              if (set[String(el.value || '').trim()]) el.checked = true;
+            } catch (e) {}
+          });
+        }
       }
+
       function updatePreview() {
+        var cameraSel = getEl('pv-ss-camera');
+        var previewImg = getEl('pv-ss-preview');
         if (!cameraSel || !previewImg) return;
         var id = cameraSel.value;
         if (!id) {
@@ -310,37 +234,106 @@
         previewImg.style.display = '';
         previewImg.src = '/cameras/' + encodeURIComponent(id) + '/preview_low.jpg?ts=' + Date.now();
       }
+
       function updateTimeBlock() {
+        var modeSel = getEl('pv-ss-mode');
+        var timeBlock = getEl('pv-ss-time-block');
         if (!modeSel || !timeBlock) return;
         var m = String(modeSel.value || 'always');
         timeBlock.style.display = (m === 'always') ? 'none' : '';
       }
 
-      if (addBtn) addBtn.addEventListener('click', openModal);
-      if (modalClose) modalClose.addEventListener('click', closeModal);
-      if (modal) {
-        modal.addEventListener('click', function (ev) {
-          if (ev.target === modal) closeModal();
+      function openModal(opts) {
+        var modal = getEl('pv-storage-schedule-modal');
+        if (!modal) return;
+        modal.classList.add('is-visible');
+        var entryId = (opts && opts.entryId) ? String(opts.entryId) : '';
+        var deviceId = (opts && opts.deviceId) ? String(opts.deviceId) : '';
+        var title = getEl('pv-storage-schedule-title');
+        if (title) title.textContent = entryId ? 'Edit Storage Schedule' : 'Add Storage Schedule';
+
+        var saveBtn = getEl('pv-ss-save');
+        if (saveBtn) saveBtn.setAttribute('data-pv-ss-action', entryId ? 'update_storage_schedule' : 'create_storage_schedule');
+
+        var actionInput = getEl('pv-ss-action');
+        if (actionInput) actionInput.value = entryId ? 'update_storage_schedule' : 'create_storage_schedule';
+        var entryInput = getEl('pv-ss-entry-id');
+        if (entryInput) entryInput.value = entryId;
+
+        var cameraSel = getEl('pv-ss-camera');
+        if (cameraSel && deviceId) {
+          cameraSel.value = String(deviceId);
+        }
+
+        var retention = getEl('pv-ss-retention');
+        if (retention) retention.value = (opts && opts.retentionDays) ? String(opts.retentionDays) : '';
+
+        var modeSel = getEl('pv-ss-mode');
+        if (modeSel) modeSel.value = (opts && opts.mode) ? String(opts.mode) : 'always';
+
+        var startInput = getEl('pv-ss-start');
+        var endInput = getEl('pv-ss-end');
+        if (startInput) startInput.value = (opts && opts.startTime) ? String(opts.startTime) : '';
+        if (endInput) endInput.value = (opts && opts.endTime) ? String(opts.endTime) : '';
+
+        setTargetsFromCsv(opts && opts.storageTargets);
+
+        updatePreview();
+        updateTimeBlock();
+      }
+
+      function closeModal() {
+        var modal = getEl('pv-storage-schedule-modal');
+        if (!modal) return;
+        modal.classList.remove('is-visible');
+      }
+
+      if (addBtn) {
+        addBtn.addEventListener('click', function () {
+          openModal({});
         });
       }
-      if (cameraSel) cameraSel.addEventListener('change', updatePreview);
-      if (modeSel) modeSel.addEventListener('change', updateTimeBlock);
 
-      var buttons = document.querySelectorAll('.rs-24h-btn');
-      buttons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var row = btn.closest('tr');
-          if (!row) return;
-          var form = row.querySelector('form');
-          if (!form) return;
-          var modeSelect = form.querySelector('select[name="mode"]');
-          var startInput = form.querySelector('input[name="start_time"]');
-          var endInput = form.querySelector('input[name="end_time"]');
-          if (modeSelect) modeSelect.value = 'always';
-          if (startInput) startInput.value = '';
-          if (endInput) endInput.value = '';
-          form.submit();
-        });
+      document.addEventListener('click', function (ev) {
+        var closeBtn = ev.target && ev.target.closest ? ev.target.closest('#pv-storage-schedule-close') : null;
+        if (closeBtn) {
+          closeModal();
+          return;
+        }
+
+        var editBtn = ev.target && ev.target.closest ? ev.target.closest('.pv-ss-edit') : null;
+        if (editBtn && editBtn.getAttribute) {
+          openModal({
+            entryId: editBtn.getAttribute('data-entry-id') || '',
+            deviceId: editBtn.getAttribute('data-device-id') || '',
+            storageTargets: editBtn.getAttribute('data-storage-targets') || '',
+            retentionDays: editBtn.getAttribute('data-retention-days') || '',
+            mode: editBtn.getAttribute('data-mode') || 'always',
+            startTime: editBtn.getAttribute('data-start-time') || '',
+            endTime: editBtn.getAttribute('data-end-time') || ''
+          });
+          return;
+        }
+
+        var actionBtn = ev.target && ev.target.closest ? ev.target.closest('[data-pv-ss-action]') : null;
+        if (actionBtn && actionBtn.getAttribute) {
+          var desired = actionBtn.getAttribute('data-pv-ss-action');
+          var actionInput = getEl('pv-ss-action');
+          if (actionInput) actionInput.value = String(desired || 'create_storage_schedule');
+        }
+      });
+
+      document.addEventListener('change', function (ev) {
+        var target = ev.target;
+        if (!target || !target.id) return;
+        if (target.id === 'pv-ss-camera') updatePreview();
+        if (target.id === 'pv-ss-mode') updateTimeBlock();
+      });
+
+      document.addEventListener('click', function (ev) {
+        var modal = getEl('pv-storage-schedule-modal');
+        if (!modal) return;
+        if (ev.target === modal) closeModal();
       });
     })();
   </script>
@@ -357,7 +350,8 @@
 
       <form method="post" style="margin-top: 1rem;">
         <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-        <input type="hidden" name="action" value="create_storage_schedule" />
+        <input type="hidden" name="action" id="pv-ss-action" value="create_storage_schedule" />
+        <input type="hidden" name="entry_id" id="pv-ss-entry-id" value="" />
 
         <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 1rem; align-items: start;">
           <div class="pv-card" style="margin: 0;">
@@ -397,10 +391,11 @@
             <div id="pv-ss-time-block" style="margin-top: 0.75rem;">
               <div class="pv-card-subtitle" style="margin-bottom: 0.35rem;">Time window</div>
               <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
-                <input type="time" name="start_time" style="max-width: 8.5rem;" />
+                <input type="time" id="pv-ss-start" name="start_time" style="max-width: 8.5rem;" />
                 <span style="font-size: 0.85rem; color: #9ca3af;">to</span>
-                <input type="time" name="end_time" style="max-width: 8.5rem;" />
+                <input type="time" id="pv-ss-end" name="end_time" style="max-width: 8.5rem;" />
               </div>
+              <p class="pv-card-subtitle" style="margin-top: 0.4rem;">Leave start/end blank to record 24 hours.</p>
             </div>
 
             <div style="margin-top: 0.9rem;">
@@ -418,8 +413,9 @@
               <p class="pv-card-subtitle" style="margin-top: 0.5rem;">If no modules are selected, the schedule will be created but will not record until targets are selected.</p>
             </div>
 
-            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
-              <button type="submit" class="pv-button-primary">Save schedule</button>
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+              <button type="submit" class="pv-button-secondary" data-pv-ss-action="test_storage_schedule">Test</button>
+              <button type="submit" class="pv-button-primary" id="pv-ss-save" data-pv-ss-action="create_storage_schedule">Save</button>
             </div>
           </div>
         </div>

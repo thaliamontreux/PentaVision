@@ -3840,7 +3840,7 @@ def recording_settings():
                 }
                 if mode not in valid_modes:
                     mode = "always"
-                if mode == "always":
+                if mode == "always" or (start_time is None and end_time is None):
                     start_time = None
                     end_time = None
 
@@ -3864,6 +3864,119 @@ def recording_settings():
                         session_db.add(entry)
                         session_db.commit()
                         saved = True
+
+            elif action == "update_storage_schedule":
+                entry_id_raw = request.form.get("entry_id") or ""
+                device_id_raw = request.form.get("device_id") or ""
+                try:
+                    entry_id = int(entry_id_raw)
+                except ValueError:
+                    entry_id = None
+                try:
+                    device_id = int(device_id_raw)
+                except ValueError:
+                    device_id = None
+
+                targets = request.form.getlist("targets")
+                clean_targets = [name.strip() for name in targets if name.strip()]
+                targets_str = ",".join(sorted(set(clean_targets))) if clean_targets else None
+
+                retention_raw = (request.form.get("retention_days") or "").strip()
+                retention_days = None
+                if retention_raw:
+                    try:
+                        retention_days = int(retention_raw)
+                    except ValueError:
+                        retention_days = None
+
+                mode = (request.form.get("mode") or "always").strip().lower() or "always"
+                start_time = (request.form.get("start_time") or "").strip() or None
+                end_time = (request.form.get("end_time") or "").strip() or None
+
+                valid_modes = {
+                    "always",
+                    "scheduled",
+                    "motion_only",
+                    "scheduled_motion",
+                }
+                if mode not in valid_modes:
+                    mode = "always"
+                if mode == "always" or (start_time is None and end_time is None):
+                    start_time = None
+                    end_time = None
+
+                if entry_id is not None and device_id is not None:
+                    with Session(record_engine) as session_db:
+                        CameraStorageScheduleEntry.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        row = session_db.get(CameraStorageScheduleEntry, entry_id)
+                        if row is not None:
+                            row.device_id = device_id
+                            row.storage_targets = targets_str
+                            row.retention_days = retention_days
+                            row.mode = mode
+                            row.days_of_week = "*"
+                            row.start_time = start_time
+                            row.end_time = end_time
+                            session_db.add(row)
+                            session_db.commit()
+                            saved = True
+
+            elif action == "test_storage_schedule":
+                targets = request.form.getlist("targets")
+                clean_targets = [name.strip() for name in targets if name.strip()]
+                targets_set = {name for name in clean_targets if name}
+                if not targets_set:
+                    test_result = {
+                        "ok": False,
+                        "module_name": "Schedule targets",
+                        "message": "No storage locations selected.",
+                    }
+                else:
+                    with Session(record_engine) as session_db:
+                        StorageModule.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
+                        modules = (
+                            session_db.query(StorageModule)
+                            .filter(StorageModule.name.in_(sorted(targets_set)))
+                            .all()
+                        )
+                    found = {m.name for m in modules}
+                    missing = sorted([t for t in targets_set if t not in found])
+
+                    router = get_storage_router(current_app)
+                    results: list[str] = []
+                    ok_all = True
+                    for module in modules:
+                        instance_key = str(module.id)
+                        try:
+                            status = router.health_check(instance_key)
+                        except StorageError as exc:  # pragma: no cover - error path
+                            ok_all = False
+                            results.append(f"{module.name}: {str(exc)[:180]}")
+                        except Exception as exc:  # noqa: BLE001
+                            ok_all = False
+                            results.append(f"{module.name}: {str(exc)[:180]}")
+                        else:
+                            status_text = str(status.get("status") or "ok")
+                            message = status.get("message") or f"Health check status: {status_text}"
+                            if status_text != "ok":
+                                ok_all = False
+                            results.append(f"{module.name}: {str(message)[:180]}")
+
+                    if missing:
+                        ok_all = False
+                        results.append("Missing: " + ", ".join(missing))
+
+                    test_result = {
+                        "ok": bool(ok_all),
+                        "module_name": "Schedule targets",
+                        "message": " | ".join(results)[:300],
+                    }
 
             elif action == "toggle_storage_schedule":
                 entry_id_raw = request.form.get("entry_id") or ""
