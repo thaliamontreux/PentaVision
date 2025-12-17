@@ -9,7 +9,7 @@ WorkingDirectory=/opt/pentavision/app
 Environment="PATH=/opt/pentavision/venv/bin:/usr/bin:/bin"
 Environment="PYTHONPATH=/opt/pentavision/app"
 EnvironmentFile=/opt/pentavision/app/.env
-ExecStart=/opt/pentavision/venv/bin/gunicorn --chdir /opt/pentavision/app wsgi:application --bind 0.0.0.0:8080 --workers 2 --threads 4
+ExecStart=/opt/pentavision/venv/bin/gunicorn --chdir /opt/pentavision/app wsgi:application --bind 127.0.0.1:8000 --workers 2 --threads 4
 Restart=on-failure
 
 [Install]
