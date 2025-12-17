@@ -291,6 +291,28 @@ body {
   min-width: 0;
 }
 
+.pv-admin-topnav {
+  margin: 0.5rem 0 1.25rem;
+}
+
+.pv-admin-topnav .pv-admin-sidebar {
+  position: static;
+  top: auto;
+  width: 100%;
+  max-width: none;
+  flex: 1 1 auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  max-height: none;
+  overflow: visible;
+}
+
+.pv-admin-topnav .pv-admin-navbtn {
+  flex: 0 0 auto;
+  padding: 0.5rem 0.75rem;
+}
+
 .pv-admin-main .pv-card {
   background:
     radial-gradient(circle at top, rgba(30, 41, 59, 0.9), rgba(2, 6, 23, 0.92) 70%),
