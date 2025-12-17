@@ -6,6 +6,7 @@ import os
 import tempfile
 import ftplib
 import ssl
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
@@ -34,6 +35,19 @@ from .storage_csal import (
     StorageRouter,
     StorageTransientError,
 )
+
+
+def _recordings_prefix_for_hint(key_hint: str) -> str:
+    raw = str(key_hint or "").strip()
+    if not raw:
+        return "recordings"
+    match = re.match(r"^camera(?P<id>\d+)(?:\b|_)", raw)
+    if not match:
+        return "recordings"
+    cam_id = match.group("id")
+    if not cam_id:
+        return "recordings"
+    return f"recordings/camera_{cam_id}"
 
 
 class StorageProvider:
@@ -275,7 +289,8 @@ class S3StorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        key = f"recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        key = f"{prefix}/{now}_{safe_hint}.mp4"
         self._client.put_object(
             Bucket=self.bucket,
             Key=key,
@@ -312,11 +327,17 @@ class LocalFilesystemStorageProvider(StorageProvider):
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
         filename = f"{now}_{safe_hint}.mp4"
-        path = self.base_path / filename
+        prefix = _recordings_prefix_for_hint(key_hint)
+        rel_dir = ""
+        if prefix.startswith("recordings/"):
+            rel_dir = prefix.split("/", 1)[1]
+        target_dir = self.base_path / rel_dir if rel_dir else self.base_path
+        target_dir.mkdir(parents=True, exist_ok=True)
+        path = target_dir / filename
         counter = 1
         while path.exists():
             filename = f"{now}_{safe_hint}_{counter}.mp4"
-            path = self.base_path / filename
+            path = target_dir / filename
             counter += 1
         with open(path, "wb") as handle:
             handle.write(data)
@@ -432,7 +453,8 @@ class GCSStorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        key = f"recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        key = f"{prefix}/{now}_{safe_hint}.mp4"
         blob = self._bucket.blob(key)
         blob.upload_from_string(data, content_type="video/mp4")
         return key
@@ -485,12 +507,13 @@ class AzureBlobStorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        blob_name = f"recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        blob_name = f"{prefix}/{now}_{safe_hint}.mp4"
         self._container_client.upload_blob(
             name=blob_name,
             data=data,
             overwrite=True,
-            content_type="video/mp4",
+            content_settings=ContentSettings(content_type="video/mp4"),
         )
         return blob_name
 
@@ -514,7 +537,8 @@ class DropboxStorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        path = f"/recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        path = f"/{prefix}/{now}_{safe_hint}.mp4"
         self._dbx.files_upload(data, path, mute=True)
         return path
 
@@ -558,7 +582,8 @@ class WebDAVStorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        key = f"recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        key = f"{prefix}/{now}_{safe_hint}.mp4"
         url = f"{self.base_url}/{key}"
         response = requests.put(url, data=data, auth=self._auth())
         if response.status_code >= 400:
@@ -638,7 +663,8 @@ class FTPStorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        rel_key = f"recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        rel_key = f"{prefix}/{now}_{safe_hint}.mp4"
         remote_key = f"{self.base_dir}/{rel_key}" if self.base_dir != "/" else f"/{rel_key}"
         remote_dir = os.path.dirname(remote_key)
         ftp = self._connect()
@@ -736,7 +762,8 @@ class SFTPStorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        rel_key = f"recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        rel_key = f"{prefix}/{now}_{safe_hint}.mp4"
         remote_key = f"{self.base_dir}/{rel_key}" if self.base_dir != "/" else f"/{rel_key}"
         remote_dir = os.path.dirname(remote_key)
         client = self._connect()
@@ -831,7 +858,9 @@ class SCPStorageProvider(StorageProvider):
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
         filename = f"{now}_{safe_hint}.mp4"
-        remote_dir = f"{self.base_dir}/recordings" if self.base_dir != "/" else "/recordings"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        rel_dir = prefix
+        remote_dir = f"{self.base_dir}/{rel_dir}" if self.base_dir != "/" else f"/{rel_dir}"
         remote_path = f"{remote_dir}/{filename}"
         client = self._connect()
         tmp_path = None
@@ -1125,13 +1154,13 @@ class SwiftStorageProvider(StorageProvider):
     def upload(self, data: bytes, key_hint: str) -> str:
         safe_hint = key_hint.replace("/", "_").replace("\\", "_")
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        key = f"recordings/{now}_{safe_hint}.mp4"
+        prefix = _recordings_prefix_for_hint(key_hint)
+        key = f"{prefix}/{now}_{safe_hint}.mp4"
         url = f"{self._storage_url}/{self._container}/{key}"
         response = requests.put(url, headers=self._headers(), data=data)
         if response.status_code >= 400:
             raise RuntimeError(
-                f"Swift upload failed with status {response.status_code}: "
-                f"{response.text[:512]}"
+                f"Swift upload failed with status {response.status_code}: {response.text[:200]}"
             )
         return key
 

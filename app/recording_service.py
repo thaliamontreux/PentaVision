@@ -557,8 +557,8 @@ class CameraWorker(threading.Thread):
     def _segment_temp_dir(self) -> Path:
         base = self.app.config.get("RECORDING_BASE_DIR") or ""
         if base:
-            return Path(str(base)) / "tmp"
-        return Path(self.app.instance_path) / "recording_tmp"
+            return Path(str(base)) / "tmp" / f"camera_{self.config.device_id}"
+        return Path(self.app.instance_path) / "recording_tmp" / f"camera_{self.config.device_id}"
 
     def _create_camera_recording(
         self,
