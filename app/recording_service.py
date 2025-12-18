@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import subprocess
 import threading
 import time
@@ -444,6 +445,8 @@ class CameraWorker(threading.Thread):
         self.retry_delay = 10
         self._failure_backoff = float(self.retry_delay)
         self._ingest_session_id = uuid.uuid4().hex
+        self._last_shm_reason: Optional[str] = None
+        self._last_shm_log_ts: float = 0.0
 
     def run(self) -> None:
         with self.app.app_context():
@@ -463,7 +466,15 @@ class CameraWorker(threading.Thread):
                         self._failure_backoff = min(max(10.0, self._failure_backoff * 2.0), 300.0)
                     else:
                         self._failure_backoff = float(self.retry_delay)
-                    time.sleep(self._failure_backoff)
+                    # De-sync reconnect attempts across cameras to avoid RTSP session storms.
+                    # Many cameras will return 503 temporarily when too many clients reconnect at once.
+                    jitter = 0.0
+                    try:
+                        jitter = random.uniform(0.85, 1.25)
+                    except Exception:
+                        jitter = 1.0
+                    sleep_s = float(self._failure_backoff) * float(jitter or 1.0)
+                    time.sleep(min(max(1.0, sleep_s), 600.0))
 
     def _record_segment(self) -> None:
         if not _should_record_now(self.app, self.config.device_id):
@@ -817,17 +828,21 @@ class CameraWorker(threading.Thread):
         )
 
     def _ingest_root_dir(self) -> Optional[Path]:
+        reason: Optional[str] = None
         try:
             enabled = self.app.config.get("USE_SHM_INGEST")
             if enabled is None:
                 enabled = True
             if not bool(enabled):
+                reason = "USE_SHM_INGEST disabled"
                 return None
         except Exception:  # noqa: BLE001
+            reason = "USE_SHM_INGEST config error"
             return None
 
         shm_base = Path("/dev/shm")
         if not shm_base.exists() or not shm_base.is_dir():
+            reason = "/dev/shm not available"
             return None
 
         root = (
@@ -839,14 +854,57 @@ class CameraWorker(threading.Thread):
         )
         try:
             # Quota/backpressure check before creating more data.
-            if not self._shm_quota_allows_write(root.parent):
+            ok, reason = self._shm_quota_allows_write(root.parent)
+            if not ok:
                 return None
             (root / "segments").mkdir(parents=True, exist_ok=True)
             return root
         except Exception:  # noqa: BLE001
+            reason = "failed to create shm ingest dirs"
             return None
+        finally:
+            if reason:
+                self._log_shm_fallback(reason)
 
-    def _shm_quota_allows_write(self, camera_root: Path) -> bool:
+    def _log_shm_fallback(self, reason: str) -> None:
+        # Avoid log spam: only emit when reason changes or every 5 minutes.
+        try:
+            now_ts = time.time()
+        except Exception:
+            now_ts = 0.0
+        should_log = False
+        if self._last_shm_reason != reason:
+            should_log = True
+        elif now_ts and (now_ts - float(self._last_shm_log_ts or 0.0)) >= 300.0:
+            should_log = True
+        if not should_log:
+            return
+        self._last_shm_reason = reason
+        self._last_shm_log_ts = now_ts
+        try:
+            usage = shutil.disk_usage("/dev/shm")
+            free_mb = int(usage.free / (1024 * 1024))
+            total_mb = int(usage.total / (1024 * 1024))
+            self.app.logger.warning(
+                "SHM ingest disabled for device=%s dir_key=%s reason=%s /dev/shm_free_mb=%s /dev/shm_total_mb=%s",
+                self.config.device_id,
+                self.config.dir_key,
+                str(reason)[:200],
+                free_mb,
+                total_mb,
+            )
+        except Exception:
+            try:
+                self.app.logger.warning(
+                    "SHM ingest disabled for device=%s dir_key=%s reason=%s",
+                    self.config.device_id,
+                    self.config.dir_key,
+                    str(reason)[:200],
+                )
+            except Exception:
+                return
+
+    def _shm_quota_allows_write(self, camera_root: Path) -> tuple[bool, str]:
         """Basic backpressure: if /dev/shm usage is above limits, skip recording."""
 
         try:
@@ -863,12 +921,12 @@ class CameraWorker(threading.Thread):
 
         cam_bytes = self._dir_size_bytes(camera_root)
         if cam_bytes >= (per_cam_limit_mb * 1024 * 1024):
-            return False
+            return False, f"per-camera limit exceeded ({per_cam_limit_mb}MB)"
 
         global_root = Path("/dev/shm") / "pentavision" / "ingest"
         global_bytes = self._dir_size_bytes(global_root)
         if global_bytes >= (global_limit_mb * 1024 * 1024):
-            return False
+            return False, f"global limit exceeded ({global_limit_mb}MB)"
 
         try:
             min_free_mb = int(self.app.config.get("SHM_INGEST_MIN_FREE_MB", 256) or 256)
@@ -878,10 +936,10 @@ class CameraWorker(threading.Thread):
         try:
             usage = shutil.disk_usage("/dev/shm")
             if int(usage.free) < int(min_free_mb) * 1024 * 1024:
-                return False
+                return False, f"/dev/shm free below SHM_INGEST_MIN_FREE_MB ({min_free_mb}MB)"
         except Exception:  # noqa: BLE001
-            return False
-        return True
+            return False, "failed to read /dev/shm disk usage"
+        return True, "ok"
 
     def _dir_size_bytes(self, path: Path) -> int:
         try:
