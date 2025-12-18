@@ -30,10 +30,13 @@ from .models import (
     IpAllowlist,
     IpBlocklist,
     Property,
+    PropertyZone,
     Role,
     AuditEvent,
     User,
+    UserPropertyAccessWindow,
     UserProperty,
+    UserPropertyZoneLink,
     UserRole,
 )
 from .security import get_current_user, user_has_role
@@ -1536,6 +1539,289 @@ def property_edit(property_id: int):
         user_links=user_links,
         property_id=property_id,
     )
+
+
+@bp.get("/properties/<int:property_id>/workspace")
+def property_workspace(property_id: int):
+    engine = get_user_engine()
+    errors: List[str] = []
+    csrf_token = _ensure_csrf_token()
+    tab = (request.args.get("tab") or "zones").strip().lower()
+    if tab not in {"zones", "camera_scopes", "access_windows", "role_overrides"}:
+        tab = "zones"
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "admin/property_workspace.html",
+            errors=errors,
+            csrf_token=csrf_token,
+            property_id=property_id,
+            prop=None,
+            tab=tab,
+            zones=[],
+            users=[],
+            zone_memberships={},
+            access_windows_by_user={},
+            user_links={},
+        )
+
+    with Session(engine) as db:
+        prop = db.get(Property, property_id)
+        if prop is None:
+            errors.append("Property not found.")
+            return render_template(
+                "admin/property_workspace.html",
+                errors=errors,
+                csrf_token=csrf_token,
+                property_id=property_id,
+                prop=None,
+                tab=tab,
+                zones=[],
+                users=[],
+                zone_memberships={},
+                access_windows_by_user={},
+                user_links={},
+            )
+
+        zones = (
+            db.query(PropertyZone)
+            .filter(PropertyZone.property_id == property_id)
+            .order_by(PropertyZone.name)
+            .all()
+        )
+        users = db.query(User).order_by(User.email).all()
+
+        links = (
+            db.query(UserProperty)
+            .filter(UserProperty.property_id == property_id)
+            .all()
+        )
+        user_links: Dict[int, UserProperty] = {link.user_id: link for link in links}
+
+        zone_rows = (
+            db.query(UserPropertyZoneLink.user_id, UserPropertyZoneLink.zone_id)
+            .filter(UserPropertyZoneLink.property_id == property_id)
+            .all()
+        )
+        zone_memberships: Dict[int, set[int]] = {}
+        for user_id, zone_id in zone_rows:
+            zone_memberships.setdefault(int(user_id), set()).add(int(zone_id))
+
+        aw_rows = (
+            db.query(UserPropertyAccessWindow)
+            .filter(UserPropertyAccessWindow.property_id == property_id)
+            .order_by(UserPropertyAccessWindow.user_id, UserPropertyAccessWindow.id)
+            .all()
+        )
+        access_windows_by_user: Dict[int, List[UserPropertyAccessWindow]] = {}
+        for w in aw_rows:
+            access_windows_by_user.setdefault(int(w.user_id), []).append(w)
+
+    return render_template(
+        "admin/property_workspace.html",
+        errors=errors,
+        csrf_token=csrf_token,
+        property_id=property_id,
+        prop=prop,
+        tab=tab,
+        zones=zones,
+        users=users,
+        zone_memberships=zone_memberships,
+        access_windows_by_user=access_windows_by_user,
+        user_links=user_links,
+    )
+
+
+@bp.post("/properties/<int:property_id>/zones")
+def property_zones_create(property_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    if not name:
+        return redirect(url_for("admin.property_workspace", property_id=property_id, tab="zones"))
+
+    with Session(engine) as db:
+        prop = db.get(Property, property_id)
+        if prop is None:
+            abort(404)
+        zone = PropertyZone(
+            property_id=property_id,
+            name=name,
+            description=description or None,
+        )
+        db.add(zone)
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_ZONE_CREATE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, name={name}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="zones"))
+
+
+@bp.post("/properties/<int:property_id>/zones/<int:zone_id>/delete")
+def property_zones_delete(property_id: int, zone_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        zone = db.get(PropertyZone, zone_id)
+        if zone is None or int(zone.property_id) != int(property_id):
+            abort(404)
+        db.query(UserPropertyZoneLink).filter(
+            UserPropertyZoneLink.property_id == property_id,
+            UserPropertyZoneLink.zone_id == zone_id,
+        ).delete(synchronize_session=False)
+        name = zone.name
+        db.delete(zone)
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_ZONE_DELETE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, zone_id={zone_id}, name={name}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="zones"))
+
+
+@bp.post("/properties/<int:property_id>/users/<int:user_id>/zones")
+def property_user_zones_update(property_id: int, user_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    selected = request.form.getlist("zone_ids")
+    selected_ids: set[int] = set()
+    for raw in selected:
+        try:
+            selected_ids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        prop = db.get(Property, property_id)
+        if user is None or prop is None:
+            abort(404)
+        valid_zone_ids = {
+            int(zid)
+            for (zid,) in db.query(PropertyZone.id)
+            .filter(PropertyZone.property_id == property_id)
+            .all()
+        }
+        selected_ids = {z for z in selected_ids if z in valid_zone_ids}
+
+        db.query(UserPropertyZoneLink).filter(
+            UserPropertyZoneLink.property_id == property_id,
+            UserPropertyZoneLink.user_id == user_id,
+        ).delete(synchronize_session=False)
+
+        for zid in sorted(selected_ids):
+            db.add(
+                UserPropertyZoneLink(
+                    property_id=property_id,
+                    user_id=user_id,
+                    zone_id=zid,
+                )
+            )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_USER_ZONES_UPDATE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, target_user_id={user_id}, zones={sorted(selected_ids)}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="zones"))
+
+
+@bp.post("/properties/<int:property_id>/users/<int:user_id>/access-windows")
+def property_user_access_windows_create(property_id: int, user_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    days = (request.form.get("days_of_week") or "0,1,2,3,4,5,6").strip()
+    start_time = (request.form.get("start_time") or "00:00").strip()
+    end_time = (request.form.get("end_time") or "23:59").strip()
+    timezone_value = (request.form.get("timezone") or "").strip() or None
+    is_enabled = 1
+    try:
+        is_enabled = 1 if int(request.form.get("is_enabled") or 1) else 0
+    except (TypeError, ValueError):
+        is_enabled = 1
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        prop = db.get(Property, property_id)
+        if user is None or prop is None:
+            abort(404)
+        db.add(
+            UserPropertyAccessWindow(
+                property_id=property_id,
+                user_id=user_id,
+                days_of_week=days or "0,1,2,3,4,5,6",
+                start_time=start_time or "00:00",
+                end_time=end_time or "23:59",
+                timezone=timezone_value,
+                is_enabled=is_enabled,
+            )
+        )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_USER_ACCESS_WINDOW_CREATE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, target_user_id={user_id}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+
+@bp.post(
+    "/properties/<int:property_id>/users/<int:user_id>/access-windows/<int:window_id>/delete"
+)
+def property_user_access_windows_delete(property_id: int, user_id: int, window_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        w = db.get(UserPropertyAccessWindow, window_id)
+        if (
+            w is None
+            or int(w.property_id) != int(property_id)
+            or int(w.user_id) != int(user_id)
+        ):
+            abort(404)
+        db.delete(w)
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_USER_ACCESS_WINDOW_DELETE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, target_user_id={user_id}, window_id={window_id}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
 
 
 @bp.post("/properties/<int:property_id>/delete")

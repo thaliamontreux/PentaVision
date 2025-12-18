@@ -107,6 +107,48 @@ class User(UserBase):
     )
 
 
+class PropertyZone(UserBase):
+    __tablename__ = "property_zones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    name: Mapped[str] = mapped_column(String(128), index=True)
+    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserPropertyZoneLink(UserBase):
+    __tablename__ = "user_property_zone_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    zone_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserPropertyAccessWindow(UserBase):
+    __tablename__ = "user_property_access_windows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    # CSV of day indices (0=Mon .. 6=Sun) to keep things simple with the current
+    # migration-lite approach.
+    days_of_week: Mapped[str] = mapped_column(String(32), server_default="0,1,2,3,4,5,6")
+    start_time: Mapped[str] = mapped_column(String(8), server_default="00:00")
+    end_time: Mapped[str] = mapped_column(String(8), server_default="23:59")
+    timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    is_enabled: Mapped[int] = mapped_column(Integer, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class PropertyUser(UserBase):
     __tablename__ = "property_users"
 

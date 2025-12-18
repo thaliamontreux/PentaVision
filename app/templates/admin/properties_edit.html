@@ -121,6 +121,15 @@
             Create property
           {% endif %}
         </button>
+        {% if is_edit and property_id %}
+          <a
+            href="{{ url_for('admin.property_workspace', property_id=property_id) }}"
+            class="pv-button"
+            style="margin-left: 0.5rem;"
+          >
+            Open workspace
+          </a>
+        {% endif %}
         <a href="{{ url_for('admin.properties_list') }}" class="pv-button" style="margin-left: 0.5rem;">
           Cancel
         </a>
