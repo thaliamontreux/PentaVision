@@ -25,6 +25,8 @@
 - [x] Auto-detect camera MAC from IP during camera create/edit/scan; persist to RecordDB.
 - [x] Alert on MAC changes (no alert when previous MAC was blank) and run a twice-daily MAC audit in the video worker.
 
+- [ ] Implement persistent ingest service (one RTSP connection per camera) that segments continuously and feeds both dashboard previews and recording uploads (behind `INGEST_ENABLED=1`).
+
 ## Pentastar-web UI rules / polish
 
 - [x] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from .camera_utils import build_camera_url
 from .db import get_record_engine
 from .models import CameraDevice, CameraUrlPattern
+from .preview_history import write_frame
 
 
 def _mask_url_password(url: str) -> str:
@@ -365,18 +366,7 @@ class CameraStream(threading.Thread):
                         # local CameraStreamManager) can serve previews.
                         if self._preview_dir:
                             try:
-                                if not self._preview_dir_ready:
-                                    os.makedirs(self._preview_dir, exist_ok=True)
-                                    self._preview_dir_ready = True
-                                tmp_path = os.path.join(
-                                    self._preview_dir, f"{self.device_id}.jpg.tmp"
-                                )
-                                final_path = os.path.join(
-                                    self._preview_dir, f"{self.device_id}.jpg"
-                                )
-                                with open(tmp_path, "wb") as f:
-                                    f.write(jpg_bytes)
-                                os.replace(tmp_path, final_path)
+                                write_frame(self.app, self.device_id, jpg_bytes, ts=now_ts)
                             except Exception:
                                 # Disk preview caching must never break streaming.
                                 pass

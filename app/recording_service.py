@@ -35,6 +35,7 @@ from .models import (
     UploadQueueItem,
 )
 from .storage_providers import StorageProvider, build_storage_providers
+from .preview_history import write_frame
 from .storage_csal import get_storage_router
 from .camera_utils import build_camera_url
 
@@ -632,7 +633,6 @@ class CameraWorker(threading.Thread):
         except Exception:
             return
         tmp_path = out_dir / f"{self.config.device_id}.jpg.tmp"
-        final_path = out_dir / f"{self.config.device_id}.jpg"
         cmd = [
             "ffmpeg",
             "-hide_banner",
@@ -667,7 +667,9 @@ class CameraWorker(threading.Thread):
             return
         try:
             if tmp_path.exists():
-                tmp_path.replace(final_path)
+                jpg_bytes = tmp_path.read_bytes()
+                write_frame(self.app, self.config.device_id, jpg_bytes)
+                tmp_path.unlink(missing_ok=True)
         except Exception:
             try:
                 tmp_path.unlink(missing_ok=True)

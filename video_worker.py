@@ -11,6 +11,7 @@ import sys
 import time
 
 from app import create_app
+from app.ingest_service import start_ingest_service
 from app.mac_audit_service import start_mac_audit_service
 from app.recording_service import start_recording_service
 from app.stream_service import start_stream_service
@@ -62,12 +63,20 @@ def main() -> None:
     _install_stderr_filter()
     app = create_app()
     # Start long-running background services (each manages its own threads).
-    start_recording_service(app)
+    try:
+        ingest_enabled = bool(app.config.get("INGEST_ENABLED", False))
+    except Exception:
+        ingest_enabled = False
+
+    if ingest_enabled:
+        start_ingest_service(app)
+    else:
+        start_recording_service(app)
     try:
         streams_enabled = bool(app.config.get("STREAMS_ENABLED", True))
     except Exception:
         streams_enabled = True
-    if streams_enabled:
+    if streams_enabled and (not ingest_enabled):
         start_stream_service(app)
     start_rtmp_service(app)
     start_mac_audit_service(app)

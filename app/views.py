@@ -77,6 +77,7 @@ from .security import (
     validate_global_csrf_token,
 )
 from .stream_service import get_stream_manager
+from .preview_history import find_frame_by_age
 from .storage_providers import build_storage_providers, _load_storage_settings
 from .storage_csal import get_storage_router, StorageError
 from .net_utils import get_ipv4_interfaces
@@ -789,6 +790,69 @@ def camera_preview_low_jpeg(device_id: int):
         return send_file(path, mimetype="image/jpeg")
     except Exception:
         abort(404)
+
+
+@bp.get("/cameras/<int:device_id>/preview_history.jpg")
+def camera_preview_history_jpeg(device_id: int):
+    user = get_current_user()
+    record_engine = get_record_engine()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        abort(404)
+    age_raw = request.args.get("age", "0")
+    try:
+        age = float(age_raw)
+    except (TypeError, ValueError):
+        age = 0.0
+    path = find_frame_by_age(current_app, device_id, age)
+    if path is None or not path.exists():
+        abort(404)
+    try:
+        return send_file(path, mimetype="image/jpeg")
+    except Exception:
+        abort(404)
+
+
+@bp.get("/cameras/<int:device_id>/preview_history.mjpg")
+def camera_preview_history_mjpg(device_id: int):
+    user = get_current_user()
+    record_engine = get_record_engine()
+    if not _user_can_access_camera(user, device_id, record_engine):
+        abort(404)
+    fps_raw = request.args.get("fps", "10")
+    try:
+        fps = float(fps_raw)
+    except (TypeError, ValueError):
+        fps = 10.0
+    if fps <= 0.0:
+        fps = 10.0
+    fps = min(30.0, fps)
+    interval = 1.0 / fps
+
+    def generate():  # pragma: no cover - realtime streaming
+        import time
+
+        start = time.time()
+        while True:
+            age = time.time() - start
+            if age > 60.0:
+                break
+            path = find_frame_by_age(current_app, device_id, age)
+            if path is not None:
+                try:
+                    frame = path.read_bytes()
+                except Exception:
+                    frame = b""
+                if frame:
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+                    )
+            time.sleep(interval)
+
+    return Response(
+        generate(),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
 
 
 @bp.get("/cameras/<int:device_id>/preview.mjpg")
