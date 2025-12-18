@@ -68,6 +68,7 @@ def main() -> None:
             f"INGEST_ENABLED={app.config.get('INGEST_ENABLED')} "
             f"STREAMS_ENABLED={app.config.get('STREAMS_ENABLED')} "
             f"RECORDING_ENABLED={app.config.get('RECORDING_ENABLED')} "
+            f"SHM_PROCESSING_REQUIRED={app.config.get('SHM_PROCESSING_REQUIRED')} "
             f"RECORD_DB_URL_set={bool(str(app.config.get('RECORD_DB_URL') or '').strip())} "
             f"USER_DB_URL_set={bool(str(app.config.get('USER_DB_URL') or '').strip())} "
             f"STORAGE_TARGETS={str(app.config.get('STORAGE_TARGETS') or '')} "

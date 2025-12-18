@@ -77,6 +77,10 @@ class CameraIngestProcess:
         self.segments_dir.mkdir(parents=True, exist_ok=True)
 
     def _ingest_root_dir(self) -> Path:
+        try:
+            shm_required = bool(self.app.config.get("SHM_PROCESSING_REQUIRED", True))
+        except Exception:
+            shm_required = True
         use_shm = self.app.config.get("USE_SHM_INGEST")
         if use_shm is None:
             use_shm = True
@@ -88,6 +92,8 @@ class CameraIngestProcess:
                 / f"camera_{self.config.dir_key}"
                 / f"session_{self.session_id}"
             )
+        if shm_required:
+            raise RuntimeError("SHM_PROCESSING_REQUIRED enabled but /dev/shm ingest not available")
         base = str(self.app.config.get("RECORDING_BASE_DIR", "") or "").strip()
         if base:
             return Path(base) / "ingest" / f"camera_{self.config.dir_key}" / f"session_{self.session_id}"

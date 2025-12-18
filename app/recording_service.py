@@ -477,6 +477,15 @@ class CameraWorker(threading.Thread):
                     time.sleep(min(max(1.0, sleep_s), 600.0))
 
     def _record_segment(self) -> None:
+        try:
+            shm_required = bool(self.app.config.get("SHM_PROCESSING_REQUIRED", True))
+        except Exception:
+            shm_required = True
+        if shm_required and self._ingest_root_dir() is None:
+            # Hard rule: never write processing output to disk. If /dev/shm is not
+            # available/allowed, skip this cycle.
+            time.sleep(max(5, min(self.segment_seconds, 60)))
+            return
         if not _should_record_now(self.app, self.config.device_id):
             sleep_seconds = max(5, min(self.segment_seconds, 60))
             time.sleep(sleep_seconds)
@@ -818,6 +827,13 @@ class CameraWorker(threading.Thread):
         ingest_root = self._ingest_root_dir()
         if ingest_root is not None:
             return ingest_root / "segments"
+        try:
+            shm_required = bool(self.app.config.get("SHM_PROCESSING_REQUIRED", True))
+        except Exception:
+            shm_required = True
+        if shm_required:
+            # Hard rule: do not fall back to disk.
+            return Path("/dev/shm") / "pentavision" / "ingest" / f"camera_{self.config.dir_key}" / f"session_{self._ingest_session_id}" / "segments"
         base = self.app.config.get("RECORDING_BASE_DIR") or ""
         if base:
             return Path(str(base)) / "tmp" / f"camera_{self.config.dir_key}"
