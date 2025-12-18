@@ -47,10 +47,22 @@ def _normalize_bool(value: str) -> bool:
 
 
 class CameraConfig:
-    def __init__(self, device_id: int, name: str, url: str) -> None:
+    def __init__(self, device_id: int, name: str, url: str, dir_key: str) -> None:
         self.device_id = device_id
         self.name = name
         self.url = url
+        self.dir_key = dir_key
+
+
+def _normalize_dir_key(value: str) -> str:
+    text = (value or "").strip().lower()
+    if not text:
+        return ""
+    parts: list[str] = []
+    for ch in text:
+        if ch.isalnum():
+            parts.append(ch)
+    return "".join(parts)
 
 
 def _mask_url_password(url: str) -> str:
@@ -719,8 +731,12 @@ class CameraWorker(threading.Thread):
             return ingest_root / "segments"
         base = self.app.config.get("RECORDING_BASE_DIR") or ""
         if base:
-            return Path(str(base)) / "tmp" / f"camera_{self.config.device_id}"
-        return Path(self.app.instance_path) / "recording_tmp" / f"camera_{self.config.device_id}"
+            return Path(str(base)) / "tmp" / f"camera_{self.config.dir_key}"
+        return (
+            Path(self.app.instance_path)
+            / "recording_tmp"
+            / f"camera_{self.config.dir_key}"
+        )
 
     def _ingest_root_dir(self) -> Optional[Path]:
         try:
@@ -736,7 +752,13 @@ class CameraWorker(threading.Thread):
         if not shm_base.exists() or not shm_base.is_dir():
             return None
 
-        root = shm_base / "pentavision" / "ingest" / f"camera_{self.config.device_id}" / f"session_{self._ingest_session_id}"
+        root = (
+            shm_base
+            / "pentavision"
+            / "ingest"
+            / f"camera_{self.config.dir_key}"
+            / f"session_{self._ingest_session_id}"
+        )
         try:
             # Quota/backpressure check before creating more data.
             if not self._shm_quota_allows_write(root.parent):
@@ -1099,9 +1121,13 @@ class RecordingManager:
             url = build_camera_url(device, pattern)
             if not url:
                 continue
+            raw_key = str(getattr(device, "mac_address", "") or "")
+            dir_key = _normalize_dir_key(raw_key)
+            if not dir_key:
+                dir_key = str(int(device.id))
             worker = CameraWorker(
                 self.app,
-                CameraConfig(device.id, device.name, url),
+                CameraConfig(device.id, device.name, url, dir_key),
                 device_providers,
                 segment_seconds=self.segment_seconds,
             )

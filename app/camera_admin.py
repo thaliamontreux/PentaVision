@@ -5,6 +5,7 @@ import ipaddress
 import json
 import re
 import socket
+import subprocess
 import threading
 import time
 import uuid
@@ -78,6 +79,23 @@ def _validate_csrf_token(token: Optional[str]) -> bool:
     return token == session.get("camera_admin_csrf")
 
 
+@bp.post("/devices/detect-mac")
+def detect_mac_for_device_ip():
+    engine = get_record_engine()
+    if engine is None:
+        return jsonify({"ok": False, "error": "Record database is not configured."})
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        return jsonify({"ok": False, "error": "Invalid or missing CSRF token."})
+
+    ip_address = (request.form.get("ip_address") or "").strip()
+    if not ip_address:
+        return jsonify({"ok": False, "error": "IP address is required."})
+
+    detected = _detect_mac_address_for_ip(ip_address)
+    return jsonify({"ok": True, "mac_address": detected or ""})
+
+
 def _normalize_mac_for_oui(mac: str) -> str:
     value = (mac or "").strip().upper()
     if not value:
@@ -88,6 +106,46 @@ def _normalize_mac_for_oui(mac: str) -> str:
         return ""
     pairs = [cleaned[i : i + 2] for i in range(0, len(cleaned), 2)]
     return ":".join(pairs)
+
+
+def _detect_mac_address_for_ip(ip_address: str) -> str:
+    ip_address = (ip_address or "").strip()
+    if not ip_address:
+        return ""
+
+    def _run(cmd: list[str]) -> str:
+        try:
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            out = (res.stdout or "") + "\n" + (res.stderr or "")
+            return out
+        except Exception:
+            return ""
+
+    # Prime ARP cache best-effort.
+    _run(["ping", "-c", "1", "-W", "1", ip_address])
+
+    out = _run(["ip", "neigh", "show", ip_address])
+    match = re.search(r"lladdr\s+(([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})", out)
+    if match:
+        return _normalize_mac_for_oui(match.group(1))
+
+    out = _run(["arp", "-n", ip_address])
+    match = re.search(r"(([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})", out)
+    if match:
+        return _normalize_mac_for_oui(match.group(1))
+
+    out = _run(["arp", "-a", ip_address])
+    match = re.search(r"(([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})", out)
+    if match:
+        return _normalize_mac_for_oui(match.group(1))
+
+    return ""
 
 
 def _suggest_pattern_id_for_mac(session_db: Session, mac_address: str) -> Optional[int]:
@@ -534,10 +592,12 @@ def _scan_network_for_cameras(
                     continue
                 name = f"CAM{cam_index}"
                 cam_index += 1
+                detected_mac = _detect_mac_address_for_ip(ip_str)
                 device = CameraDevice(
                     name=name,
                     pattern_id=pattern.id,
                     ip_address=ip_str,
+                    mac_address=detected_mac or None,
                     port=port,
                     username=None,
                     password=None,
@@ -1888,6 +1948,12 @@ def create_device():
                         continue
                     pattern_params[param_name] = value
 
+                detected_mac = ""
+                if not form["mac_address"]:
+                    detected_mac = _detect_mac_address_for_ip(form["ip_address"])
+                    if detected_mac:
+                        form["mac_address"] = detected_mac
+
                 device = CameraDevice(
                     name=form["name"],
                     pattern_id=pattern_id_int,
@@ -2140,6 +2206,8 @@ def edit_device(device_id: int):
                     username_value = None
                     password_value = None
 
+                previous_mac = _normalize_mac_for_oui(device.mac_address or "")
+
                 pattern_params: dict[str, str] = {}
                 for key, value in request.form.items():
                     if not key.startswith("pattern_param_"):
@@ -2152,7 +2220,16 @@ def edit_device(device_id: int):
                 device.name = form["name"]
                 device.pattern_id = pattern_id_int
                 device.ip_address = form["ip_address"]
-                device.mac_address = form["mac_address"] or None
+                if not form["mac_address"]:
+                    form["mac_address"] = _detect_mac_address_for_ip(form["ip_address"])
+                new_mac = _normalize_mac_for_oui(form["mac_address"] or "")
+                if previous_mac and new_mac and previous_mac != new_mac:
+                    log_event(
+                        "CAMERA_MAC_CHANGED",
+                        user_id=get_current_user().id if get_current_user() else None,
+                        details=f"device_id={device.id}, ip={device.ip_address}, old_mac={previous_mac}, new_mac={new_mac}, source=edit_save",
+                    )
+                device.mac_address = new_mac or None
                 device.port = port_int
                 device.username = username_value
                 device.password = password_value

@@ -11,6 +11,7 @@ import sys
 import time
 
 from app import create_app
+from app.mac_audit_service import start_mac_audit_service
 from app.recording_service import start_recording_service
 from app.stream_service import start_stream_service
 from app.rtmp_service import start_rtmp_service
@@ -64,6 +65,7 @@ def main() -> None:
     start_recording_service(app)
     start_stream_service(app)
     start_rtmp_service(app)
+    start_mac_audit_service(app)
 
     try:
         while True:

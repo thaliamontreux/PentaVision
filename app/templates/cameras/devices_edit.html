@@ -880,6 +880,53 @@
       if (macInput) {
         macInput.addEventListener('blur', suggestPatternFromMac);
       }
+
+      function detectMacFromIp() {
+        if (!ipInput || !macInput) {
+          return;
+        }
+        var ip = ipInput.value ? ipInput.value.trim() : '';
+        if (!ip) {
+          return;
+        }
+        if ((macInput.value || '').trim()) {
+          return;
+        }
+        var payload = new URLSearchParams();
+        payload.append('csrf_token', (form.csrf_token && form.csrf_token.value) || '');
+        payload.append('ip_address', ip);
+        fetch('{{ url_for("camera_admin.detect_mac_for_device_ip") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: payload.toString(),
+        })
+          .then(function (resp) {
+            return resp.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok) {
+              return;
+            }
+            var mac = (data.mac_address || '').trim();
+            if (!mac) {
+              return;
+            }
+            if ((macInput.value || '').trim()) {
+              return;
+            }
+            macInput.value = mac;
+            suggestPatternFromMac();
+          })
+          .catch(function () {
+            /* ignore detect errors */
+          });
+      }
+
+      if (ipInput) {
+        ipInput.addEventListener('blur', detectMacFromIp);
+      }
       if (!btn || !statusEl) {
         return;
       }
