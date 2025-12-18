@@ -148,6 +148,148 @@
               <div class="pv-card-title">Access Windows</div>
               <div class="pv-card-subtitle">Add as many time windows as needed per user. These will be used for camera viewing policy.</div>
 
+              <div class="pv-card" style="margin-top: 0.75rem;">
+                <div class="pv-card-title">Predefined schedules</div>
+                <div class="pv-card-subtitle">Create reusable schedules (multiple windows) and apply them to users or groups.</div>
+
+                <form method="post" action="{{ url_for('admin.property_schedule_template_create', property_id=property_id) }}" class="pv-form" style="margin-top: 0.75rem; display:grid; grid-template-columns: 1fr 2fr auto; gap: 0.5rem; align-items:end;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <div class="pv-field-group" style="margin:0;">
+                    <label for="tmpl_name">Template name</label>
+                    <input id="tmpl_name" name="name" type="text" placeholder="e.g. Evenings" required />
+                  </div>
+                  <div class="pv-field-group" style="margin:0;">
+                    <label for="tmpl_desc">Description</label>
+                    <input id="tmpl_desc" name="description" type="text" placeholder="Optional" />
+                  </div>
+                  <button type="submit" class="pv-button pv-button-primary">Create</button>
+                </form>
+
+                {% if templates %}
+                  <div style="margin-top: 0.75rem; display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    {% for t in templates %}
+                      <div class="pv-card" style="margin:0;">
+                        <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:center;">
+                          <div>
+                            <div class="pv-card-title" style="margin:0;">{{ t.name }}</div>
+                            <div class="pv-card-subtitle">{{ t.description or '' }}</div>
+                          </div>
+                          <form method="post" action="{{ url_for('admin.property_schedule_template_delete', property_id=property_id, template_id=t.id) }}" onsubmit="return confirm('Delete this schedule template?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="pv-button pv-button-small">Delete</button>
+                          </form>
+                        </div>
+
+                        <div style="margin-top: 0.5rem;">
+                          {% set wins = template_windows_by_template.get(t.id, []) %}
+                          {% if wins %}
+                            <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                              {% for w in wins %}
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                                  <div>
+                                    <strong>{% if w.is_enabled %}Enabled{% else %}Disabled{% endif %}</strong>
+                                    — Days: {{ w.days_of_week }} — {{ w.start_time }}–{{ w.end_time }}{% if w.timezone %} ({{ w.timezone }}){% endif %}
+                                  </div>
+                                  <form method="post" action="{{ url_for('admin.property_schedule_template_window_delete', property_id=property_id, template_id=t.id, window_id=w.id) }}" onsubmit="return confirm('Delete this template window?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <button type="submit" class="pv-button pv-button-small">Delete</button>
+                                  </form>
+                                </div>
+                              {% endfor %}
+                            </div>
+                          {% else %}
+                            <div class="pv-card-subtitle">No windows yet.</div>
+                          {% endif %}
+                        </div>
+
+                        <form method="post" action="{{ url_for('admin.property_schedule_template_window_create', property_id=property_id, template_id=t.id) }}" style="margin-top: 0.75rem; display:grid; grid-template-columns: 1.2fr 1fr 1fr 1fr auto; gap:0.35rem; align-items:end;">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                          <div class="pv-field-group" style="margin:0;">
+                            <label>Days</label>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+                              {% for d,label in [(0,'Mon'),(1,'Tue'),(2,'Wed'),(3,'Thu'),(4,'Fri'),(5,'Sat'),(6,'Sun')] %}
+                                <label style="display:inline-flex; align-items:center; gap: 0.25rem; margin:0;">
+                                  <input type="checkbox" name="days" value="{{ d }}" checked />
+                                  <span>{{ label }}</span>
+                                </label>
+                              {% endfor %}
+                            </div>
+                          </div>
+                          <div class="pv-field-group" style="margin:0;">
+                            <label>Start</label>
+                            <input name="start_time" type="time" value="00:00" />
+                          </div>
+                          <div class="pv-field-group" style="margin:0;">
+                            <label>End</label>
+                            <input name="end_time" type="time" value="23:59" />
+                          </div>
+                          <div class="pv-field-group" style="margin:0;">
+                            <label>Timezone</label>
+                            <input name="timezone" type="text" value="{{ prop.timezone or '' }}" />
+                            <div style="display:flex; align-items:center; gap:0.35rem; margin-top:0.25rem;">
+                              <input id="tmpl_enabled_{{ t.id }}" name="is_enabled" type="checkbox" value="1" checked />
+                              <label for="tmpl_enabled_{{ t.id }}" style="margin:0;">Enabled</label>
+                            </div>
+                          </div>
+                          <button type="submit" class="pv-button pv-button-small">Add</button>
+                        </form>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                {% if templates and groups %}
+                  <div class="pv-card" style="margin-top: 0.75rem;">
+                    <div class="pv-card-title">Apply schedule to groups</div>
+                    <div class="pv-card-subtitle">Assign a schedule to a group. This applies windows to all users currently scoped to that group.</div>
+
+                    <table class="pv-table" style="margin-top: 0.75rem;">
+                      <thead>
+                        <tr>
+                          <th scope="col">Group</th>
+                          <th scope="col">Assigned schedule</th>
+                          <th scope="col">Apply</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for g in groups %}
+                          <tr>
+                            <td style="white-space:nowrap;">{{ g.name }}</td>
+                            <td>
+                              {% set tid = group_schedule_assignment.get(g.id) %}
+                              {% if tid %}
+                                {% for t in templates %}
+                                  {% if t.id == tid %}
+                                    <strong>{{ t.name }}</strong>
+                                  {% endif %}
+                                {% endfor %}
+                              {% else %}
+                                <span class="pv-card-subtitle">None</span>
+                              {% endif %}
+                            </td>
+                            <td>
+                              <form method="post" action="{{ url_for('admin.property_apply_schedule_to_group', property_id=property_id, group_id=g.id) }}" style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                <select name="template_id" class="pv-select" style="min-width: 200px;">
+                                  {% for t in templates %}
+                                    <option value="{{ t.id }}" {% if group_schedule_assignment.get(g.id) == t.id %}selected{% endif %}>{{ t.name }}</option>
+                                  {% endfor %}
+                                </select>
+                                <select name="mode" class="pv-select">
+                                  <option value="replace">Replace</option>
+                                  <option value="append">Append</option>
+                                </select>
+                                <button type="submit" class="pv-button pv-button-small">Apply</button>
+                              </form>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% endif %}
+              </div>
+
               {% if not users %}
                 <p style="margin-top: 0.75rem;">No users found.</p>
               {% else %}
@@ -185,26 +327,59 @@
                           {% endif %}
                         </td>
                         <td>
-                          <form method="post" action="{{ url_for('admin.property_user_access_windows_create', property_id=property_id, user_id=u.id) }}" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap:0.35rem; align-items:end;">
+                          <form method="post" action="{{ url_for('admin.property_user_access_windows_create', property_id=property_id, user_id=u.id) }}" style="display:grid; grid-template-columns: 1.4fr 1fr 1fr 1.2fr auto; gap:0.35rem; align-items:end;">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                             <div class="pv-field-group" style="margin:0;">
-                              <label>Days (CSV)</label>
-                              <input name="days_of_week" type="text" value="0,1,2,3,4,5,6" />
+                              <label>Days</label>
+                              <div style="display:flex; flex-wrap:wrap; gap:0.35rem;">
+                                {% for d,label in [(0,'Mon'),(1,'Tue'),(2,'Wed'),(3,'Thu'),(4,'Fri'),(5,'Sat'),(6,'Sun')] %}
+                                  <label style="display:inline-flex; align-items:center; gap: 0.25rem; margin:0;">
+                                    <input type="checkbox" name="days" value="{{ d }}" checked />
+                                    <span>{{ label }}</span>
+                                  </label>
+                                {% endfor %}
+                              </div>
+                              <div style="display:flex; gap:0.35rem; margin-top:0.35rem;">
+                                <button type="button" class="pv-button pv-button-small" onclick="(function(f){['0','1','2','3','4'].forEach(function(v){f.querySelectorAll('input[name=days]').forEach(function(i){i.checked = (['0','1','2','3','4'].indexOf(i.value)>=0);});});})(this.closest('form'))">Weekdays</button>
+                                <button type="button" class="pv-button pv-button-small" onclick="(function(f){f.querySelectorAll('input[name=days]').forEach(function(i){i.checked = (i.value==='5'||i.value==='6');});})(this.closest('form'))">Weekends</button>
+                                <button type="button" class="pv-button pv-button-small" onclick="(function(f){f.querySelectorAll('input[name=days]').forEach(function(i){i.checked = true;});})(this.closest('form'))">Always</button>
+                              </div>
                             </div>
                             <div class="pv-field-group" style="margin:0;">
                               <label>Start</label>
-                              <input name="start_time" type="text" value="00:00" />
+                              <input name="start_time" type="time" value="00:00" />
                             </div>
                             <div class="pv-field-group" style="margin:0;">
                               <label>End</label>
-                              <input name="end_time" type="text" value="23:59" />
+                              <input name="end_time" type="time" value="23:59" />
                             </div>
                             <div class="pv-field-group" style="margin:0;">
                               <label>Timezone</label>
                               <input name="timezone" type="text" value="{{ prop.timezone or '' }}" />
+                              <div style="display:flex; align-items:center; gap:0.35rem; margin-top:0.25rem;">
+                                <input id="enabled_{{ u.id }}" name="is_enabled" type="checkbox" value="1" checked />
+                                <label for="enabled_{{ u.id }}" style="margin:0;">Enabled</label>
+                              </div>
                             </div>
                             <button type="submit" class="pv-button pv-button-small">Add</button>
                           </form>
+
+                          {% if templates %}
+                            <form method="post" action="{{ url_for('admin.property_apply_schedule_to_user', property_id=property_id, user_id=u.id) }}" style="margin-top: 0.5rem; display:flex; gap:0.35rem; align-items:center; flex-wrap: wrap;">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                              <label style="margin:0;">Apply template:</label>
+                              <select name="template_id" class="pv-select" style="min-width: 200px;">
+                                {% for t in templates %}
+                                  <option value="{{ t.id }}" {% if user_schedule_assignment.get(u.id) == t.id %}selected{% endif %}>{{ t.name }}</option>
+                                {% endfor %}
+                              </select>
+                              <select name="mode" class="pv-select">
+                                <option value="replace">Replace</option>
+                                <option value="append">Append</option>
+                              </select>
+                              <button type="submit" class="pv-button pv-button-small">Apply</button>
+                            </form>
+                          {% endif %}
                         </td>
                       </tr>
                     {% endfor %}
@@ -216,33 +391,35 @@
           {% elif tab == 'camera_scopes' %}
             <div class="pv-card">
               <div class="pv-card-title">Camera Scopes</div>
-              <div class="pv-card-subtitle">This section will be upgraded to structured group-based scopes. For now it displays the per-user scope field.</div>
+              <div class="pv-card-subtitle">Choose which camera groups each user can view at this property. (This is the foundation for group-scoped camera visibility.)</div>
 
-              {% if not users %}
+              {% if not groups %}
+                <p style="margin-top: 0.75rem;">No camera groups exist for this property yet. Create property groups first (RBAC module).</p>
+              {% elif not users %}
                 <p style="margin-top: 0.75rem;">No users found.</p>
               {% else %}
                 <table class="pv-table" style="margin-top: 0.75rem;">
                   <thead>
                     <tr>
                       <th scope="col">User</th>
-                      <th scope="col">Camera scope</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">Allowed camera groups</th>
+                      <th scope="col">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for u in users %}
-                      {% set link = user_links.get(u.id) %}
+                      {% set selected = group_scopes.get(u.id, set()) %}
                       <tr>
                         <td style="white-space:nowrap;">{{ u.email }}</td>
                         <td>
-                          <form method="post" action="{{ url_for('admin.property_update_user', property_id=property_id, user_id=u.id) }}">
+                          <form method="post" action="{{ url_for('admin.property_user_camera_scopes_update', property_id=property_id, user_id=u.id) }}" style="display:flex; flex-wrap:wrap; gap: 0.5rem; align-items:center;">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                            <input type="hidden" name="action" value="save" />
-                            <input type="hidden" name="residency_status" value="{{ link.residency_status if link else '' }}" />
-                            <input type="hidden" name="authorized_zones" value="{{ link.authorized_zones if link else '' }}" />
-                            <input type="hidden" name="access_windows" value="{{ link.access_windows if link else '' }}" />
-                            <input type="hidden" name="role_overrides" value="{{ link.role_overrides if link else '' }}" />
-                            <input name="camera_scope" type="text" value="{{ link.camera_scope if link else '' }}" style="width: 100%;" />
+                            {% for g in groups %}
+                              <label style="display:inline-flex; align-items:center; gap: 0.35rem; margin:0;">
+                                <input type="checkbox" name="group_ids" value="{{ g.id }}" {% if g.id in selected %}checked{% endif %} />
+                                <span>{{ g.name }}</span>
+                              </label>
+                            {% endfor %}
                         </td>
                         <td>
                             <button type="submit" class="pv-button pv-button-small">Save</button>
@@ -258,9 +435,11 @@
           {% elif tab == 'role_overrides' %}
             <div class="pv-card">
               <div class="pv-card-title">Role Overrides</div>
-              <div class="pv-card-subtitle">This will be upgraded to structured per-property roles. For now it stores a per-user override string.</div>
+              <div class="pv-card-subtitle">Select additional roles granted to a user within this property. (Structured; no free-text.)</div>
 
-              {% if not users %}
+              {% if not roles %}
+                <p style="margin-top: 0.75rem;">No roles exist.</p>
+              {% elif not users %}
                 <p style="margin-top: 0.75rem;">No users found.</p>
               {% else %}
                 <table class="pv-table" style="margin-top: 0.75rem;">
@@ -268,23 +447,23 @@
                     <tr>
                       <th scope="col">User</th>
                       <th scope="col">Role overrides</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for u in users %}
-                      {% set link = user_links.get(u.id) %}
+                      {% set selected = role_overrides.get(u.id, set()) %}
                       <tr>
                         <td style="white-space:nowrap;">{{ u.email }}</td>
                         <td>
-                          <form method="post" action="{{ url_for('admin.property_update_user', property_id=property_id, user_id=u.id) }}">
+                          <form method="post" action="{{ url_for('admin.property_user_role_overrides_update', property_id=property_id, user_id=u.id) }}" style="display:flex; flex-wrap:wrap; gap: 0.5rem; align-items:center;">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                            <input type="hidden" name="action" value="save" />
-                            <input type="hidden" name="residency_status" value="{{ link.residency_status if link else '' }}" />
-                            <input type="hidden" name="authorized_zones" value="{{ link.authorized_zones if link else '' }}" />
-                            <input type="hidden" name="camera_scope" value="{{ link.camera_scope if link else '' }}" />
-                            <input type="hidden" name="access_windows" value="{{ link.access_windows if link else '' }}" />
-                            <input name="role_overrides" type="text" value="{{ link.role_overrides if link else '' }}" style="width: 100%;" />
+                            {% for r in roles %}
+                              <label style="display:inline-flex; align-items:center; gap: 0.35rem; margin:0;">
+                                <input type="checkbox" name="role_ids" value="{{ r.id }}" {% if r.id in selected %}checked{% endif %} />
+                                <span>{{ r.name }}</span>
+                              </label>
+                            {% endfor %}
                         </td>
                         <td>
                             <button type="submit" class="pv-button pv-button-small">Save</button>

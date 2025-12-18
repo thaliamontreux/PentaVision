@@ -107,6 +107,81 @@ class User(UserBase):
     )
 
 
+class PropertyScheduleTemplate(UserBase):
+    __tablename__ = "property_schedule_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    name: Mapped[str] = mapped_column(String(128), index=True)
+    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PropertyScheduleTemplateWindow(UserBase):
+    __tablename__ = "property_schedule_template_windows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    template_id: Mapped[int] = mapped_column(Integer, index=True)
+    days_of_week: Mapped[str] = mapped_column(String(32), server_default="0,1,2,3,4,5,6")
+    start_time: Mapped[str] = mapped_column(String(8), server_default="00:00")
+    end_time: Mapped[str] = mapped_column(String(8), server_default="23:59")
+    timezone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    is_enabled: Mapped[int] = mapped_column(Integer, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserPropertyScheduleAssignment(UserBase):
+    __tablename__ = "user_property_schedule_assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    template_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PropertyGroupScheduleAssignment(UserBase):
+    __tablename__ = "property_group_schedule_assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_group_id: Mapped[int] = mapped_column(Integer, index=True)
+    template_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserPropertyGroupScope(UserBase):
+    __tablename__ = "user_property_group_scopes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_group_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UserPropertyRoleOverride(UserBase):
+    __tablename__ = "user_property_role_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    role_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class PropertyZone(UserBase):
     __tablename__ = "property_zones"
 

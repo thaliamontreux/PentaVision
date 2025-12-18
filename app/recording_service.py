@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-import io
 import hashlib
+import io
 import json
 import os
-import signal
 import subprocess
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import shutil
 from urllib.parse import urlparse, urlunparse
 
 from flask import Flask
@@ -867,6 +868,18 @@ class CameraWorker(threading.Thread):
         global_root = Path("/dev/shm") / "pentavision" / "ingest"
         global_bytes = self._dir_size_bytes(global_root)
         if global_bytes >= (global_limit_mb * 1024 * 1024):
+            return False
+
+        try:
+            min_free_mb = int(self.app.config.get("SHM_INGEST_MIN_FREE_MB", 256) or 256)
+        except Exception:  # noqa: BLE001
+            min_free_mb = 256
+        min_free_mb = max(16, min_free_mb)
+        try:
+            usage = shutil.disk_usage("/dev/shm")
+            if int(usage.free) < int(min_free_mb) * 1024 * 1024:
+                return False
+        except Exception:  # noqa: BLE001
             return False
         return True
 

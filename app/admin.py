@@ -30,13 +30,20 @@ from .models import (
     IpAllowlist,
     IpBlocklist,
     Property,
+    PropertyGroup,
     PropertyZone,
     Role,
     AuditEvent,
     User,
     UserPropertyAccessWindow,
     UserProperty,
+    UserPropertyGroupScope,
+    UserPropertyRoleOverride,
     UserPropertyZoneLink,
+    PropertyScheduleTemplate,
+    PropertyScheduleTemplateWindow,
+    UserPropertyScheduleAssignment,
+    PropertyGroupScheduleAssignment,
     UserRole,
 )
 from .security import get_current_user, user_has_role
@@ -1560,9 +1567,17 @@ def property_workspace(property_id: int):
             prop=None,
             tab=tab,
             zones=[],
+            groups=[],
+            roles=[],
             users=[],
             zone_memberships={},
             access_windows_by_user={},
+            group_scopes={},
+            role_overrides={},
+            templates=[],
+            template_windows_by_template={},
+            user_schedule_assignment={},
+            group_schedule_assignment={},
             user_links={},
         )
 
@@ -1578,9 +1593,17 @@ def property_workspace(property_id: int):
                 prop=None,
                 tab=tab,
                 zones=[],
+                groups=[],
+                roles=[],
                 users=[],
                 zone_memberships={},
                 access_windows_by_user={},
+                group_scopes={},
+                role_overrides={},
+                templates=[],
+                template_windows_by_template={},
+                user_schedule_assignment={},
+                group_schedule_assignment={},
                 user_links={},
             )
 
@@ -1590,6 +1613,13 @@ def property_workspace(property_id: int):
             .order_by(PropertyZone.name)
             .all()
         )
+        groups = (
+            db.query(PropertyGroup)
+            .filter(PropertyGroup.property_id == property_id)
+            .order_by(PropertyGroup.name)
+            .all()
+        )
+        roles = db.query(Role).order_by(Role.name).all()
         users = db.query(User).order_by(User.email).all()
 
         links = (
@@ -1618,6 +1648,58 @@ def property_workspace(property_id: int):
         for w in aw_rows:
             access_windows_by_user.setdefault(int(w.user_id), []).append(w)
 
+        scope_rows = (
+            db.query(UserPropertyGroupScope.user_id, UserPropertyGroupScope.property_group_id)
+            .filter(UserPropertyGroupScope.property_id == property_id)
+            .all()
+        )
+        group_scopes: Dict[int, set[int]] = {}
+        for uid, gid in scope_rows:
+            group_scopes.setdefault(int(uid), set()).add(int(gid))
+
+        override_rows = (
+            db.query(UserPropertyRoleOverride.user_id, UserPropertyRoleOverride.role_id)
+            .filter(UserPropertyRoleOverride.property_id == property_id)
+            .all()
+        )
+        role_overrides: Dict[int, set[int]] = {}
+        for uid, rid in override_rows:
+            role_overrides.setdefault(int(uid), set()).add(int(rid))
+
+        templates = (
+            db.query(PropertyScheduleTemplate)
+            .filter(PropertyScheduleTemplate.property_id == property_id)
+            .order_by(PropertyScheduleTemplate.name)
+            .all()
+        )
+        template_windows = (
+            db.query(PropertyScheduleTemplateWindow)
+            .filter(
+                PropertyScheduleTemplateWindow.template_id.in_([t.id for t in templates])
+                if templates
+                else False
+            )
+            .order_by(PropertyScheduleTemplateWindow.template_id, PropertyScheduleTemplateWindow.id)
+            .all()
+        )
+        template_windows_by_template: Dict[int, List[PropertyScheduleTemplateWindow]] = {}
+        for w in template_windows:
+            template_windows_by_template.setdefault(int(w.template_id), []).append(w)
+
+        user_assignment_rows = (
+            db.query(UserPropertyScheduleAssignment.user_id, UserPropertyScheduleAssignment.template_id)
+            .filter(UserPropertyScheduleAssignment.property_id == property_id)
+            .all()
+        )
+        user_schedule_assignment: Dict[int, int] = {int(uid): int(tid) for uid, tid in user_assignment_rows}
+
+        group_assignment_rows = (
+            db.query(PropertyGroupScheduleAssignment.property_group_id, PropertyGroupScheduleAssignment.template_id)
+            .filter(PropertyGroupScheduleAssignment.property_id == property_id)
+            .all()
+        )
+        group_schedule_assignment: Dict[int, int] = {int(gid): int(tid) for gid, tid in group_assignment_rows}
+
     return render_template(
         "admin/property_workspace.html",
         errors=errors,
@@ -1626,11 +1708,124 @@ def property_workspace(property_id: int):
         prop=prop,
         tab=tab,
         zones=zones,
+        groups=groups,
+        roles=roles,
         users=users,
         zone_memberships=zone_memberships,
         access_windows_by_user=access_windows_by_user,
+        group_scopes=group_scopes,
+        role_overrides=role_overrides,
+        templates=templates,
+        template_windows_by_template=template_windows_by_template,
+        user_schedule_assignment=user_schedule_assignment,
+        group_schedule_assignment=group_schedule_assignment,
         user_links=user_links,
     )
+
+
+@bp.post("/properties/<int:property_id>/users/<int:user_id>/camera-scopes")
+def property_user_camera_scopes_update(property_id: int, user_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    selected = request.form.getlist("group_ids")
+    selected_ids: set[int] = set()
+    for raw in selected:
+        try:
+            selected_ids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        prop = db.get(Property, property_id)
+        if user is None or prop is None:
+            abort(404)
+
+        valid_group_ids = {
+            int(gid)
+            for (gid,) in db.query(PropertyGroup.id)
+            .filter(PropertyGroup.property_id == property_id)
+            .all()
+        }
+        selected_ids = {gid for gid in selected_ids if gid in valid_group_ids}
+
+        db.query(UserPropertyGroupScope).filter(
+            UserPropertyGroupScope.property_id == property_id,
+            UserPropertyGroupScope.user_id == user_id,
+        ).delete(synchronize_session=False)
+
+        for gid in sorted(selected_ids):
+            db.add(
+                UserPropertyGroupScope(
+                    property_id=property_id,
+                    user_id=user_id,
+                    property_group_id=gid,
+                )
+            )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_USER_CAMERA_SCOPES_UPDATE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, target_user_id={user_id}, groups={sorted(selected_ids)}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="camera_scopes"))
+
+
+@bp.post("/properties/<int:property_id>/users/<int:user_id>/role-overrides")
+def property_user_role_overrides_update(property_id: int, user_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    selected = request.form.getlist("role_ids")
+    selected_ids: set[int] = set()
+    for raw in selected:
+        try:
+            selected_ids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        prop = db.get(Property, property_id)
+        if user is None or prop is None:
+            abort(404)
+
+        valid_role_ids = {
+            int(rid) for (rid,) in db.query(Role.id).all()
+        }
+        selected_ids = {rid for rid in selected_ids if rid in valid_role_ids}
+
+        db.query(UserPropertyRoleOverride).filter(
+            UserPropertyRoleOverride.property_id == property_id,
+            UserPropertyRoleOverride.user_id == user_id,
+        ).delete(synchronize_session=False)
+
+        for rid in sorted(selected_ids):
+            db.add(
+                UserPropertyRoleOverride(
+                    property_id=property_id,
+                    user_id=user_id,
+                    role_id=rid,
+                )
+            )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_USER_ROLE_OVERRIDES_UPDATE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, target_user_id={user_id}, roles={sorted(selected_ids)}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="role_overrides"))
 
 
 @bp.post("/properties/<int:property_id>/zones")
@@ -1757,15 +1952,24 @@ def property_user_access_windows_create(property_id: int, user_id: int):
     if engine is None:
         abort(500)
 
-    days = (request.form.get("days_of_week") or "0,1,2,3,4,5,6").strip()
+    day_values = request.form.getlist("days")
+    if day_values:
+        days_list: List[int] = []
+        for raw in day_values:
+            try:
+                val = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= val <= 6:
+                days_list.append(val)
+        days = ",".join(str(v) for v in sorted(set(days_list))) or "0,1,2,3,4,5,6"
+    else:
+        days = (request.form.get("days_of_week") or "0,1,2,3,4,5,6").strip()
+
     start_time = (request.form.get("start_time") or "00:00").strip()
     end_time = (request.form.get("end_time") or "23:59").strip()
     timezone_value = (request.form.get("timezone") or "").strip() or None
-    is_enabled = 1
-    try:
-        is_enabled = 1 if int(request.form.get("is_enabled") or 1) else 0
-    except (TypeError, ValueError):
-        is_enabled = 1
+    is_enabled = 1 if (request.form.get("is_enabled") in {"1", "on", "true", "yes"}) else 0
 
     with Session(engine) as db:
         user = db.get(User, user_id)
@@ -1790,6 +1994,298 @@ def property_user_access_windows_create(property_id: int, user_id: int):
         "PROPERTY_USER_ACCESS_WINDOW_CREATE",
         user_id=actor.id if actor else None,
         details=f"property_id={property_id}, target_user_id={user_id}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+
+@bp.post("/properties/<int:property_id>/schedule-templates")
+def property_schedule_template_create(property_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip() or None
+    if not name:
+        return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+    with Session(engine) as db:
+        prop = db.get(Property, property_id)
+        if prop is None:
+            abort(404)
+        db.add(PropertyScheduleTemplate(property_id=property_id, name=name, description=description))
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_SCHEDULE_TEMPLATE_CREATE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, name={name}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+
+@bp.post("/properties/<int:property_id>/schedule-templates/<int:template_id>/delete")
+def property_schedule_template_delete(property_id: int, template_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        tmpl = db.get(PropertyScheduleTemplate, template_id)
+        if tmpl is None or int(tmpl.property_id) != int(property_id):
+            abort(404)
+        db.query(PropertyScheduleTemplateWindow).filter(
+            PropertyScheduleTemplateWindow.template_id == template_id
+        ).delete(synchronize_session=False)
+        db.query(UserPropertyScheduleAssignment).filter(
+            UserPropertyScheduleAssignment.property_id == property_id,
+            UserPropertyScheduleAssignment.template_id == template_id,
+        ).delete(synchronize_session=False)
+        db.query(PropertyGroupScheduleAssignment).filter(
+            PropertyGroupScheduleAssignment.property_id == property_id,
+            PropertyGroupScheduleAssignment.template_id == template_id,
+        ).delete(synchronize_session=False)
+        name = tmpl.name
+        db.delete(tmpl)
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_SCHEDULE_TEMPLATE_DELETE",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, template_id={template_id}, name={name}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+
+@bp.post("/properties/<int:property_id>/schedule-templates/<int:template_id>/windows")
+def property_schedule_template_window_create(property_id: int, template_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    day_values = request.form.getlist("days")
+    days_list: List[int] = []
+    for raw in day_values:
+        try:
+            val = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= val <= 6:
+            days_list.append(val)
+    days = ",".join(str(v) for v in sorted(set(days_list))) or "0,1,2,3,4,5,6"
+    start_time = (request.form.get("start_time") or "00:00").strip()
+    end_time = (request.form.get("end_time") or "23:59").strip()
+    timezone_value = (request.form.get("timezone") or "").strip() or None
+    is_enabled = 1 if (request.form.get("is_enabled") in {"1", "on", "true", "yes"}) else 0
+
+    with Session(engine) as db:
+        tmpl = db.get(PropertyScheduleTemplate, template_id)
+        if tmpl is None or int(tmpl.property_id) != int(property_id):
+            abort(404)
+        db.add(
+            PropertyScheduleTemplateWindow(
+                template_id=template_id,
+                days_of_week=days,
+                start_time=start_time or "00:00",
+                end_time=end_time or "23:59",
+                timezone=timezone_value,
+                is_enabled=is_enabled,
+            )
+        )
+        db.commit()
+
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+
+@bp.post(
+    "/properties/<int:property_id>/schedule-templates/<int:template_id>/windows/<int:window_id>/delete"
+)
+def property_schedule_template_window_delete(
+    property_id: int, template_id: int, window_id: int
+):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        tmpl = db.get(PropertyScheduleTemplate, template_id)
+        if tmpl is None or int(tmpl.property_id) != int(property_id):
+            abort(404)
+        w = db.get(PropertyScheduleTemplateWindow, window_id)
+        if w is None or int(w.template_id) != int(template_id):
+            abort(404)
+        db.delete(w)
+        db.commit()
+
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+
+@bp.post("/properties/<int:property_id>/apply-schedule/user/<int:user_id>")
+def property_apply_schedule_to_user(property_id: int, user_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    try:
+        template_id = int(request.form.get("template_id") or 0)
+    except (TypeError, ValueError):
+        template_id = 0
+    mode = (request.form.get("mode") or "replace").strip().lower()
+    if mode not in {"replace", "append"}:
+        mode = "replace"
+
+    with Session(engine) as db:
+        user = db.get(User, user_id)
+        prop = db.get(Property, property_id)
+        tmpl = db.get(PropertyScheduleTemplate, template_id) if template_id else None
+        if user is None or prop is None or tmpl is None or int(tmpl.property_id) != int(property_id):
+            abort(404)
+
+        windows = (
+            db.query(PropertyScheduleTemplateWindow)
+            .filter(PropertyScheduleTemplateWindow.template_id == template_id)
+            .order_by(PropertyScheduleTemplateWindow.id)
+            .all()
+        )
+
+        if mode == "replace":
+            db.query(UserPropertyAccessWindow).filter(
+                UserPropertyAccessWindow.property_id == property_id,
+                UserPropertyAccessWindow.user_id == user_id,
+            ).delete(synchronize_session=False)
+
+        for w in windows:
+            db.add(
+                UserPropertyAccessWindow(
+                    property_id=property_id,
+                    user_id=user_id,
+                    days_of_week=w.days_of_week,
+                    start_time=w.start_time,
+                    end_time=w.end_time,
+                    timezone=w.timezone,
+                    is_enabled=w.is_enabled,
+                )
+            )
+
+        db.query(UserPropertyScheduleAssignment).filter(
+            UserPropertyScheduleAssignment.property_id == property_id,
+            UserPropertyScheduleAssignment.user_id == user_id,
+        ).delete(synchronize_session=False)
+        db.add(
+            UserPropertyScheduleAssignment(
+                property_id=property_id,
+                user_id=user_id,
+                template_id=template_id,
+            )
+        )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_APPLY_SCHEDULE_TO_USER",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, target_user_id={user_id}, template_id={template_id}, mode={mode}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
+
+
+@bp.post("/properties/<int:property_id>/apply-schedule/group/<int:group_id>")
+def property_apply_schedule_to_group(property_id: int, group_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    try:
+        template_id = int(request.form.get("template_id") or 0)
+    except (TypeError, ValueError):
+        template_id = 0
+    mode = (request.form.get("mode") or "replace").strip().lower()
+    if mode not in {"replace", "append"}:
+        mode = "replace"
+
+    with Session(engine) as db:
+        prop = db.get(Property, property_id)
+        grp = db.get(PropertyGroup, group_id)
+        tmpl = db.get(PropertyScheduleTemplate, template_id) if template_id else None
+        if (
+            prop is None
+            or grp is None
+            or int(grp.property_id) != int(property_id)
+            or tmpl is None
+            or int(tmpl.property_id) != int(property_id)
+        ):
+            abort(404)
+
+        windows = (
+            db.query(PropertyScheduleTemplateWindow)
+            .filter(PropertyScheduleTemplateWindow.template_id == template_id)
+            .order_by(PropertyScheduleTemplateWindow.id)
+            .all()
+        )
+
+        # Group schedules apply to the set of global Users whose structured camera
+        # scope includes this PropertyGroup.
+        user_ids = [
+            int(uid)
+            for (uid,) in db.query(UserPropertyGroupScope.user_id)
+            .filter(
+                UserPropertyGroupScope.property_id == property_id,
+                UserPropertyGroupScope.property_group_id == group_id,
+            )
+            .all()
+        ]
+
+        if mode == "replace":
+            db.query(UserPropertyAccessWindow).filter(
+                UserPropertyAccessWindow.property_id == property_id,
+                UserPropertyAccessWindow.user_id.in_(user_ids) if user_ids else False,
+            ).delete(synchronize_session=False)
+
+        for uid in user_ids:
+            for w in windows:
+                db.add(
+                    UserPropertyAccessWindow(
+                        property_id=property_id,
+                        user_id=uid,
+                        days_of_week=w.days_of_week,
+                        start_time=w.start_time,
+                        end_time=w.end_time,
+                        timezone=w.timezone,
+                        is_enabled=w.is_enabled,
+                    )
+                )
+
+        db.query(PropertyGroupScheduleAssignment).filter(
+            PropertyGroupScheduleAssignment.property_id == property_id,
+            PropertyGroupScheduleAssignment.property_group_id == group_id,
+        ).delete(synchronize_session=False)
+        db.add(
+            PropertyGroupScheduleAssignment(
+                property_id=property_id,
+                property_group_id=group_id,
+                template_id=template_id,
+            )
+        )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_APPLY_SCHEDULE_TO_GROUP",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, group_id={group_id}, template_id={template_id}, mode={mode}",
     )
     return redirect(url_for("admin.property_workspace", property_id=property_id, tab="access_windows"))
 
