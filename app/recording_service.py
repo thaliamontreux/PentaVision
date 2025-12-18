@@ -452,9 +452,19 @@ class CameraWorker(threading.Thread):
             return
         use_gst = bool(self.app.config.get("USE_GSTREAMER_RECORDING"))
         if use_gst:
-            self._record_segment_gstreamer()
-        else:
-            self._record_segment_ffmpeg()
+            try:
+                self._record_segment_gstreamer()
+                return
+            except Exception as exc:  # noqa: BLE001
+                try:
+                    self.app.logger.warning(
+                        "Recording GStreamer failed for device=%s; falling back to ffmpeg. err=%s",
+                        self.config.device_id,
+                        str(exc)[:200],
+                    )
+                except Exception:
+                    pass
+        self._record_segment_ffmpeg()
 
     def _record_segment_ffmpeg(self) -> None:
         base_dir = self._segment_temp_dir()
