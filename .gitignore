@@ -1,2 +1,12 @@
 .env
 *.env
+
+__pycache__/
+*.py[cod]
+.Python
+
+.venv/
+venv/
+ENV/
+
+.DS_Store

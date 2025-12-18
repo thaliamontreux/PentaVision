@@ -440,6 +440,7 @@ class CameraWorker(threading.Thread):
         self.providers = providers
         self.segment_seconds = segment_seconds
         self.retry_delay = 10
+        self._failure_backoff = float(self.retry_delay)
         self._ingest_session_id = uuid.uuid4().hex
 
     def run(self) -> None:
@@ -447,8 +448,20 @@ class CameraWorker(threading.Thread):
             while True:
                 try:
                     self._record_segment()
-                except Exception:
-                    time.sleep(self.retry_delay)
+                    self._failure_backoff = float(self.retry_delay)
+                except Exception as exc:
+                    msg = str(exc or "")
+                    is_rtsp_5xx = (
+                        "503" in msg
+                        or "5xx" in msg.lower()
+                        or "server returned" in msg.lower()
+                        or "describe failed" in msg.lower()
+                    )
+                    if is_rtsp_5xx:
+                        self._failure_backoff = min(max(10.0, self._failure_backoff * 2.0), 300.0)
+                    else:
+                        self._failure_backoff = float(self.retry_delay)
+                    time.sleep(self._failure_backoff)
 
     def _record_segment(self) -> None:
         if not _should_record_now(self.app, self.config.device_id):
@@ -535,11 +548,16 @@ class CameraWorker(threading.Thread):
             except Exception:
                 # Logging must not crash the worker.
                 pass
-            raise RuntimeError("recording command failed")
+            raise RuntimeError(
+                f"recording ffmpeg failed: rc={result.returncode} err={stderr_text.strip()[:200]}"
+            )
         segment_meta = self._validate_segment(temp_path)
         if not segment_meta:
             temp_path.unlink(missing_ok=True)
             raise RuntimeError("segment validation failed")
+
+        self._write_preview_from_segment(temp_path)
+
         key_hint = f"camera{self.config.device_id}_{timestamp}"
         router = get_storage_router(self.app)
         providers_sorted = sorted(
@@ -601,6 +619,60 @@ class CameraWorker(threading.Thread):
             break
         temp_path.unlink(missing_ok=True)
         self._cleanup_ingest_dirs()
+
+    def _write_preview_from_segment(self, segment_path: Path) -> None:
+        preview_base = str(
+            self.app.config.get("PREVIEW_CACHE_DIR", "/var/lib/pentavision/previews")
+        )
+        if not preview_base:
+            return
+        out_dir = Path(preview_base)
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            return
+        tmp_path = out_dir / f"{self.config.device_id}.jpg.tmp"
+        final_path = out_dir / f"{self.config.device_id}.jpg"
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-ss",
+            "0.5",
+            "-i",
+            str(segment_path),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "5",
+            str(tmp_path),
+        ]
+        try:
+            res = subprocess.run(
+                cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except Exception:
+            return
+        if res.returncode != 0:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return
+        try:
+            if tmp_path.exists():
+                tmp_path.replace(final_path)
+        except Exception:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _record_segment_gstreamer(self) -> None:
         base_dir = self._segment_temp_dir()
@@ -678,6 +750,9 @@ class CameraWorker(threading.Thread):
         if not segment_meta:
             temp_path.unlink(missing_ok=True)
             raise RuntimeError("segment validation failed")
+
+        self._write_preview_from_segment(temp_path)
+
         key_hint = f"camera{self.config.device_id}_{timestamp}"
         providers_sorted = sorted(
             self.providers,

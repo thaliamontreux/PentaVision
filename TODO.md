@@ -19,6 +19,12 @@
 - [x] Update the 7080 blocklist service to read distribution settings dynamically from UserDB (env fallback).
 - [x] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
 
+- [x] Fix video worker startup when recording is enabled: ensure recording service initializes inside a Flask app context.
+- [x] Make recording resilient to RTSP/GStreamer failures: fall back to ffmpeg recording when GStreamer preroll fails.
+- [x] Use stable per-camera ingest directories (prefer camera MAC address when known; fallback to numeric id).
+- [x] Auto-detect camera MAC from IP during camera create/edit/scan; persist to RecordDB.
+- [x] Alert on MAC changes (no alert when previous MAC was blank) and run a twice-daily MAC audit in the video worker.
+
 ## Pentastar-web UI rules / polish
 
 - [x] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.

@@ -38,4 +38,15 @@ Configuration is read from environment variables. At this stage, the key setting
 - `FACE_DB_URL` – SQLAlchemy URL for the facial recognition database.
 - `RECORD_DB_URL` – SQLAlchemy URL for the recordings/metadata database.
 
+Recording/video-worker related settings:
+
+- `RECORDING_ENABLED` – set to `1` to enable background recording.
+- `USE_GSTREAMER_RECORDING` – set to `1` to use GStreamer for recording; when enabled, the recorder will fall back to ffmpeg if GStreamer fails.
+- `USE_SHM_INGEST` – when enabled, segments are written under `/dev/shm/pentavision/ingest/...` before being committed to storage.
+
+Operational notes:
+
+- The background worker (`video_worker.py`) runs a periodic MAC audit (twice daily) to populate missing camera MAC addresses and log `CAMERA_MAC_CHANGED` audit events when a camera's MAC changes.
+- Recording ingest directories prefer a stable per-camera key derived from MAC address when available (fallback to numeric device id).
+
 These will be wired into the graphical installer and database layer as the project progresses.

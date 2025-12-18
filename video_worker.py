@@ -63,7 +63,12 @@ def main() -> None:
     app = create_app()
     # Start long-running background services (each manages its own threads).
     start_recording_service(app)
-    start_stream_service(app)
+    try:
+        streams_enabled = bool(app.config.get("STREAMS_ENABLED", True))
+    except Exception:
+        streams_enabled = True
+    if streams_enabled:
+        start_stream_service(app)
     start_rtmp_service(app)
     start_mac_audit_service(app)
 
