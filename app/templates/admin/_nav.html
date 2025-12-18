@@ -25,7 +25,7 @@
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Recordings</a>
     {% set href = url_for('admin.recording_settings_alias') %}
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Recording settings</a>
-    {% set href = url_for('admin.storage_alias') %}
+    {% set href = url_for('admin.storage_settings') %}
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Storage</a>
     {% set href = url_for('admin.access_control') %}
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Block / Allow</a>

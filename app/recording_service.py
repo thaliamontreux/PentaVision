@@ -1349,9 +1349,13 @@ def start_recording_service(app: Flask) -> None:
     )
     if not enabled:
         return
-    manager = RecordingManager(app)
-    manager.start()
-    queue_worker = UploadQueueWorker(app)
-    queue_worker.start()
-    retention_worker = RetentionWorker(app)
-    retention_worker.start()
+    # Some helpers (notably db.get_record_engine) currently depend on
+    # flask.current_app. Ensure we have an application context here since
+    # this is started from a systemd worker process.
+    with app.app_context():
+        manager = RecordingManager(app)
+        manager.start()
+        queue_worker = UploadQueueWorker(app)
+        queue_worker.start()
+        retention_worker = RetentionWorker(app)
+        retention_worker.start()

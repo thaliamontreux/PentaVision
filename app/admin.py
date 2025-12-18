@@ -11,6 +11,8 @@ from argon2 import PasswordHasher
 from flask import (
     Blueprint,
     abort,
+    current_app,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -35,6 +37,7 @@ from .models import (
     UserRole,
 )
 from .security import get_current_user, user_has_role
+from .storage_settings_page import storage_settings_page
 
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -78,14 +81,9 @@ def recordings_alias():
     return redirect(url_for("main.recordings"))
 
 
-@bp.get("/storage")
-def storage_alias():
-    """Admin-scoped alias for the main storage settings view.
-
-    This keeps the underlying implementation in the main blueprint but provides
-    a stable /admin URL for navigation and future refactors.
-    """
-    return redirect(url_for("main.storage_settings"))
+@bp.route("/storage", methods=["GET", "POST"])
+def storage_settings():
+    return storage_settings_page()
 
 
 @bp.get("/recording-settings")

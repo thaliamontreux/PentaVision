@@ -1456,12 +1456,7 @@ def camera_face_recognize(device_id: int):
 
 @bp.route("/storage", methods=["GET", "POST"])
 def storage_settings():
-    user = get_current_user()
-    if user is None:
-        next_url = request.path or url_for("main.index")
-        return redirect(url_for("main.login", next=next_url))
-    if not user_has_role(user, "System Administrator"):
-        abort(403)
+    return redirect(url_for("admin.storage_settings"))
 
     cfg = current_app.config
     errors: list[str] = []
