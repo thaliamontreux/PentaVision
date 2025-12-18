@@ -11,6 +11,7 @@ from .installer import bp as installer_bp
 from .models import create_face_schema, create_record_schema, create_user_schema
 from .security import init_security
 from .storage_startup import start_storage_startup_checks
+from .url_healthcheck import start_startup_url_healthcheck
 from .views import bp as main_bp
 
 
@@ -63,6 +64,7 @@ def create_app() -> Flask:
             pass
 
     start_storage_startup_checks(app)
+    start_startup_url_healthcheck(app)
 
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)

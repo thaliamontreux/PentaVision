@@ -69,7 +69,10 @@ from .models import (
 )
 from .security import (
     get_current_user,
+    get_current_property_user,
     login_user,
+    login_property_user,
+    logout_property_user,
     logout_user,
     require_login,
     user_has_property_access,
@@ -81,6 +84,15 @@ from .preview_history import find_frame_by_age
 from .storage_providers import build_storage_providers, _load_storage_settings
 from .storage_csal import get_storage_router, StorageError
 from .net_utils import get_ipv4_interfaces
+from .db import get_user_engine
+from .models import (
+    CameraGroupLink,
+    PropertyGroupMember,
+    PropertyUser,
+)
+
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 
 
 bp = Blueprint("main", __name__)
@@ -163,16 +175,64 @@ def _load_camera_property_map(record_engine) -> dict[int, int]:
     return {int(device_id): int(property_id) for device_id, property_id in rows}
 
 
+def _load_camera_group_map(record_engine) -> dict[int, tuple[int, int]]:
+    if record_engine is None:
+        return {}
+    CameraGroupLink.__table__.create(bind=record_engine, checkfirst=True)
+    with Session(record_engine) as session_db:
+        rows = session_db.query(
+            CameraGroupLink.device_id,
+            CameraGroupLink.property_id,
+            CameraGroupLink.property_group_id,
+        ).all()
+    return {
+        int(device_id): (int(property_id), int(group_id))
+        for device_id, property_id, group_id in rows
+    }
+
+
 def _user_can_access_camera(
     user: User | None,
     device_id: int,
     record_engine=None,
     property_map: dict[int, int] | None = None,
+    group_map: dict[int, tuple[int, int]] | None = None,
+    prop_user_group_ids: set[int] | None = None,
 ) -> bool:
-    if user is None:
-        return False
-    if user_has_role(user, "System Administrator"):
+    if user is not None and user_has_role(user, "System Administrator"):
         return True
+
+    prop_user = get_current_property_user()
+    if user is None and prop_user is None:
+        return False
+
+    # Property-local users: group-based camera visibility.
+    if prop_user is not None and user is None:
+        if record_engine is None:
+            record_engine = get_record_engine()
+        if group_map is None:
+            group_map = _load_camera_group_map(record_engine)
+        link = group_map.get(device_id)
+        if not link:
+            return False
+        cam_property_id, cam_group_id = link
+        if int(getattr(prop_user, "property_id", 0) or 0) != int(cam_property_id):
+            return False
+        if prop_user_group_ids is not None:
+            return int(cam_group_id) in prop_user_group_ids
+        engine = get_user_engine()
+        if engine is None:
+            return False
+        with Session(engine) as db:
+            exists = (
+                db.query(PropertyGroupMember.id)
+                .filter(
+                    PropertyGroupMember.group_id == cam_group_id,
+                    PropertyGroupMember.property_user_id == int(prop_user.id),
+                )
+                .first()
+            )
+            return exists is not None
 
     if property_map is None:
         if record_engine is None:
@@ -183,6 +243,93 @@ def _user_can_access_camera(
     if not prop_id:
         return False
     return user_has_property_access(user, prop_id)
+
+
+@bp.route("/property-login", methods=["GET", "POST"])
+def property_login():
+    errors: list[str] = []
+    username = ""
+    property_id_raw = ""
+    next_url = (
+        request.args.get("next")
+        or request.form.get("next")
+        or url_for("main.index")
+    )
+    if not next_url.startswith("/"):
+        next_url = url_for("main.index")
+
+    engine = get_user_engine()
+    properties: list[Property] = []
+    if engine is not None:
+        with Session(engine) as db:
+            try:
+                Property.__table__.create(bind=db.get_bind(), checkfirst=True)
+                PropertyUser.__table__.create(bind=db.get_bind(), checkfirst=True)
+                properties = db.query(Property).order_by(Property.name).all()
+            except Exception:
+                properties = []
+
+    if request.method == "POST":
+        if not validate_global_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+        username = (request.form.get("username") or "").strip().lower()
+        property_id_raw = (request.form.get("property_id") or "").strip()
+        password = request.form.get("password") or ""
+
+        try:
+            property_id = int(property_id_raw)
+        except (TypeError, ValueError):
+            property_id = 0
+        if not username:
+            errors.append("Username is required.")
+        if property_id <= 0:
+            errors.append("Property is required.")
+        if not password:
+            errors.append("Password is required.")
+
+        if not errors:
+            if engine is None:
+                errors.append("User database is not configured.")
+            else:
+                with Session(engine) as db:
+                    user_obj = (
+                        db.query(PropertyUser)
+                        .filter(
+                            PropertyUser.property_id == property_id,
+                            PropertyUser.username == username,
+                            PropertyUser.is_active == 1,
+                        )
+                        .first()
+                    )
+                    if user_obj is None:
+                        errors.append("Login failed.")
+                    else:
+                        ph = PasswordHasher()
+                        try:
+                            ph.verify(user_obj.password_hash, password)
+                        except VerifyMismatchError:
+                            errors.append("Login failed.")
+                        except Exception:
+                            errors.append("Login failed.")
+                        else:
+                            db.expunge(user_obj)
+                            login_property_user(user_obj)
+                            return redirect(next_url)
+
+    return render_template(
+        "property_login.html",
+        errors=errors,
+        username=username,
+        properties=properties,
+        property_id=property_id_raw,
+        next=next_url,
+    )
+
+
+@bp.get("/property-logout")
+def property_logout():
+    logout_property_user()
+    return redirect(url_for("main.login"))
 
 
 @bp.get("/health")
@@ -216,6 +363,7 @@ def health():
 @require_login
 def index():
     user = get_current_user()
+    prop_user = get_current_property_user()
     # Reuse the same DB health logic for the dashboard.
     db_status = {}
     for label, getter in (
@@ -245,9 +393,12 @@ def index():
     camera_last_seen: dict[int, datetime] = {}
     record_engine = get_record_engine()
     camera_property_map: dict[int, int] = {}
+    camera_group_map: dict[int, tuple[int, int]] = {}
+    prop_user_group_ids: set[int] = set()
     if record_engine is not None:
         with Session(record_engine) as session_db:
             CameraPropertyLink.__table__.create(bind=record_engine, checkfirst=True)
+            CameraGroupLink.__table__.create(bind=record_engine, checkfirst=True)
             CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
             devices = (
                 session_db.query(CameraDevice)
@@ -278,6 +429,24 @@ def index():
             camera_property_map = {
                 int(link.device_id): int(link.property_id) for link in links
             }
+
+            group_links = session_db.query(CameraGroupLink).all()
+            camera_group_map = {
+                int(link.device_id): (int(link.property_id), int(link.property_group_id))
+                for link in group_links
+            }
+
+        # For property-local users, pre-load group memberships once.
+        if prop_user is not None and user is None:
+            engine = get_user_engine()
+            if engine is not None:
+                with Session(engine) as db:
+                    rows = (
+                        db.query(PropertyGroupMember.group_id)
+                        .filter(PropertyGroupMember.property_user_id == int(prop_user.id))
+                        .all()
+                    )
+                prop_user_group_ids = {int(gid) for (gid,) in rows}
 
         for device_id, last_time in rows:
             if last_time is None:
@@ -916,7 +1085,15 @@ def camera_detail(device_id: int):
             last_seen = recent_recordings[0].created_at
             now = datetime.now(timezone.utc)
             threshold = now - timedelta(minutes=3)
-            if last_seen >= threshold:
+            if last_seen is not None:
+                try:
+                    if getattr(last_seen, "tzinfo", None) is None:
+                        last_seen = last_seen.replace(tzinfo=timezone.utc)
+                    else:
+                        last_seen = last_seen.astimezone(timezone.utc)
+                except Exception:
+                    last_seen = None
+            if last_seen is not None and last_seen >= threshold:
                 status = "online"
             else:
                 status = "offline"
@@ -964,7 +1141,15 @@ def camera_session(device_id: int):
             last_seen = recent_recordings[0].created_at
             now = datetime.now(timezone.utc)
             threshold = now - timedelta(minutes=3)
-            if last_seen >= threshold:
+            if last_seen is not None:
+                try:
+                    if getattr(last_seen, "tzinfo", None) is None:
+                        last_seen = last_seen.replace(tzinfo=timezone.utc)
+                    else:
+                        last_seen = last_seen.astimezone(timezone.utc)
+                except Exception:
+                    last_seen = None
+            if last_seen is not None and last_seen >= threshold:
                 status = "online"
             else:
                 status = "offline"

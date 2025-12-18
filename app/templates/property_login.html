@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="max-width: 900px; margin: 0 auto; padding: 24px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
+    <h2 style="margin:0;">Property Login</h2>
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.login') }}">Global Login</a>
+  </div>
+
+  {% if errors %}
+    <div class="alert alert-danger" style="margin-top:16px;">
+      <ul style="margin:0; padding-left:18px;">
+        {% for e in errors %}
+          <li>{{ e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('main.property_login', next=next) }}" style="margin-top:16px;">
+    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+    <input type="hidden" name="next" value="{{ next }}" />
+
+    <div class="row" style="margin:0;">
+      <div class="col-12" style="padding:0; display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label class="form-label" for="property_id">Property</label>
+          <select class="form-select" id="property_id" name="property_id" required>
+            <option value="">Select a property</option>
+            {% for p in properties %}
+              <option value="{{ p.id }}" {% if property_id and property_id|int == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="form-label" for="username">Username</label>
+          <input class="form-control" id="username" name="username" value="{{ username }}" autocomplete="username" required />
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <label class="form-label" for="password">Password</label>
+          <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
+      <button class="btn btn-primary" type="submit">Sign In</button>
+    </div>
+  </form>
+
+  <div style="margin-top:18px; color:#666; font-size: 13px;">
+    Property accounts are managed by an administrator per property. If you don't have a property username/password, ask your system administrator.
+  </div>
+</div>
+{% endblock %}

@@ -9,10 +9,19 @@ from sqlalchemy.orm import Session
 
 from .db import get_user_engine
 from .logging_utils import evaluate_ip_access_policies
-from .models import Property, Role, User, UserProperty, UserRole
+from .models import (
+    Property,
+    PropertyGroupMember,
+    PropertyUser,
+    Role,
+    User,
+    UserProperty,
+    UserRole,
+)
 
 
 _SESSION_USER_ID_KEY = "user_id"
+_SESSION_PROPERTY_USER_ID_KEY = "property_user_id"
 _GLOBAL_CSRF_KEY = "global_csrf"
 
 
@@ -42,16 +51,49 @@ def get_current_user() -> Optional[User]:
     return user_obj
 
 
+def get_current_property_user() -> Optional[PropertyUser]:
+    user = getattr(g, "current_property_user", None)
+    if user is not None:
+        return user
+
+    user_id = session.get(_SESSION_PROPERTY_USER_ID_KEY)
+    user_obj: Optional[PropertyUser] = None
+    engine = get_user_engine()
+    if user_id is not None and engine is not None:
+        try:
+            uid = int(user_id)
+        except (TypeError, ValueError):
+            uid = None
+        if uid is not None:
+            with Session(engine) as db:
+                user_obj = db.get(PropertyUser, uid)
+                if user_obj is not None:
+                    db.expunge(user_obj)
+    g.current_property_user = user_obj
+    return user_obj
+
+
 def login_user(user: User) -> None:
     # Clear any existing session state to reduce fixation risk.
     session.clear()
     session[_SESSION_USER_ID_KEY] = int(user.id)
 
 
+def login_property_user(user: PropertyUser) -> None:
+    session.clear()
+    session[_SESSION_PROPERTY_USER_ID_KEY] = int(user.id)
+
+
 def logout_user() -> None:
     session.pop(_SESSION_USER_ID_KEY, None)
     if hasattr(g, "current_user"):
         g.current_user = None
+
+
+def logout_property_user() -> None:
+    session.pop(_SESSION_PROPERTY_USER_ID_KEY, None)
+    if hasattr(g, "current_property_user"):
+        g.current_property_user = None
 
 
 def ensure_global_csrf_token() -> str:
@@ -147,7 +189,8 @@ def require_login(view: Callable) -> Callable:
     @wraps(view)
     def wrapper(*args, **kwargs):
         user = get_current_user()
-        if user is None:
+        prop_user = get_current_property_user()
+        if user is None and prop_user is None:
             next_url = request.path or url_for("main.index")
             return redirect(url_for("main.login", next=next_url))
         return view(*args, **kwargs)
@@ -199,15 +242,17 @@ def init_security(app) -> None:
     @app.before_request
     def _load_current_user() -> None:  # pragma: no cover - request wiring
         get_current_user()
+        get_current_property_user()
 
     @app.context_processor
     def _inject_user() -> dict:  # pragma: no cover - template wiring
-        user = get_current_user()
+        user = get_current_user() or get_current_property_user()
+        global_user = get_current_user()
         return {
             "current_user": user,
             "global_csrf_token": ensure_global_csrf_token(),
-            "is_system_admin": user_has_role(user, "System Administrator"),
-            "is_technician": user_has_role(user, "Technician"),
+            "is_system_admin": user_has_role(global_user, "System Administrator"),
+            "is_technician": user_has_role(global_user, "Technician"),
         }
 
 
