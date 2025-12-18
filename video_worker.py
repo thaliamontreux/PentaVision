@@ -62,6 +62,33 @@ def _install_stderr_filter() -> None:
 def main() -> None:
     _install_stderr_filter()
     app = create_app()
+    try:
+        startup_line = (
+            "video_worker starting: "
+            f"INGEST_ENABLED={app.config.get('INGEST_ENABLED')} "
+            f"STREAMS_ENABLED={app.config.get('STREAMS_ENABLED')} "
+            f"RECORDING_ENABLED={app.config.get('RECORDING_ENABLED')} "
+            f"RECORD_DB_URL_set={bool(str(app.config.get('RECORD_DB_URL') or '').strip())} "
+            f"USER_DB_URL_set={bool(str(app.config.get('USER_DB_URL') or '').strip())} "
+            f"STORAGE_TARGETS={str(app.config.get('STORAGE_TARGETS') or '')} "
+            f"LOCAL_STORAGE_PATH={str(app.config.get('LOCAL_STORAGE_PATH') or '')}"
+        )
+        print(startup_line, file=sys.stderr, flush=True)
+    except Exception:
+        pass
+    try:
+        app.logger.warning(
+            "video_worker starting: INGEST_ENABLED=%s STREAMS_ENABLED=%s RECORDING_ENABLED=%s RECORD_DB_URL_set=%s USER_DB_URL_set=%s STORAGE_TARGETS=%s LOCAL_STORAGE_PATH=%s",
+            app.config.get("INGEST_ENABLED"),
+            app.config.get("STREAMS_ENABLED"),
+            app.config.get("RECORDING_ENABLED"),
+            bool(str(app.config.get("RECORD_DB_URL") or "").strip()),
+            bool(str(app.config.get("USER_DB_URL") or "").strip()),
+            str(app.config.get("STORAGE_TARGETS") or ""),
+            str(app.config.get("LOCAL_STORAGE_PATH") or ""),
+        )
+    except Exception:
+        pass
     # Start long-running background services (each manages its own threads).
     try:
         ingest_enabled = bool(app.config.get("INGEST_ENABLED", False))
