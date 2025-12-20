@@ -81,7 +81,13 @@ from .security import (
 )
 from .stream_service import get_stream_manager
 from .preview_history import find_frame_by_age
-from .storage_providers import build_storage_providers, _load_storage_settings
+from .storage_providers import (
+    DatabaseStorageProvider,
+    ExternalSQLDatabaseStorageProvider,
+    LocalFilesystemStorageProvider,
+    build_storage_providers,
+    _load_storage_settings,
+)
 from .storage_csal import get_storage_router, StorageError
 from .net_utils import get_ipv4_interfaces
 from .db import get_user_engine
@@ -4683,18 +4689,105 @@ def download_camera_recording(recording_id: int):
         provider_name = rec.storage_provider
         key = rec.storage_key or ""
 
-        if provider_name == "local_fs":
+        download_raw = (request.args.get("download") or "").strip().lower()
+        download = download_raw in {"1", "true", "yes", "on"}
+
+        providers = build_storage_providers(current_app)
+        provider_obj = next(
+            (p for p in providers if getattr(p, "name", None) == provider_name),
+            None,
+        )
+
+        def _serve_video_bytes(data: bytes, filename: str) -> Response:
+            payload = bytes(data or b"")
+            size = len(payload)
+            disposition = "attachment" if download else "inline"
+            range_header = request.headers.get("Range")
+
+            if range_header and str(range_header).startswith("bytes=") and size:
+                spec = (
+                    str(range_header)
+                    .split("=", 1)[1]
+                    .split(",", 1)[0]
+                    .strip()
+                )
+                try:
+                    if spec.startswith("-"):
+                        suffix_len = int(spec[1:].strip() or "0")
+                        if suffix_len <= 0:
+                            raise ValueError
+                        if suffix_len > size:
+                            suffix_len = size
+                        start = size - suffix_len
+                        end = size - 1
+                    else:
+                        start_s, end_s = spec.split("-", 1)
+                        start = int(start_s.strip() or "0")
+                        end = int(end_s.strip()) if end_s.strip() else size - 1
+                        if start < 0 or start >= size:
+                            raise ValueError
+                        if end < start:
+                            raise ValueError
+                        if end >= size:
+                            end = size - 1
+                except Exception:
+                    resp = Response(status=416)
+                    resp.headers["Content-Range"] = f"bytes */{size}"
+                    resp.headers["Accept-Ranges"] = "bytes"
+                    return resp
+
+                chunk = payload[start : end + 1]
+                resp = Response(chunk, status=206, mimetype="video/mp4")
+                resp.headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+                resp.headers["Accept-Ranges"] = "bytes"
+                resp.headers["Content-Length"] = str(len(chunk))
+                resp.headers[
+                    "Content-Disposition"
+                ] = f"{disposition}; filename={filename}"
+                return resp
+
+            resp = Response(payload, mimetype="video/mp4")
+            resp.headers["Accept-Ranges"] = "bytes"
+            resp.headers["Content-Length"] = str(size)
+            resp.headers["Content-Disposition"] = f"{disposition}; filename={filename}"
+            return resp
+
+        if provider_name == "local_fs" or isinstance(provider_obj, LocalFilesystemStorageProvider):
             path = Path(key)
+            if isinstance(provider_obj, LocalFilesystemStorageProvider):
+                try:
+                    target = Path(str(key)).expanduser()
+                    if not target.is_absolute():
+                        target = provider_obj.base_path / target
+                    target = target.resolve()
+                    try:
+                        target.relative_to(provider_obj.base_path)
+                    except ValueError:
+                        abort(404)
+                    path = target
+                except Exception:
+                    abort(404)
             if not path.exists():
                 abort(404)
+            if download:
+                return send_file(
+                    str(path),
+                    as_attachment=True,
+                    download_name=path.name,
+                    mimetype="video/mp4",
+                    conditional=True,
+                )
             return send_file(
                 str(path),
-                as_attachment=True,
-                download_name=path.name,
                 mimetype="video/mp4",
+                conditional=True,
             )
 
-        if provider_name == "db":
+        if (
+            provider_name == "db"
+            or isinstance(provider_obj, DatabaseStorageProvider)
+            or key.startswith("recording_data:")
+        ):
             db_id = None
             if key.startswith("recording_data:"):
                 try:
@@ -4706,18 +4799,51 @@ def download_camera_recording(recording_id: int):
             data_row = session_db.get(RecordingData, db_id)
             if data_row is None:
                 abort(404)
-            response = Response(data_row.data, mimetype="video/mp4")
-            response.headers[
-                "Content-Disposition"
-            ] = f"attachment; filename=recording-{recording_id}.mp4"
-            return response
+            return _serve_video_bytes(data_row.data, f"recording-{recording_id}.mp4")
+
+        if key.startswith("external_recording_data:") or isinstance(
+            provider_obj, ExternalSQLDatabaseStorageProvider
+        ):
+            raw = str(key or "").strip()
+            row_id = None
+            if raw.startswith("external_recording_data:"):
+                try:
+                    row_id = int(raw.split(":", 1)[1])
+                except ValueError:
+                    row_id = None
+            if row_id is None:
+                abort(404)
+            if not isinstance(provider_obj, ExternalSQLDatabaseStorageProvider):
+                abort(404)
+
+            try:
+                provider_obj._ensure_table()
+                if provider_obj._engine is None:
+                    abort(404)
+                with provider_obj._engine.connect() as conn:
+                    row = conn.execute(
+                        text(
+                            "SELECT data FROM external_recording_data WHERE id = :id"
+                        ),
+                        {"id": int(row_id)},
+                    ).first()
+            except Exception:
+                abort(404)
+
+            if row is None:
+                abort(404)
+            blob_raw = row[0]
+            if blob_raw is None:
+                abort(404)
+            try:
+                blob = bytes(blob_raw)
+            except Exception:
+                blob = blob_raw if isinstance(blob_raw, (bytes, bytearray)) else None
+            if blob is None:
+                abort(404)
+            return _serve_video_bytes(blob, f"recording-{recording_id}.mp4")
 
         # For other providers (e.g. S3), attempt to get a signed URL and redirect.
-        providers = build_storage_providers(current_app)
-        provider_obj = next(
-            (p for p in providers if getattr(p, "name", None) == provider_name),
-            None,
-        )
         if provider_obj is not None:
             url = provider_obj.get_url(key)
             if url:

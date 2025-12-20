@@ -5,14 +5,15 @@ import io
 import json
 import os
 import random
+import signal
 import subprocess
 import threading
 import time
 import uuid
-from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import shutil
 from urllib.parse import urlparse, urlunparse
@@ -146,6 +147,7 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
             any_entries = (
                 session.query(CameraStorageScheduleEntry)
                 .filter(CameraStorageScheduleEntry.device_id == device_id)
+                .filter(CameraStorageScheduleEntry.is_enabled != 0)
                 .count()
             )
         except Exception:  # noqa: BLE001
@@ -276,6 +278,19 @@ def _get_active_storage_schedule_entry(
             sched_tz_name = getattr(schedule, "timezone", None)
     except Exception:  # noqa: BLE001
         sched_tz_name = None
+    if not sched_tz_name:
+        try:
+            link = (
+                session.query(CameraPropertyLink)
+                .filter(CameraPropertyLink.device_id == device_id)
+                .first()
+            )
+            if link is not None and getattr(link, "property_id", None) is not None:
+                prop = session.get(Property, link.property_id)
+                if prop is not None:
+                    sched_tz_name = getattr(prop, "timezone", None)
+        except Exception:  # noqa: BLE001
+            sched_tz_name = None
     if not sched_tz_name:
         sched_tz_name = str(app.config.get("DEFAULT_TIMEZONE") or "UTC")
     try:
@@ -447,6 +462,8 @@ class CameraWorker(threading.Thread):
         self._ingest_session_id = uuid.uuid4().hex
         self._last_shm_reason: Optional[str] = None
         self._last_shm_log_ts: float = 0.0
+        self._last_error_reason: Optional[str] = None
+        self._last_error_log_ts: float = 0.0
 
     def run(self) -> None:
         with self.app.app_context():
@@ -455,7 +472,27 @@ class CameraWorker(threading.Thread):
                     self._record_segment()
                     self._failure_backoff = float(self.retry_delay)
                 except Exception as exc:
-                    msg = str(exc or "")
+                    msg = f"{type(exc).__name__}: {str(exc or '')}".strip()
+                    try:
+                        now_ts = time.time()
+                    except Exception:
+                        now_ts = 0.0
+                    should_log = False
+                    if self._last_error_reason != msg:
+                        should_log = True
+                    elif now_ts and (now_ts - float(self._last_error_log_ts or 0.0)) >= 300.0:
+                        should_log = True
+                    if should_log:
+                        self._last_error_reason = msg
+                        self._last_error_log_ts = now_ts
+                        try:
+                            self.app.logger.exception(
+                                "Recording worker error for device=%s: %s",
+                                self.config.device_id,
+                                msg[:300],
+                            )
+                        except Exception:
+                            pass
                     is_rtsp_5xx = (
                         "503" in msg
                         or "5xx" in msg.lower()
@@ -1184,6 +1221,8 @@ class RecordingManager:
         self.providers = build_storage_providers(app)
         self.workers: Dict[int, CameraWorker] = {}
         self.lock = threading.Lock()
+        self._last_skip_reason: dict[int, str] = {}
+        self._last_skip_log_ts: dict[int, float] = {}
         try:
             segment_seconds = int(
                 self.app.config.get("RECORD_SEGMENT_SECONDS", 60) or 60
@@ -1209,6 +1248,25 @@ class RecordingManager:
                     time.sleep(5)
                 time.sleep(10)
 
+    def _log_skip(self, device_id: int, reason: str) -> None:
+        try:
+            now_ts = time.time()
+        except Exception:
+            now_ts = 0.0
+        last_reason = self._last_skip_reason.get(int(device_id))
+        last_ts = float(self._last_skip_log_ts.get(int(device_id)) or 0.0)
+        if last_reason != reason or (now_ts and (now_ts - last_ts) >= 300.0):
+            self._last_skip_reason[int(device_id)] = reason
+            self._last_skip_log_ts[int(device_id)] = now_ts
+            try:
+                self.app.logger.info(
+                    "Recording worker not started for device=%s: %s",
+                    int(device_id),
+                    str(reason)[:200],
+                )
+            except Exception:
+                pass
+
     def _sync_workers(self) -> None:
         engine = get_record_engine()
         if engine is None:
@@ -1226,6 +1284,11 @@ class RecordingManager:
         entries_by_device: dict[int, list[CameraStorageScheduleEntry]] = {}
         for entry in schedule_entries:
             try:
+                if not bool(getattr(entry, "is_enabled", 1)):
+                    continue
+            except Exception:  # noqa: BLE001
+                continue
+            try:
                 dev_id = int(getattr(entry, "device_id", 0) or 0)
             except Exception:  # noqa: BLE001
                 continue
@@ -1242,18 +1305,19 @@ class RecordingManager:
                 active_targets = _get_active_storage_targets(self.app, int(device.id))
                 if active_targets is None:
                     # schedule entries exist but none are active
+                    self._log_skip(int(device.id), "no active storage schedule entry")
                     continue
-                if not active_targets:
-                    continue
-                selected = [
-                    providers_index[name]
-                    for name in active_targets
-                    if name in providers_index
-                ]
-                if selected:
-                    device_providers = selected
-                else:
-                    continue
+                if active_targets:
+                    selected = [
+                        providers_index[name]
+                        for name in active_targets
+                        if name in providers_index
+                    ]
+                    if selected:
+                        device_providers = selected
+                    else:
+                        self._log_skip(int(device.id), "storage targets not configured")
+                        continue
             else:
                 # Legacy per-camera policy fallback.
                 policy = policies_index.get(device.id)
@@ -1271,8 +1335,10 @@ class RecordingManager:
                     if selected:
                         device_providers = selected
                     else:
+                        self._log_skip(int(device.id), "legacy storage targets not configured")
                         continue
             if not device_providers:
+                self._log_skip(int(device.id), "no storage providers configured")
                 continue
             if (
                 device.id in self.workers
@@ -1284,6 +1350,7 @@ class RecordingManager:
                 pattern = patterns_index.get(device.pattern_id)
             url = build_camera_url(device, pattern)
             if not url:
+                self._log_skip(int(device.id), "camera URL is not configured")
                 continue
             raw_key = str(getattr(device, "mac_address", "") or "")
             dir_key = _normalize_dir_key(raw_key)

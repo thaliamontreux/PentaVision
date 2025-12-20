@@ -1683,9 +1683,11 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
     providers: List[StorageProvider] = []
 
     if modules:
+        any_enabled = False
         for module in modules:
             if not getattr(module, "is_enabled", 0):
                 continue
+            any_enabled = True
             provider = _build_provider_for_module(app, module)
             if provider is None:
                 continue
@@ -1704,7 +1706,8 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
                 provider.priority = 100
             providers.append(provider)
 
-        return providers
+        if any_enabled:
+            return providers
 
     # Fallback: legacy StorageSettings-based single-instance configuration.
     db_settings = _load_storage_settings() or {}
