@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from typing import Optional
-from ipaddress import ip_address, ip_network
+from ipaddress import ip_address, ip_network, IPv4Address, IPv6Address
+import os
 
 from flask import Request, has_request_context, request, current_app
 from sqlalchemy import func
@@ -50,6 +51,18 @@ def log_event(event_type: str, user_id: Optional[int] = None, details: str = "")
         return
 
 
+def _env_consumer_allow_networks() -> list:
+    raw = os.environ.get("PENTAVISION_BLOCKLIST_CONSUMER_ALLOW_CIDRS", "").strip()
+    parts = [c.strip() for c in raw.split(",") if c.strip()]
+    nets = []
+    for c in parts + ["127.0.0.1/32", "::1/128"]:
+        try:
+            nets.append(ip_network(c, strict=False))
+        except ValueError:
+            continue
+    return nets
+
+
 def _ip_is_allowlisted(ip: str) -> bool:
     """Return True if the given IP string is present in the allowlist.
 
@@ -62,6 +75,102 @@ def _ip_is_allowlisted(ip: str) -> bool:
     engine = get_user_engine()
     if engine is None:
         return False
+
+
+def _add_blocklist_cidr(cidr: str, reason: str = "") -> None:
+    engine = get_user_engine()
+    if engine is None:
+        return
+    try:
+        with Session(engine) as session:
+            IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+            exists = session.query(IpBlocklist.id).filter(IpBlocklist.cidr == cidr).first()
+            if exists is None:
+                entry = IpBlocklist(cidr=cidr, description=reason or None)
+                session.add(entry)
+                session.commit()
+                log_event("SECURITY_IP_AUTO_BLOCK", details=f"cidr={cidr} reason={reason}")
+    except Exception:
+        return
+
+
+def _cidr24_for_ipv4(ip_str: str) -> Optional[str]:
+    try:
+        ip_obj = ip_address(ip_str)
+    except ValueError:
+        return None
+    if isinstance(ip_obj, IPv4Address):
+        parts = ip_str.split(".")
+        if len(parts) == 4:
+            return f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
+    return None
+
+
+def _escalate_network_if_needed(ip_str: str) -> None:
+    # If 3 or more hosts in the same /24 are already blocked, block the whole /24.
+    cidr24 = _cidr24_for_ipv4(ip_str)
+    if not cidr24:
+        return
+    engine = get_user_engine()
+    if engine is None:
+        return
+    try:
+        with Session(engine) as session:
+            rows = session.query(IpBlocklist.cidr).all()
+            count_hosts = 0
+            for (c,) in rows:
+                try:
+                    net = ip_network(c, strict=False)
+                except ValueError:
+                    continue
+                try:
+                    if net.prefixlen == 32 and str(net.supernet(new_prefix=24)) == cidr24:
+                        count_hosts += 1
+                except Exception:
+                    continue
+            if count_hosts >= 3:
+                # Do not block if env-allowlisted network
+                for env_net in _env_consumer_allow_networks():
+                    try:
+                        if ip_address(ip_str) in env_net:
+                            return
+                    except Exception:
+                        continue
+                _add_blocklist_cidr(cidr24, reason="escalate_network_after_multiple_hosts")
+    except Exception:
+        return
+
+
+def record_invalid_url_attempt(path: str) -> None:
+    """Record a 404 attempt and auto-block abusive IPs.
+
+    If an IP triggers >5 invalid URLs, add the IP/32 to IpBlocklist (unless allowlisted
+    via DB or PENTAVISION_BLOCKLIST_CONSUMER_ALLOW_CIDRS). If multiple hosts in the same
+    /24 are blocked, escalate by blocking the /24.
+    """
+    engine = get_user_engine()
+    if engine is None:
+        return
+    ip = _client_ip()
+    if not ip:
+        return
+    if _ip_is_allowlisted(ip):
+        return
+    # Log the 404 event
+    log_event("SECURITY_URL_404", details=f"path={path}")
+    try:
+        with Session(engine) as session:
+            AuditEvent.__table__.create(bind=engine, checkfirst=True)
+            cnt = (
+                session.query(func.count(AuditEvent.id))
+                .filter(AuditEvent.ip == ip, AuditEvent.event_type == "SECURITY_URL_404")
+                .scalar()
+            )
+            if cnt is not None and int(cnt) > 5:
+                _add_blocklist_cidr(f"{ip}/32", reason="too_many_invalid_urls")
+                _escalate_network_if_needed(ip)
+    except Exception:
+        return
 
     try:
         addr = ip_address(ip)
@@ -76,6 +185,14 @@ def _ip_is_allowlisted(ip: str) -> bool:
             continue
         if addr in net:
             return True
+
+    # Environment-based consumer allowlist (never block)
+    for net in _env_consumer_allow_networks():
+        try:
+            if addr in net:
+                return True
+        except Exception:
+            continue
 
     try:
         with Session(engine) as session:
@@ -127,7 +244,7 @@ def ip_is_locked() -> bool:
         return False
 
 
-def update_ip_lockout_after_failure(threshold: int = 3) -> None:
+def update_ip_lockout_after_failure(threshold: int = 4) -> None:
     """After a failed login attempt, update lockout state for the client IP.
 
     When the number of recorded failure events for an IP reaches the
@@ -188,6 +305,10 @@ def update_ip_lockout_after_failure(threshold: int = 3) -> None:
             )
             session.add(lock_event)
             session.commit()
+            # Also add to central blocklist and consider network escalation
+            if not _ip_is_allowlisted(ip):
+                _add_blocklist_cidr(f"{ip}/32", reason=f"auth_failures>={int(failure_count)}")
+                _escalate_network_if_needed(ip)
     except Exception:  # noqa: BLE001
         # Never raise from IP lockout bookkeeping.
         return

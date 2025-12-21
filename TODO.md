@@ -17,6 +17,7 @@
 - [x] Add systemd service integration for blocklist publication service (`pentavision-blocklist.service`) and install/enable it in Ubuntu installer.
 - [x] Add Admin pages for Blocklist Distribution settings (UserDB-backed) and Services management (restart allowlisted systemd units with CSRF + audit logging).
 - [x] Update the 7080 blocklist service to read distribution settings dynamically from UserDB (env fallback).
+- [x] Auto-block threats in web app: add IP to blocklist after >5 invalid URLs and after ≥4 auth failures (unknown user/2FA/password), never block env allowlisted CIDRs, and escalate to /24 when multiple hosts offend.
 - [x] Redesign storage provider system and admin UI into a CSAL-based, pluggable storage orchestration platform (manifest-driven modules, multi-instance, admin module manager).
 
 - [x] Fix video worker startup when recording is enabled: ensure recording service initializes inside a Flask app context.

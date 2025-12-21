@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 
 from jinja2 import ChoiceLoader, FileSystemLoader
 
@@ -71,4 +71,14 @@ def create_app() -> Flask:
     app.register_blueprint(installer_bp, url_prefix="/install")
     app.register_blueprint(auth_bp)
     app.register_blueprint(camera_admin_bp)
+
+    @app.errorhandler(404)
+    def _handle_404(err):  # pragma: no cover - error wiring
+        try:
+            from .logging_utils import record_invalid_url_attempt
+            path = request.path or ""
+            record_invalid_url_attempt(path)
+        except Exception:
+            pass
+        return ("Not Found", 404)
     return app
