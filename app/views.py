@@ -8,6 +8,7 @@ import json
 import os
 import platform
 import subprocess
+import tempfile
 import secrets
 import time
 from collections import defaultdict
@@ -4718,6 +4719,8 @@ def download_camera_recording(recording_id: int):
 
         download_raw = (request.args.get("download") or "").strip().lower()
         download = download_raw in {"1", "true", "yes", "on"}
+        transcode_raw = (request.args.get("transcode") or "").strip().lower()
+        force_transcode = transcode_raw in {"1", "true", "yes", "on"}
 
         providers = build_storage_providers(current_app)
         provider_obj = next(
@@ -4779,6 +4782,58 @@ def download_camera_recording(recording_id: int):
             resp.headers["Content-Disposition"] = f"{disposition}; filename={filename}"
             return resp
 
+        def _tmp_dir() -> Path:
+            # Prefer tmpfs if available
+            for cand in (Path("/dev/shm/pentavision"), Path("/dev/shm")):
+                try:
+                    cand.mkdir(parents=True, exist_ok=True)
+                    return cand
+                except Exception:
+                    continue
+            try:
+                return Path(tempfile.gettempdir())
+            except Exception:
+                return Path("/tmp")
+
+        def _transcode_file_to_temp(src_path: Path) -> Path | None:
+            out_path = _tmp_dir() / f"recording-{recording_id}-{int(time.time())}.mp4"
+            x264_preset = str(current_app.config.get("RECORD_FFMPEG_X264_PRESET", "veryfast") or "veryfast")
+            try:
+                x264_crf = int(current_app.config.get("RECORD_FFMPEG_X264_CRF", 23) or 23)
+            except Exception:
+                x264_crf = 23
+            aac_bitrate = str(current_app.config.get("RECORD_FFMPEG_AAC_BITRATE", "128k") or "128k")
+            cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(src_path),
+                "-c:v",
+                "libx264",
+                "-preset",
+                x264_preset,
+                "-crf",
+                str(x264_crf),
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-c:a",
+                "aac",
+                "-b:a",
+                aac_bitrate,
+                str(out_path),
+            ]
+            try:
+                r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=False)
+            except FileNotFoundError:
+                return None
+            if r.returncode != 0 or not out_path.exists():
+                return None
+            return out_path
+
         if provider_name == "local_fs" or isinstance(provider_obj, LocalFilesystemStorageProvider):
             path = Path(key)
             if isinstance(provider_obj, LocalFilesystemStorageProvider):
@@ -4796,6 +4851,25 @@ def download_camera_recording(recording_id: int):
                     abort(404)
             if not path.exists():
                 abort(404)
+            if force_transcode:
+                out_path = _transcode_file_to_temp(path)
+                if out_path is None or not out_path.exists():
+                    abort(404)
+                from flask import after_this_request
+
+                @after_this_request
+                def _cleanup_temp(response):  # noqa: ANN001
+                    try:
+                        out_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    return response
+
+                return send_file(
+                    str(out_path),
+                    mimetype="video/mp4",
+                    conditional=True,
+                )
             if download:
                 return send_file(
                     str(path),
@@ -4826,6 +4900,29 @@ def download_camera_recording(recording_id: int):
             data_row = session_db.get(RecordingData, db_id)
             if data_row is None:
                 abort(404)
+            if force_transcode:
+                tmp_in = _tmp_dir() / f"recin-{recording_id}-{int(time.time())}.bin"
+                try:
+                    tmp_in.write_bytes(bytes(data_row.data or b""))
+                    out_path = _transcode_file_to_temp(tmp_in)
+                finally:
+                    try:
+                        tmp_in.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                if out_path is None or not out_path.exists():
+                    abort(404)
+                from flask import after_this_request
+
+                @after_this_request
+                def _cleanup_temp2(response):  # noqa: ANN001
+                    try:
+                        out_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    return response
+
+                return send_file(str(out_path), mimetype="video/mp4", conditional=True)
             return _serve_video_bytes(data_row.data, f"recording-{recording_id}.mp4")
 
         if key.startswith("external_recording_data:") or isinstance(
@@ -4868,12 +4965,65 @@ def download_camera_recording(recording_id: int):
                 blob = blob_raw if isinstance(blob_raw, (bytes, bytearray)) else None
             if blob is None:
                 abort(404)
+            if force_transcode:
+                tmp_in = _tmp_dir() / f"recin-{recording_id}-{int(time.time())}.bin"
+                try:
+                    tmp_in.write_bytes(bytes(blob or b""))
+                    out_path = _transcode_file_to_temp(tmp_in)
+                finally:
+                    try:
+                        tmp_in.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                if out_path is None or not out_path.exists():
+                    abort(404)
+                from flask import after_this_request
+
+                @after_this_request
+                def _cleanup_temp3(response):  # noqa: ANN001
+                    try:
+                        out_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    return response
+
+                return send_file(str(out_path), mimetype="video/mp4", conditional=True)
             return _serve_video_bytes(blob, f"recording-{recording_id}.mp4")
 
-        # For other providers (e.g. S3), attempt to get a signed URL and redirect.
+        # For other providers (e.g. S3): if transcode requested, fetch via signed URL and transcode on the fly.
         if provider_obj is not None:
             url = provider_obj.get_url(key)
             if url:
+                if force_transcode:
+                    tmp_in = _tmp_dir() / f"recin-{recording_id}-{int(time.time())}.bin"
+                    try:
+                        with requests.get(url, stream=True, timeout=30) as r:
+                            if r.status_code >= 400:
+                                abort(404)
+                            with open(tmp_in, "wb") as fh:
+                                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                                    if chunk:
+                                        fh.write(chunk)
+                        out_path = _transcode_file_to_temp(tmp_in)
+                    finally:
+                        try:
+                            tmp_in.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                    if out_path is None or not out_path.exists():
+                        abort(404)
+                    from flask import after_this_request
+
+                    @after_this_request
+                    def _cleanup_temp4(response):  # noqa: ANN001
+                        try:
+                            out_path.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                        return response
+
+                    return send_file(str(out_path), mimetype="video/mp4", conditional=True)
+                # Default: let the browser stream from provider directly.
                 return redirect(url)
 
     abort(404)

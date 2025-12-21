@@ -564,37 +564,101 @@ class CameraWorker(threading.Thread):
         except (TypeError, ValueError):
             threads = 2
         threads = max(1, threads)
-        command = [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-rtsp_transport",
-            "tcp",
-            "-rtsp_flags",
-            "prefer_tcp",
-            "-fflags",
-            "nobuffer",
-            "-flags",
-            "low_delay",
-            "-probesize",
-            "32",
-            "-analyzeduration",
-            "0",
-            "-rw_timeout",
-            "15000000",
-            "-user_agent",
-            "PentaVision-ffmpeg",
-            "-i",
-            self.config.url,
-            "-t",
-            str(self.segment_seconds),
-            "-threads",
-            str(threads),
-            "-c",
-            "copy",
-            str(temp_path),
-        ]
+        should_transcode = False
+        try:
+            # Default on for web playback compatibility; can be disabled via config
+            should_transcode = bool(int(self.app.config.get("RECORD_FFMPEG_TRANSCODE_FOR_WEB", 1) or 1))
+        except Exception:
+            should_transcode = True
+
+        if should_transcode:
+            # Produce a web-compatible MP4 (H.264/AAC, yuv420p, faststart) regardless of input codec.
+            x264_preset = str(self.app.config.get("RECORD_FFMPEG_X264_PRESET", "veryfast") or "veryfast")
+            try:
+                x264_crf = int(self.app.config.get("RECORD_FFMPEG_X264_CRF", 23) or 23)
+            except Exception:
+                x264_crf = 23
+            aac_bitrate = str(self.app.config.get("RECORD_FFMPEG_AAC_BITRATE", "128k") or "128k")
+            command = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-rtsp_transport",
+                "tcp",
+                "-rtsp_flags",
+                "prefer_tcp",
+                "-fflags",
+                "nobuffer",
+                "-flags",
+                "low_delay",
+                "-probesize",
+                "32",
+                "-analyzeduration",
+                "0",
+                "-rw_timeout",
+                "15000000",
+                "-user_agent",
+                "PentaVision-ffmpeg",
+                "-i",
+                self.config.url,
+                "-t",
+                str(self.segment_seconds),
+                "-threads",
+                str(threads),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a:0?",
+                "-c:v",
+                "libx264",
+                "-preset",
+                x264_preset,
+                "-crf",
+                str(x264_crf),
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-c:a",
+                "aac",
+                "-b:a",
+                aac_bitrate,
+                str(temp_path),
+            ]
+        else:
+            # Low-CPU path: copy streams into MP4 container (may not be web-playable if HEVC)
+            command = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-rtsp_transport",
+                "tcp",
+                "-rtsp_flags",
+                "prefer_tcp",
+                "-fflags",
+                "nobuffer",
+                "-flags",
+                "low_delay",
+                "-probesize",
+                "32",
+                "-analyzeduration",
+                "0",
+                "-rw_timeout",
+                "15000000",
+                "-user_agent",
+                "PentaVision-ffmpeg",
+                "-i",
+                self.config.url,
+                "-t",
+                str(self.segment_seconds),
+                "-threads",
+                str(threads),
+                "-c",
+                "copy",
+                str(temp_path),
+            ]
         try:
             result = subprocess.run(
                 command,
