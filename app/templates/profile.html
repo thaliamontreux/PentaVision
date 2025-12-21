@@ -432,39 +432,142 @@
       var phoneCountry = document.getElementById('primary_phone_country');
       var phoneNational = document.getElementById('primary_phone_national');
       if (hiddenPhone && phoneCountry && phoneNational) {
-        var stored = String(hiddenPhone.value || '');
-        if (stored.startsWith('+')) {
-          stored = stored.slice(1);
-        }
-        // Rough parse: take leading digits as country code up to 3 digits.
-        var cc = '';
-        var rest = stored;
-        var i;
-        for (i = 1; i <= 3 && i <= stored.length; i++) {
-          var prefix = stored.slice(0, i);
-          if (/^\d+$/.test(prefix)) {
-            cc = prefix;
-            rest = stored.slice(i);
-          }
-        }
-        if (cc) {
-          phoneCountry.value = cc;
-          phoneNational.value = rest;
-        } else {
-          phoneNational.value = stored;
+        var DATA_URL = '{{ url_for('main.static', filename='data/countries.min.json') if false else url_for('static', filename='data/countries.min.json') }}';
+
+        function sanitizeDigits(s) {
+          return String(s || '').replace(/\D/g, '');
         }
 
-        var syncPhone = function () {
-          var c = (phoneCountry.value || '').replace(/\D/g, '');
-          var n = (phoneNational.value || '').replace(/[^0-9x+]/gi, '');
+        function buildPrefixes(data) {
+          var set = new Set();
+          try {
+            Object.keys(data || {}).forEach(function (k) {
+              var phones = (data[k] && data[k].phone) || [];
+              phones.forEach(function (p) {
+                var d = sanitizeDigits(p);
+                if (d) set.add(d);
+              });
+            });
+          } catch (e) {}
+          return Array.from(set);
+        }
+
+        function populateSelectWithPrefixes(prefixes) {
+          // Keep the first placeholder option; remove the rest
+          while (phoneCountry.options.length > 1) {
+            phoneCountry.remove(1);
+          }
+          // Sort ascending numerically for usability
+          prefixes
+            .slice()
+            .sort(function (a, b) {
+              return Number(a) - Number(b);
+            })
+            .forEach(function (p) {
+              var opt = document.createElement('option');
+              opt.value = String(p);
+              opt.textContent = '+' + String(p);
+              phoneCountry.appendChild(opt);
+            });
+        }
+
+        function longestPrefix(prefixes, digits) {
+          var sorted = prefixes
+            .slice()
+            .sort(function (a, b) {
+              if (b.length !== a.length) return b.length - a.length; // longest first
+              return Number(a) - Number(b);
+            });
+          for (var i = 0; i < sorted.length; i++) {
+            var p = sorted[i];
+            if (digits.startsWith(p)) return p;
+          }
+          return '';
+        }
+
+        function syncPhone() {
+          var c = sanitizeDigits(phoneCountry.value);
+          var n = sanitizeDigits(phoneNational.value);
           if (c && n) {
             hiddenPhone.value = '+' + c + n;
+          } else if (!c && n) {
+            hiddenPhone.value = '+' + n;
           } else {
-            hiddenPhone.value = n || '';
+            hiddenPhone.value = '';
           }
-        };
-        phoneCountry.addEventListener('change', syncPhone);
-        phoneNational.addEventListener('input', syncPhone);
+        }
+
+        function prefillFromStored(prefixes) {
+          var stored = String(hiddenPhone.value || '').trim();
+          if (stored.charAt(0) === '+') stored = stored.slice(1);
+          var digits = sanitizeDigits(stored);
+          if (!digits) return;
+          var cc = prefixes && prefixes.length ? longestPrefix(prefixes, digits) : '';
+          var rest = cc ? digits.slice(cc.length) : digits;
+          if (cc) {
+            try { phoneCountry.value = cc; } catch (e) {}
+          }
+          phoneNational.value = rest;
+        }
+
+        function initWithDataset(data) {
+          var prefixes = buildPrefixes(data);
+          if (!prefixes.length) {
+            initFallback();
+            return;
+          }
+          populateSelectWithPrefixes(prefixes);
+          prefillFromStored(prefixes);
+          phoneCountry.addEventListener('change', syncPhone);
+          phoneNational.addEventListener('input', syncPhone);
+          // Ensure hidden field is synced initially
+          syncPhone();
+        }
+
+        function initFallback() {
+          // Fallback: no dataset available. Normalize existing options to show only +prefix.
+          var prefixesFromSelect = [];
+          try {
+            for (var i = 1; i < phoneCountry.options.length; i++) {
+              var opt = phoneCountry.options[i];
+              var v = sanitizeDigits(opt.value || '');
+              if (v) {
+                prefixesFromSelect.push(v);
+                opt.value = v;
+                opt.textContent = '+' + v; // show only the prefix
+              }
+            }
+          } catch (e) {}
+
+          var stored = String(hiddenPhone.value || '').trim();
+          if (stored.charAt(0) === '+') stored = stored.slice(1);
+          var digits = sanitizeDigits(stored);
+          var cc = prefixesFromSelect.length ? longestPrefix(prefixesFromSelect, digits) : '';
+          var rest = cc ? digits.slice(cc.length) : digits;
+          if (cc) {
+            try { phoneCountry.value = cc; } catch (e) {}
+          }
+          phoneNational.value = rest;
+          phoneCountry.addEventListener('change', syncPhone);
+          phoneNational.addEventListener('input', syncPhone);
+          syncPhone();
+        }
+
+        try {
+          fetch(DATA_URL, { credentials: 'same-origin' })
+            .then(function (r) {
+              if (!r.ok) throw new Error('status ' + r.status);
+              return r.json();
+            })
+            .then(function (data) {
+              initWithDataset(data);
+            })
+            .catch(function () {
+              initFallback();
+            });
+        } catch (e) {
+          initFallback();
+        }
       }
 
       // --- Time zone: populate select with browser-known zones, fallback to textbox ---

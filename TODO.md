@@ -111,6 +111,7 @@
 - [x] Add storage settings UI to select and configure storage providers (storage overview page with provider details and configuration hints).
 - [x] Implement client-side validation for forms (usernames, passwords, DB settings, etc.).
 - [x] Address accessibility (keyboard navigation, ARIA labels, contrast) with aria-live regions, landmarks, and grouped camera tiles.
+ - [x] Profile phone UI: use full calling-code dataset, show prefix-only (+code), prefill via longest-prefix match, and sanitize before saving.
 
 ## Storage provider integration
 

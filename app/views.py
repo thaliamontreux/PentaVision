@@ -756,8 +756,8 @@ def profile():
             full_name = (request.form.get("full_name") or "").strip()
             preferred_name = (request.form.get("preferred_name") or "").strip()
             pronouns = (request.form.get("pronouns") or "").strip()
-            country_code = (request.form.get("primary_phone_country") or "").strip()
-            national_phone = (request.form.get("primary_phone_national") or "").strip()
+            raw_country_code = (request.form.get("primary_phone_country") or "").strip()
+            raw_national_phone = (request.form.get("primary_phone_national") or "").strip()
             timezone_val = (
                 request.form.get("timezone")
                 or request.form.get("timezone_fallback")
@@ -781,12 +781,14 @@ def profile():
                 db_user.preferred_name = preferred_name or None
                 db_user.pronouns = pronouns or None
 
-                if country_code and national_phone:
-                    phone_compact = national_phone.replace(" ", "").replace("-", "")
-                    db_user.primary_phone = f"+{country_code}{phone_compact}"
+                cc = "".join(ch for ch in raw_country_code if ch.isdigit())
+                nn = "".join(ch for ch in raw_national_phone if ch.isdigit())
+                if cc and nn:
+                    db_user.primary_phone = f"+{cc}{nn}"
                 else:
                     raw_phone = (request.form.get("primary_phone") or "").strip()
-                    db_user.primary_phone = raw_phone or None
+                    digits_only = "".join(ch for ch in raw_phone if ch.isdigit())
+                    db_user.primary_phone = f"+{digits_only}" if digits_only else None
                 db_user.timezone = timezone_val or None
                 db_user.mfa_preference = mfa_pref or None
 
