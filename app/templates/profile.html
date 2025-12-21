@@ -433,23 +433,202 @@
       var phoneNational = document.getElementById('primary_phone_national');
       if (hiddenPhone && phoneCountry && phoneNational) {
         var DATA_URL = '{{ url_for('main.static', filename='data/countries.min.json') if false else url_for('static', filename='data/countries.min.json') }}';
+        var PHONE_LIB_URL = '{{ url_for('static', filename='js/libphonenumber-max.js') }}';
 
         function sanitizeDigits(s) {
           return String(s || '').replace(/\D/g, '');
         }
 
+        function showToastLocal(message) {
+          try {
+            var toastEl = document.getElementById('pv-global-toast');
+            if (!toastEl) return;
+            toastEl.textContent = String(message || '');
+            toastEl.style.display = 'block';
+            window.clearTimeout(showToastLocal._t);
+            showToastLocal._t = window.setTimeout(function () {
+              toastEl.style.display = 'none';
+            }, 10000);
+            var lastErr = document.getElementById('pv-status-last-error');
+            if (lastErr) lastErr.textContent = String(message || '');
+          } catch (e) {}
+        }
+
+        // Optional: load libphonenumber-js for world-wide as-you-type formatting.
+        // If it fails to load (offline), we'll use lightweight fallbacks.
+        var phoneLibLoaded = false;
+        (function loadPhoneLib() {
+          if (window.libphonenumber && window.libphonenumber.AsYouType) {
+            phoneLibLoaded = true;
+            return;
+          }
+          try {
+            var s = document.createElement('script');
+            s.src = PHONE_LIB_URL; // load locally vendored bundle
+            s.async = true;
+            s.onload = function () {
+              if (window.libphonenumber && window.libphonenumber.AsYouType) {
+                phoneLibLoaded = true;
+              } else {
+                // Local file loaded but library not present; attempt CDN fallback
+                try {
+                  var s2 = document.createElement('script');
+                  s2.src = 'https://unpkg.com/libphonenumber-js@1.11.4/bundle/libphonenumber-max.js';
+                  s2.async = true;
+                  s2.onload = function () {
+                    if (window.libphonenumber && window.libphonenumber.AsYouType) {
+                      phoneLibLoaded = true;
+                    }
+                  };
+                  document.head.appendChild(s2);
+                } catch (e3) {}
+              }
+            };
+            s.onerror = function () {
+              // Fallback to CDN if local asset is missing (dev convenience)
+              try {
+                var s2 = document.createElement('script');
+                s2.src = 'https://unpkg.com/libphonenumber-js@1.11.4/bundle/libphonenumber-max.js';
+                s2.async = true;
+                s2.onload = function () { phoneLibLoaded = true; };
+                document.head.appendChild(s2);
+              } catch (e2) {}
+            };
+            document.head.appendChild(s);
+          } catch (e) {}
+        })();
+
+        function formatNationalDisplay(cc, digits) {
+          var c = String(cc || '');
+          var d = String(digits || '');
+          // Prefer library formatting when available
+          try {
+            if (phoneLibLoaded && window.libphonenumber && window.libphonenumber.AsYouType && c) {
+              var iso2 = dialIndex && dialIndex[c];
+              var formatted;
+              if (iso2) {
+                var ayt1 = new window.libphonenumber.AsYouType(iso2);
+                formatted = ayt1.input(d) || d;
+                return String(formatted).trim();
+              } else {
+                var ayt2 = new window.libphonenumber.AsYouType();
+                formatted = ayt2.input('+' + c + d) || ('+' + c + d);
+                // Strip "+<cc>" and any spaces directly following it
+                var re = new RegExp('^\\+' + c + '\\s*');
+                return String(formatted).replace(re, '').trim();
+              }
+            }
+          } catch (e) {}
+
+          // Fallbacks when library isn't available
+          if (c === '1') {
+            // North America NANP style: (XXX) XXX-XXXX
+            var a = d.slice(0, 3);
+            var b = d.slice(3, 6);
+            var c3 = d.slice(6, 10);
+            if (d.length > 6) return '(' + a + ') ' + b + '-' + c3;
+            if (d.length > 3) return '(' + a + ') ' + b;
+            if (d.length > 0) return '(' + a;
+            return '';
+          }
+          // Default: space every 3 digits
+          return d.replace(/(.{3})/g, '$1 ').trim();
+        }
+
+        function enforceMaxDigitsAndFormat() {
+          var c = sanitizeDigits(phoneCountry.value);
+          var maxDigits = Math.max(0, 15 - String(c).length); // E.164 max total length minus country code
+          var digits = sanitizeDigits(phoneNational.value).slice(0, maxDigits);
+          phoneNational.value = formatNationalDisplay(c, digits);
+          syncPhone();
+        }
+
+        function validatePhoneSoft() {
+          var c = sanitizeDigits(phoneCountry.value);
+          var n = sanitizeDigits(phoneNational.value);
+          var full = '+' + c + n;
+          var res = { possible: true, valid: null };
+          try {
+            if (phoneLibLoaded && window.libphonenumber && window.libphonenumber.parsePhoneNumberFromString) {
+              var pn = window.libphonenumber.parsePhoneNumberFromString(full);
+              if (!pn) return { possible: false, valid: false };
+              res.possible = !!pn.isPossible();
+              res.valid = !!pn.isValid();
+            } else {
+              // Lightweight heuristic fallback
+              if (!c || n.length < 4) res.possible = false;
+            }
+          } catch (e) {
+            res.possible = false; res.valid = false;
+          }
+          return res;
+        }
+
+        var _lastWarnTs = 0;
+        function softStrictWarnIfNeeded() {
+          var r = validatePhoneSoft();
+          var now = Date.now();
+          if (!r.possible) {
+            if (now - _lastWarnTs > 5000) {
+              showToastLocal('This phone number may be invalid for the selected calling code. If you believe it is correct, you can still save.');
+              _lastWarnTs = now;
+            }
+          } else if (r.valid === false) {
+            if (now - _lastWarnTs > 5000) {
+              showToastLocal('This phone number format might not be valid for the selected calling code. You can still save.');
+              _lastWarnTs = now;
+            }
+          }
+        }
+
+        function firstDigits(s) {
+          // Extract the first run of digits from a string like "1-876" => "1".
+          var m = String(s || '').match(/\d+/);
+          return m ? m[0] : '';
+        }
+
         function buildPrefixes(data) {
+          // Build unique root calling codes (not area codes like 1-876)
           var set = new Set();
           try {
-            Object.keys(data || {}).forEach(function (k) {
-              var phones = (data[k] && data[k].phone) || [];
-              phones.forEach(function (p) {
-                var d = sanitizeDigits(p);
-                if (d) set.add(d);
-              });
+            Object.keys(data || {}).forEach(function (iso2) {
+              var p = (data[iso2] && data[iso2].phone);
+              if (!p) return;
+              if (Array.isArray(p)) {
+                p.forEach(function (x) {
+                  var d = firstDigits(x);
+                  if (d) set.add(d);
+                });
+              } else {
+                var d2 = firstDigits(p);
+                if (d2) set.add(d2);
+              }
             });
           } catch (e) {}
           return Array.from(set);
+        }
+
+        var dialIndex = {};
+        function buildDialIndex(data) {
+          // Map calling code -> a representative ISO2 code to guide formatting.
+          // If multiple countries share a calling code, the first seen wins.
+          var map = {};
+          try {
+            Object.keys(data || {}).forEach(function (iso2) {
+              var p = (data[iso2] && data[iso2].phone);
+              if (!p) return;
+              if (Array.isArray(p)) {
+                p.forEach(function (x) {
+                  var cc = firstDigits(x);
+                  if (cc && !map[cc]) map[cc] = iso2;
+                });
+              } else {
+                var cc2 = firstDigits(p);
+                if (cc2 && !map[cc2]) map[cc2] = iso2;
+              }
+            });
+          } catch (e) {}
+          return map;
         }
 
         function populateSelectWithPrefixes(prefixes) {
@@ -511,6 +690,7 @@
         }
 
         function initWithDataset(data) {
+          dialIndex = buildDialIndex(data);
           var prefixes = buildPrefixes(data);
           if (!prefixes.length) {
             initFallback();
@@ -518,10 +698,23 @@
           }
           populateSelectWithPrefixes(prefixes);
           prefillFromStored(prefixes);
-          phoneCountry.addEventListener('change', syncPhone);
-          phoneNational.addEventListener('input', syncPhone);
-          // Ensure hidden field is synced initially
-          syncPhone();
+          phoneCountry.addEventListener('change', function () {
+            enforceMaxDigitsAndFormat();
+          });
+          phoneNational.addEventListener('input', function () {
+            enforceMaxDigitsAndFormat();
+          });
+          phoneNational.addEventListener('blur', function () {
+            softStrictWarnIfNeeded();
+          });
+          // Initial format + sync
+          enforceMaxDigitsAndFormat();
+          var frm = phoneNational.form || phoneCountry.form || hiddenPhone.form;
+          if (frm) {
+            frm.addEventListener('submit', function () {
+              softStrictWarnIfNeeded();
+            });
+          }
         }
 
         function initFallback() {
@@ -547,10 +740,23 @@
           if (cc) {
             try { phoneCountry.value = cc; } catch (e) {}
           }
-          phoneNational.value = rest;
-          phoneCountry.addEventListener('change', syncPhone);
-          phoneNational.addEventListener('input', syncPhone);
-          syncPhone();
+          phoneNational.value = formatNationalDisplay(sanitizeDigits(phoneCountry.value), rest);
+          phoneCountry.addEventListener('change', function () {
+            enforceMaxDigitsAndFormat();
+          });
+          phoneNational.addEventListener('input', function () {
+            enforceMaxDigitsAndFormat();
+          });
+          phoneNational.addEventListener('blur', function () {
+            softStrictWarnIfNeeded();
+          });
+          enforceMaxDigitsAndFormat();
+          var frm2 = phoneNational.form || phoneCountry.form || hiddenPhone.form;
+          if (frm2) {
+            frm2.addEventListener('submit', function () {
+              softStrictWarnIfNeeded();
+            });
+          }
         }
 
         try {
