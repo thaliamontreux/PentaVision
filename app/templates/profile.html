@@ -538,9 +538,43 @@
         function enforceMaxDigitsAndFormat() {
           var c = sanitizeDigits(phoneCountry.value);
           var maxDigits = Math.max(0, 15 - String(c).length); // E.164 max total length minus country code
+          // Preserve caret position relative to digits while reformatting
+          var digitCaret = 0;
+          try {
+            var pos = phoneNational.selectionStart || 0;
+            var s = String(phoneNational.value || '');
+            for (var i = 0; i < pos && i < s.length; i++) {
+              if (/\d/.test(s.charAt(i))) digitCaret++;
+            }
+          } catch (e) {}
+
           var digits = sanitizeDigits(phoneNational.value).slice(0, maxDigits);
-          phoneNational.value = formatNationalDisplay(c, digits);
+          var formatted = formatNationalDisplay(c, digits);
+          phoneNational.value = formatted;
+
+          // Restore caret to the same digit index in the new formatted text
+          try {
+            var target = formatted.length;
+            var seen = 0;
+            for (var j = 0; j < formatted.length; j++) {
+              if (/\d/.test(formatted.charAt(j))) {
+                if (seen >= digitCaret) { target = j; break; }
+                seen++;
+              }
+            }
+            phoneNational.setSelectionRange(target, target);
+          } catch (e2) {}
+
           syncPhone();
+        }
+
+        function ensureDefaultCountryIfEmpty() {
+          // If no calling code is chosen yet, default to +1 so US users get (XXX) XXX-XXXX while typing.
+          try {
+            if (!sanitizeDigits(phoneCountry.value)) {
+              phoneCountry.value = '1';
+            }
+          } catch (e) {}
         }
 
         function validatePhoneSoft() {
@@ -702,7 +736,22 @@
             enforceMaxDigitsAndFormat();
           });
           phoneNational.addEventListener('input', function () {
+            ensureDefaultCountryIfEmpty();
             enforceMaxDigitsAndFormat();
+          });
+          phoneNational.addEventListener('keydown', function () {
+            // Reformat on the next tick to reflect the keystroke
+            setTimeout(enforceMaxDigitsAndFormat, 0);
+          });
+          phoneNational.addEventListener('paste', function () {
+            setTimeout(function () {
+              ensureDefaultCountryIfEmpty();
+              enforceMaxDigitsAndFormat();
+            }, 0);
+          });
+          phoneNational.addEventListener('focus', function () {
+            ensureDefaultCountryIfEmpty();
+            setTimeout(enforceMaxDigitsAndFormat, 0);
           });
           phoneNational.addEventListener('blur', function () {
             softStrictWarnIfNeeded();
@@ -745,7 +794,21 @@
             enforceMaxDigitsAndFormat();
           });
           phoneNational.addEventListener('input', function () {
+            ensureDefaultCountryIfEmpty();
             enforceMaxDigitsAndFormat();
+          });
+          phoneNational.addEventListener('keydown', function () {
+            setTimeout(enforceMaxDigitsAndFormat, 0);
+          });
+          phoneNational.addEventListener('paste', function () {
+            setTimeout(function () {
+              ensureDefaultCountryIfEmpty();
+              enforceMaxDigitsAndFormat();
+            }, 0);
+          });
+          phoneNational.addEventListener('focus', function () {
+            ensureDefaultCountryIfEmpty();
+            setTimeout(enforceMaxDigitsAndFormat, 0);
           });
           phoneNational.addEventListener('blur', function () {
             softStrictWarnIfNeeded();
