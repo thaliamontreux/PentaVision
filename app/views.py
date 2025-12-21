@@ -4085,6 +4085,11 @@ def recording_settings():
                                 "message": str(message)[:300],
                             }
 
+                # If the client requested JSON (AJAX), return the test result immediately.
+                accept_header = (request.headers.get("Accept") or "").lower()
+                if "application/json" in accept_header:
+                    return jsonify(test_result or {"ok": False, "message": "no result"})
+
             elif action == "update_storage":
                 device_id_raw = request.form.get("device_id") or ""
                 try:
@@ -4283,6 +4288,11 @@ def recording_settings():
                         "module_name": "Schedule targets",
                         "message": " | ".join(results)[:300],
                     }
+
+                # If the client requested JSON (AJAX), return the test result immediately.
+                accept_header = (request.headers.get("Accept") or "").lower()
+                if "application/json" in accept_header:
+                    return jsonify(test_result or {"ok": False, "message": "no result"})
 
             elif action == "toggle_storage_schedule":
                 entry_id_raw = request.form.get("entry_id") or ""

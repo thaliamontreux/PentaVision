@@ -140,6 +140,17 @@
         return document.getElementById(id);
       }
 
+      function pvShowToast(message) {
+        var toastEl = document.getElementById('pv-global-toast');
+        if (!toastEl) return;
+        toastEl.textContent = String(message || '');
+        toastEl.style.display = 'block';
+        window.clearTimeout(pvShowToast._t);
+        pvShowToast._t = window.setTimeout(function () {
+          toastEl.style.display = 'none';
+        }, 5000);
+      }
+
       function clearTargets() {
         var checks = document.querySelectorAll('#pv-storage-schedule-modal input[name="targets"]');
         if (checks && checks.length) {
@@ -268,6 +279,44 @@
           var desired = actionBtn.getAttribute('data-pv-ss-action');
           var actionInput = getEl('pv-ss-action');
           if (actionInput) actionInput.value = String(desired || 'create_storage_schedule');
+
+          if (String(desired) === 'test_storage_schedule') {
+            // Intercept default form submission to keep modal open and show toast.
+            ev.preventDefault();
+            try {
+              var modal = getEl('pv-storage-schedule-modal');
+              var form = modal ? modal.querySelector('form') : null;
+              if (!form) { pvShowToast('Test failed'); return; }
+              var fd = new FormData();
+              var csrf = form.querySelector('input[name="csrf_token"]');
+              if (csrf && csrf.value) fd.append('csrf_token', csrf.value);
+              fd.append('action', 'test_storage_schedule');
+              var checks = modal.querySelectorAll('input[name="targets"]');
+              if (checks && checks.length) {
+                checks.forEach(function (el) { if (el.checked) fd.append('targets', String(el.value || '')); });
+              }
+              fetch(window.location.href, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' },
+                body: fd
+              }).then(function (resp) {
+                return resp.json().catch(function () { return {}; });
+              }).then(function (data) {
+                if (data && data.ok) {
+                  pvShowToast('Success');
+                } else {
+                  var msg = (data && data.message) ? String(data.message) : 'Test failed';
+                  pvShowToast(msg);
+                }
+              }).catch(function () {
+                pvShowToast('Test failed');
+              });
+            } catch (e) {
+              pvShowToast('Test failed');
+            }
+            return;
+          }
         }
       });
 
