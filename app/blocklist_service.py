@@ -523,7 +523,7 @@ def create_blocklist_service() -> Flask:
                     "</tr>"
                 )
 
-        html += f"""
+        html += """
           </tbody>
         </table>
       </div>

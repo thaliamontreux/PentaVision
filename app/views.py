@@ -931,21 +931,35 @@ def _camera_preview_response(
     def generate():  # pragma: no cover - realtime streaming
         import time
 
+        next_tick = time.monotonic()
         while True:
             frame = _load_frame()
-            if not frame:
-                time.sleep(interval)
-                continue
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-            )
-            time.sleep(interval)
+            if frame:
+                size = len(frame)
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    + f"Content-Length: {size}\r\n\r\n".encode("ascii")
+                    + frame
+                    + b"\r\n"
+                )
 
-    return Response(
+            next_tick += interval
+            delay = next_tick - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                next_tick = time.monotonic()
+
+    resp = Response(
         generate(),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    resp.headers["X-Accel-Buffering"] = "no"
+    return resp
 
 
 @bp.get("/cameras/<int:device_id>/preview_low.mjpg")

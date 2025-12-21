@@ -1,0 +1,168 @@
+Add the ability to authenticate against a windows domain server. "mistnet.pentastarstudios.com" will be the domain server we will be using 
+
+1. Identity & Credentialing Layer
+This section establishes trust, accountability, and auditability across the ecosystem.
+
+  - Legal Identity
+  - Full legal name
+  - Organization / operating entity
+  - Business registration identifiers (where applicable)
+  - Jurisdiction(s) of operation
+  - Professional Role Classification
+  - Primary role (e.g., Platform Administrator, Security Integrator, MSP Operator)
+  - Secondary roles / delegated authorities
+  - Employment or contractual status
+  - Authentication Artifacts
+  - Username / system ID
+  - MFA enrollment status (methods, recovery paths)
+  - Public key / certificate fingerprints
+  - Verification Status
+  - Identity verification tier (unverified, verified, enterprise-validated)
+  - Background or compliance attestations (if required)
+  - Timezone Information
+  - Time Format 12/24 (toggle) 
+
+2. Access Governance & Privilege Model
+Defines what the user can do, where, and under what constraints.
+  - Scope of Access
+  - Global platform access vs delegated property access
+  - Geographic or jurisdictional boundaries
+  - Property group memberships
+  - Permission Matrix
+  - Live view permissions
+  - Playback permissions
+  - Export / evidence access
+  - Configuration & provisioning rights
+  - User management authority
+  - Role Inheritance & Delegation
+  - Ability to create sub-users
+  - Permission templating
+  - Temporary or conditional access grants
+  - Time-Bound Controls
+  - Access schedules
+  - Emergency override privileges
+  - Expiration policies
+
+3. Property & Asset Relationships
+Establishes the user’s operational footprint.
+  - Managed Properties
+  - Property identifiers
+  - Ownership vs service-only relationships
+  - SLA classification per property
+  - Camera & Device Inventory Access
+  - Camera counts by property
+  - Manufacturer and model access
+  - Stream quality and codec entitlements
+  - Storage & Retention Authority
+  - Retention policy override rights
+  - Archive tier access (hot / warm / cold)
+  - Legal hold capabilities
+
+4. Operational Responsibilities
+  - Clarifies accountability and workflow ownership.
+  - Primary Responsibilities
+  - Monitoring oversight
+  - Incident review and escalation
+  - System health validation
+  - Secondary Responsibilities
+  - Compliance reporting
+  - Client support interaction
+  - Maintenance coordination
+  - Automation Oversight
+  - Rule creation authority
+  - Alert threshold management
+
+5. Compliance, Legal, & Risk Posture
+Critical for a public or multi-tenant DVR service.
+Regulatory Alignment
+  - Applicable privacy regimes (GDPR, CCPA, etc.)
+  - Industry-specific compliance (education, healthcare, retail)
+  - Data Handling Authority
+  - Export justification requirements
+  - Redaction privileges
+  - Chain-of-custody controls
+  - Auditability
+  - Activity logging visibility
+  - Audit trail access
+  - Incident accountability mapping
+  - Legal Constraints
+  - Jurisdictional access limitations
+  - Evidence disclosure permissions
+
+6. Technical Proficiency & System Interaction Profile
+Used to tailor UX, defaults, and safeguards.
+  Skill Tier
+  - Basic / Advanced / Expert
+  - Certified integrator status
+  - Preferred Interaction Mode
+  - Web UI
+  - Mobile client
+  - API / automation
+  - System Touchpoints
+  - Frequency of access
+  - Peak usage windows
+  - Typical session duration
+  - Customization Entitlements
+  - UI layout control
+  - Advanced diagnostics visibility
+  - Low-level stream controls
+
+7. Security Posture & Behavioral Baseline
+  - Enables anomaly detection and proactive defense.
+  - Normal Access Patterns
+  - Typical locations
+  - Usual devices
+  - Standard operating hours
+  - Risk Indicators
+  - Privileged action frequency
+  - Export volume trends
+  - Failed authentication patterns
+  - Trust Score / Risk Rating
+  - Dynamic trust level
+  - Adaptive access controls
+  - Incident History
+  - Policy violations
+  - Security events
+  - Remediation outcomes
+
+8. Communication & Notification Preferences
+  - Ensures signal without noise.
+  - Alert Channels
+  - Email
+  - Push
+  - Webhooks
+  - Severity Thresholds
+  - Informational
+  - Warning
+  - Critical
+  - Escalation Paths
+  - Self
+  - Team
+  - External stakeholders
+
+9. Commercial & Service Context
+Important for a DVR platform operating as a service.
+  Account Tier
+  - Free / Professional / Enterprise
+  - Billing Authority
+  - View-only vs administrative
+  - Cost center mapping
+  - Usage Quotas
+  - Stream limits
+  - Storage ceilings
+  - Export caps
+  - SLA Entitlements
+  - Support response times
+  - Uptime guarantees
+
+10. Metadata & Lifecycle Management
+  - Keeps the system clean and scalable.
+  - Account Status
+  - Active / Suspended / Archived
+  - Lifecycle Events
+  - Created date
+  - Last access
+  - Role changes
+  - Deprovisioning Rules
+  - Automated revocation triggers
+  - Data reassignment policies
