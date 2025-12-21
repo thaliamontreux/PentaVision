@@ -62,8 +62,8 @@
           </li>
           {% if last_seen %}
           <li>
-            <span>Last segment</span>
-            <span>{{ last_seen.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            <span>Last segment ({{ current_timezone }})</span>
+            <span>{{ last_seen|local_dt }}</span>
           </li>
           {% endif %}
         </ul>
@@ -94,7 +94,7 @@
         <table class="pv-table" style="margin-top: 0.5rem;">
           <thead>
             <tr>
-              <th>Time (UTC)</th>
+              <th>Time ({{ current_timezone }})</th>
               <th>Provider</th>
               <th>Actions</th>
             </tr>
@@ -102,11 +102,18 @@
           <tbody>
             {% for r in recordings %}
               <tr>
-                <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ r.created_at|local_dt }}</td>
                 <td>{{ r.storage_provider }}</td>
                 <td>
                   <a
-                    href="{{ url_for('main.download_camera_recording', recording_id=r.id) }}"
+                    href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
+                    class="pv-link-muted"
+                  >
+                    Play
+                  </a>
+                  <span aria-hidden="true"> · </span>
+                  <a
+                    href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
                     class="pv-link-muted"
                   >
                     Download

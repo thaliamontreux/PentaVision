@@ -765,6 +765,17 @@ def profile():
             ).strip()
             mfa_pref = (request.form.get("mfa_preference") or "").strip()
 
+            if timezone_val:
+                if len(timezone_val) > 64:
+                    errors.append("Time zone name is too long.")
+                else:
+                    try:
+                        ZoneInfo(str(timezone_val))
+                    except Exception:  # noqa: BLE001
+                        errors.append(
+                            "Invalid time zone. Use an IANA time zone like America/Chicago."
+                        )
+
             if not errors:
                 db_user.full_name = full_name or None
                 db_user.preferred_name = preferred_name or None

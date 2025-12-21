@@ -62,8 +62,8 @@
         <h2>Recording details</h2>
         <ul class="pv-status-list">
           <li>
-            <span>Time (UTC)</span>
-            <span>{{ recording.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            <span>Time ({{ current_timezone }})</span>
+            <span>{{ recording.created_at|local_dt }}</span>
           </li>
           <li>
             <span>Camera</span>

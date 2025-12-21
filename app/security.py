@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from functools import wraps
 from typing import Callable, Iterable, Optional, Set
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import abort, g, jsonify, redirect, request, session, url_for
 from sqlalchemy import select
@@ -10,8 +12,6 @@ from sqlalchemy.orm import Session
 from .db import get_user_engine
 from .logging_utils import evaluate_ip_access_policies
 from .models import (
-    Property,
-    PropertyGroupMember,
     PropertyUser,
     Role,
     User,
@@ -222,6 +222,38 @@ def require_roles(roles: Iterable[str]) -> Callable:
 
 
 def init_security(app) -> None:
+    def _normalize_timezone_name(value: Optional[str]) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return "UTC"
+        try:
+            ZoneInfo(raw)
+        except (ZoneInfoNotFoundError, ValueError):
+            return "UTC"
+        return raw
+
+    def _current_timezone_name() -> str:
+        user = get_current_user()
+        return _normalize_timezone_name(getattr(user, "timezone", None) if user else None)
+
+    def local_dt(value, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
+        if value is None:
+            return ""
+        tz_name = _current_timezone_name()
+        try:
+            tz = ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            tz = timezone.utc
+
+        if isinstance(value, datetime):
+            dt = value
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(tz).strftime(fmt)
+        if hasattr(value, "strftime"):
+            return value.strftime(fmt)
+        return str(value)
+
     @app.before_request
     def _enforce_ip_access_policies():
         allowed, reason = evaluate_ip_access_policies()
@@ -253,7 +285,10 @@ def init_security(app) -> None:
             "global_csrf_token": ensure_global_csrf_token(),
             "is_system_admin": user_has_role(global_user, "System Administrator"),
             "is_technician": user_has_role(global_user, "Technician"),
+            "current_timezone": _current_timezone_name(),
         }
+
+    app.jinja_env.filters["local_dt"] = local_dt
 
 
 def seed_system_admin_role_for_email(email: str) -> None:

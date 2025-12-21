@@ -110,6 +110,16 @@
           <label for="timezone">Time zone</label>
           <select id="timezone" name="timezone">
             <option value="">Select time zone…</option>
+            <option value="UTC" {% if form.timezone == 'UTC' %}selected{% endif %}>UTC</option>
+            <option value="America/Chicago" {% if form.timezone == 'America/Chicago' %}selected{% endif %}>America/Chicago</option>
+            <option value="America/New_York" {% if form.timezone == 'America/New_York' %}selected{% endif %}>America/New_York</option>
+            <option value="America/Denver" {% if form.timezone == 'America/Denver' %}selected{% endif %}>America/Denver</option>
+            <option value="America/Los_Angeles" {% if form.timezone == 'America/Los_Angeles' %}selected{% endif %}>America/Los_Angeles</option>
+            <option value="Europe/London" {% if form.timezone == 'Europe/London' %}selected{% endif %}>Europe/London</option>
+            <option value="Europe/Paris" {% if form.timezone == 'Europe/Paris' %}selected{% endif %}>Europe/Paris</option>
+            <option value="Asia/Tokyo" {% if form.timezone == 'Asia/Tokyo' %}selected{% endif %}>Asia/Tokyo</option>
+            <option value="Asia/Kolkata" {% if form.timezone == 'Asia/Kolkata' %}selected{% endif %}>Asia/Kolkata</option>
+            <option value="Australia/Sydney" {% if form.timezone == 'Australia/Sydney' %}selected{% endif %}>Australia/Sydney</option>
           </select>
           <input
             id="timezone_fallback"
@@ -120,8 +130,7 @@
             style="margin-top: 0.5rem; display: none;"
           />
           <p class="pv-card-subtitle">
-            Choose your IANA time zone (like America/Chicago). If the list
-            doesnt work in your browser, you can type it manually.
+            Choose your IANA time zone (like America/Chicago). If the list doesn't work in your browser, you can type it manually.
           </p>
         </div>
 
@@ -472,6 +481,9 @@
           }
         }
         if (zones && zones.length) {
+          while (tzSelect.options.length > 1) {
+            tzSelect.remove(1);
+          }
           zones.forEach(function (z) {
             var opt = document.createElement('option');
             opt.value = z;
@@ -491,14 +503,35 @@
           }
           tzFallback.style.display = 'none';
         } else {
-          // Fallback: hide select and rely on manual textbox.
-          tzSelect.style.display = 'none';
+          // Fallback: keep the select with built-in options and show manual textbox.
           tzFallback.style.display = 'block';
+
+          if (initialTz) {
+            try {
+              tzSelect.value = initialTz;
+            } catch (e) {}
+          } else if (Intl.DateTimeFormat) {
+            try {
+              var guess2 = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              if (guess2) {
+                tzSelect.value = guess2;
+              }
+            } catch (e) {}
+          }
         }
 
         var form2 = tzSelect.form || tzFallback.form;
         if (form2) {
           form2.addEventListener('submit', function () {
+            var fbVisible = tzFallback.style.display !== 'none';
+            var fbValue = String(tzFallback.value || '').trim();
+            if (fbVisible && fbValue) {
+              try {
+                tzSelect.value = '';
+              } catch (e) {}
+              return;
+            }
+
             if (tzSelect.style.display !== 'none' && tzSelect.value) {
               tzFallback.value = tzSelect.value;
             }

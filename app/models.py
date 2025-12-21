@@ -879,6 +879,14 @@ def create_user_schema(engine) -> None:
     """Create tables for the user DB on the given engine."""
 
     UserBase.metadata.create_all(engine)
+    try:
+        insp = inspect(engine)
+        cols = {c.get("name") for c in insp.get_columns("users")}
+        if "timezone" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN timezone VARCHAR(64)"))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def create_face_schema(engine) -> None:

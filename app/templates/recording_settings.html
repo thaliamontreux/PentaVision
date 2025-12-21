@@ -37,7 +37,7 @@
     <div class="pv-card" style="margin-bottom: 1.5rem;">
       <h2>Overview</h2>
       <p class="pv-card-subtitle">
-        Current time: {{ current_time_local.strftime('%Y-%m-%d %H:%M:%S') }} ({{ current_timezone }})
+        Current time: {{ current_time_local|local_dt }} ({{ current_timezone }})
       </p>
       <p class="pv-card-subtitle">
         Recording windows are evaluated using each camera's recording schedule. When no schedule is configured for a camera, it records 24 hours a day.

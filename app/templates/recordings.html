@@ -24,7 +24,7 @@
             <table class="pv-table">
               <thead>
                 <tr>
-                  <th>Time (UTC)</th>
+                  <th>Time ({{ current_timezone }})</th>
                   <th>Camera</th>
                   <th>Provider</th>
                   <th>Actions</th>
@@ -33,7 +33,7 @@
               <tbody>
                 {% for r in recordings %}
                   <tr>
-                    <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ r.created_at|local_dt }}</td>
                     <td>
                       {% set dev = devices_index.get(r.device_id) if devices_index else None %}
                       {% if dev %}
@@ -50,17 +50,17 @@
                     <td>{{ r.storage_provider }}</td>
                     <td>
                       <a
-                        href="{{ url_for('main.download_camera_recording', recording_id=r.id) }}"
-                        class="pv-link-muted"
-                      >
-                        Download
-                      </a>
-                      <span aria-hidden="true"> · </span>
-                      <a
                         href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
                         class="pv-link-muted"
                       >
-                        Play with overlays
+                        Play
+                      </a>
+                      <span aria-hidden="true"> · </span>
+                      <a
+                        href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
+                        class="pv-link-muted"
+                      >
+                        Download
                       </a>
                     </td>
                   </tr>
@@ -91,7 +91,7 @@
         <table class="pv-table">
           <thead>
             <tr>
-              <th>Time (UTC)</th>
+              <th>Time ({{ current_timezone }})</th>
               <th>Camera</th>
               <th>Provider</th>
               <th>Actions</th>
@@ -100,7 +100,7 @@
           <tbody>
             {% for r in recordings %}
               <tr>
-                <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ r.created_at|local_dt }}</td>
                 <td>
                   {% set dev = devices_index.get(r.device_id) if devices_index else None %}
                   {% if dev %}
@@ -117,17 +117,17 @@
                 <td>{{ r.storage_provider }}</td>
                 <td>
                   <a
-                    href="{{ url_for('main.download_camera_recording', recording_id=r.id) }}"
-                    class="pv-link-muted"
-                  >
-                    Download
-                  </a>
-                  <span aria-hidden="true"> · </span>
-                  <a
                     href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
                     class="pv-link-muted"
                   >
-                    Play with overlays
+                    Play
+                  </a>
+                  <span aria-hidden="true"> · </span>
+                  <a
+                    href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
+                    class="pv-link-muted"
+                  >
+                    Download
                   </a>
                 </td>
               </tr>
