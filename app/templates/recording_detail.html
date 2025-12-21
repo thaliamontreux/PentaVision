@@ -4,9 +4,13 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Recording playback</h1>
     {% if is_system_admin or is_technician %}
-      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-layout">
+        {% include 'admin/_nav.html' %}
+        <div class="pv-admin-main">
+          <h1>Recording playback</h1>
+    {% else %}
+          <h1>Recording playback</h1>
     {% endif %}
 
     {% if not recording %}
@@ -26,7 +30,7 @@
       recognition engine as the live view.
     </p>
 
-    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr);">
+    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 0.8fr);">
       <div class="pv-card">
         <h2>Playback</h2>
         <div style="position: relative; max-width: 800px;">
@@ -58,7 +62,7 @@
         </p>
       </div>
 
-      <div class="pv-card">
+      <div class="pv-card" style="max-width: 360px;">
         <h2>Recording details</h2>
         <ul class="pv-status-list">
           <li>
@@ -96,6 +100,11 @@
     </div>
 
     <canvas id="rec-canvas" style="display: none;"></canvas>
+    {% endif %}
+
+    {% if is_system_admin or is_technician %}
+        </div>
+      </div>
     {% endif %}
   </section>
 
