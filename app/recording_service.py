@@ -5,17 +5,18 @@ import io
 import json
 import os
 import random
+import re
+import shutil
 import signal
 import subprocess
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
-
-import shutil
 from urllib.parse import urlparse, urlunparse
 
 from flask import Flask
@@ -1052,12 +1053,24 @@ class CameraWorker(threading.Thread):
 
         cam_bytes = self._dir_size_bytes(camera_root)
         if cam_bytes >= (per_cam_limit_mb * 1024 * 1024):
-            return False, f"per-camera limit exceeded ({per_cam_limit_mb}MB)"
+            try:
+                self._prune_shm_camera_root(camera_root, int(per_cam_limit_mb * 1024 * 1024))
+            except Exception:  # noqa: BLE001
+                pass
+            cam_bytes = self._dir_size_bytes(camera_root)
+            if cam_bytes >= (per_cam_limit_mb * 1024 * 1024):
+                return False, f"per-camera limit exceeded ({per_cam_limit_mb}MB)"
 
         global_root = Path("/dev/shm") / "pentavision" / "ingest"
         global_bytes = self._dir_size_bytes(global_root)
         if global_bytes >= (global_limit_mb * 1024 * 1024):
-            return False, f"global limit exceeded ({global_limit_mb}MB)"
+            try:
+                self._prune_shm_global_root(global_root, int(global_limit_mb * 1024 * 1024))
+            except Exception:  # noqa: BLE001
+                pass
+            global_bytes = self._dir_size_bytes(global_root)
+            if global_bytes >= (global_limit_mb * 1024 * 1024):
+                return False, f"global limit exceeded ({global_limit_mb}MB)"
 
         try:
             min_free_mb = int(self.app.config.get("SHM_INGEST_MIN_FREE_MB", 256) or 256)
@@ -1071,6 +1084,84 @@ class CameraWorker(threading.Thread):
         except Exception:  # noqa: BLE001
             return False, "failed to read /dev/shm disk usage"
         return True, "ok"
+
+    def _prune_shm_camera_root(self, camera_root: Path, limit_bytes: int) -> None:
+        try:
+            if not camera_root.exists() or not camera_root.is_dir():
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+        target = int(limit_bytes * 0.85)
+        if target <= 0:
+            target = int(limit_bytes)
+        while self._dir_size_bytes(camera_root) > target:
+            oldest: Optional[Path] = None
+            oldest_ts: Optional[float] = None
+            try:
+                for child in camera_root.iterdir():
+                    if not child.is_dir():
+                        continue
+                    name = child.name or ""
+                    if not name.startswith("session_"):
+                        continue
+                    try:
+                        ts = child.stat().st_mtime
+                    except Exception:
+                        continue
+                    if oldest is None or (oldest_ts is not None and ts < oldest_ts):
+                        oldest = child
+                        oldest_ts = ts
+                    elif oldest_ts is None:
+                        oldest = child
+                        oldest_ts = ts
+            except Exception:  # noqa: BLE001
+                return
+            if oldest is None:
+                return
+            try:
+                shutil.rmtree(oldest, ignore_errors=True)
+            except Exception:  # noqa: BLE001
+                return
+
+    def _prune_shm_global_root(self, global_root: Path, limit_bytes: int) -> None:
+        try:
+            if not global_root.exists() or not global_root.is_dir():
+                return
+        except Exception:  # noqa: BLE001
+            return
+
+        target = int(limit_bytes * 0.85)
+        if target <= 0:
+            target = int(limit_bytes)
+        while self._dir_size_bytes(global_root) > target:
+            oldest: Optional[Path] = None
+            oldest_ts: Optional[float] = None
+            try:
+                for cam_dir in global_root.iterdir():
+                    if not cam_dir.is_dir():
+                        continue
+                    name = cam_dir.name or ""
+                    if not name.startswith("camera_"):
+                        continue
+                    try:
+                        ts = cam_dir.stat().st_mtime
+                    except Exception:
+                        continue
+                    if oldest is None or (oldest_ts is not None and ts < oldest_ts):
+                        oldest = cam_dir
+                        oldest_ts = ts
+                    elif oldest_ts is None:
+                        oldest = cam_dir
+                        oldest_ts = ts
+            except Exception:  # noqa: BLE001
+                return
+            if oldest is None:
+                return
+            try:
+                shutil.rmtree(oldest, ignore_errors=True)
+            except Exception:  # noqa: BLE001
+                return
 
     def _dir_size_bytes(self, path: Path) -> int:
         try:
