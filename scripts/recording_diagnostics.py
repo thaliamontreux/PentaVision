@@ -44,7 +44,10 @@ from app.models import (
     StorageModuleWriteStat,
 )
 from app.recording_service import _get_active_storage_targets, _should_record_now
-from app.views import build_camera_url
+try:
+    from app.camera_utils import build_camera_url  # type: ignore
+except Exception:  # noqa: BLE001
+    build_camera_url = None  # type: ignore
 
 
 @dataclass
@@ -207,7 +210,8 @@ def main() -> int:
 
                 url = None
                 try:
-                    url = build_camera_url(d, None)
+                    if build_camera_url is not None:
+                        url = build_camera_url(d, None)
                 except Exception:
                     url = None
                 url_ok = bool(str(url or "").strip())
