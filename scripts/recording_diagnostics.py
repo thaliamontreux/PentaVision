@@ -168,19 +168,17 @@ def main() -> int:
     args = parser.parse_args()
 
     app = create_app()
-    record_engine = get_record_engine()
-    if record_engine is None:
-        print("ERROR: record database engine is not configured (RECORD_DB_URL).")
-        return 2
-
     now_utc = datetime.now(timezone.utc)
     lookback = now_utc - timedelta(minutes=max(1, int(args.minutes)))
-
     shm_total_mb, shm_free_mb = _disk_usage_mb("/dev/shm")
-
     diags: list[CameraDiag] = []
 
     with app.app_context():
+        record_engine = get_record_engine()
+        if record_engine is None:
+            print("ERROR: record database engine is not configured (RECORD_DB_URL).")
+            return 2
+
         with Session(record_engine) as session:
             CameraDevice.__table__.create(bind=record_engine, checkfirst=True)
             CameraStorageScheduleEntry.__table__.create(bind=record_engine, checkfirst=True)
