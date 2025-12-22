@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,6 +13,25 @@ from typing import Any, Optional
 
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
+
+_HERE = Path(__file__).resolve()
+for _candidate in (_HERE.parent, *_HERE.parents):
+    try:
+        # Standard repo layout: <repo_root>/app/__init__.py
+        if (_candidate / "app" / "__init__.py").exists():
+            sys.path.insert(0, str(_candidate))
+            break
+        # Alt layout (common on servers): script is under <repo_root>/app/scripts/
+        # and the python package directory is <repo_root>/app/.
+        if (
+            _candidate.name == "app"
+            and (_candidate / "__init__.py").exists()
+            and _candidate.parent.exists()
+        ):
+            sys.path.insert(0, str(_candidate.parent))
+            break
+    except Exception:
+        continue
 
 from app import create_app
 from app.db import get_record_engine
