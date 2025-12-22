@@ -173,12 +173,21 @@ def main() -> int:
     shm_total_mb, shm_free_mb = _disk_usage_mb("/dev/shm")
     diags: list[CameraDiag] = []
 
-    with app.app_context():
+    record_engine = None
+    try:
         record_engine = get_record_engine()
-        if record_engine is None:
-            print("ERROR: record database engine is not configured (RECORD_DB_URL).")
-            return 2
+    except RuntimeError:
+        record_engine = None
 
+    if record_engine is None:
+        with app.app_context():
+            record_engine = get_record_engine()
+
+    if record_engine is None:
+        print("ERROR: record database engine is not configured (RECORD_DB_URL).")
+        return 2
+
+    with app.app_context():
         with Session(record_engine) as session:
             CameraDevice.__table__.create(bind=record_engine, checkfirst=True)
             CameraStorageScheduleEntry.__table__.create(bind=record_engine, checkfirst=True)
