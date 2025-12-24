@@ -60,6 +60,11 @@
         <p class="pv-card-subtitle">Run scripts/git_pull.sh on the server and watch output live (read-only).</p>
       </a>
 
+      <a href="{{ url_for('admin.login_failures_list') }}" class="pv-card">
+        <h2 class="pv-card-title">Login failures</h2>
+        <p class="pv-card-subtitle">Review failed login attempts and decrypt the attempted password (admin-only).</p>
+      </a>
+
       <a href="{{ url_for('installer.install') }}" class="pv-card">
         <h2 class="pv-card-title">Installer & databases</h2>
         <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
