@@ -1,3 +1,6 @@
+import sys
+import traceback
+
 from flask import Flask, request
 from werkzeug.exceptions import HTTPException
 
@@ -78,6 +81,10 @@ def create_app() -> Flask:
     def _handle_uncaught(err):  # pragma: no cover - error wiring
         if isinstance(err, HTTPException):
             return err
+        try:
+            traceback.print_exc(file=sys.stderr)
+        except Exception:
+            pass
         try:
             pv_log_exception(
                 "system",
