@@ -49,9 +49,12 @@ from .models import (
     UserPropertyScheduleAssignment,
     PropertyGroupScheduleAssignment,
     UserRole,
+    LoginFailure,
 )
 from .security import get_current_user, user_has_role
 from .storage_settings_page import storage_settings_page
+
+from cryptography.fernet import Fernet, InvalidToken
 
 
 def _pid_is_running(pid: int | None) -> bool:
@@ -141,6 +144,17 @@ def _validate_csrf_token(token: str | None) -> bool:
     return token == session.get("admin_csrf")
 
 
+def _login_failures_fernet() -> Fernet | None:
+    key = os.environ.get("PENTAVISION_LOGIN_FAILURES_KEY") or ""
+    key = str(key).strip()
+    if not key:
+        return None
+    try:
+        return Fernet(key.encode("utf-8"))
+    except Exception:
+        return None
+
+
 @bp.before_request
 def _require_system_admin():
     user = get_current_user()
@@ -164,6 +178,89 @@ def index():
         csrf_token=csrf_token,
         git_pull_start_url=git_pull_start_url,
     )
+
+
+@bp.get("/login-failures")
+def login_failures_list():
+    engine = get_user_engine()
+    errors: List[str] = []
+    csrf_token = _ensure_csrf_token()
+    rows: List[LoginFailure] = []
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "admin/login_failures.html",
+            errors=errors,
+            csrf_token=csrf_token,
+            rows=rows,
+        )
+
+    with Session(engine) as db:
+        try:
+            LoginFailure.__table__.create(bind=engine, checkfirst=True)
+        except Exception:
+            pass
+        rows = (
+            db.query(LoginFailure)
+            .order_by(LoginFailure.when.desc())
+            .limit(250)
+            .all()
+        )
+        for r in rows:
+            try:
+                db.expunge(r)
+            except Exception:
+                pass
+
+    return render_template(
+        "admin/login_failures.html",
+        errors=errors,
+        csrf_token=csrf_token,
+        rows=rows,
+    )
+
+
+@bp.post("/login-failures/<int:failure_id>/decrypt")
+def login_failures_decrypt(failure_id: int):
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_user_engine()
+    if engine is None:
+        return jsonify({"ok": False, "error": "user database not configured"}), 500
+
+    fernet = _login_failures_fernet()
+    if fernet is None:
+        return jsonify({"ok": False, "error": "missing or invalid PENTAVISION_LOGIN_FAILURES_KEY"}), 500
+
+    with Session(engine) as db:
+        row = db.get(LoginFailure, int(failure_id))
+        if row is None:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        token = getattr(row, "password_enc", None)
+
+    if not token:
+        return jsonify({"ok": True, "password": ""})
+
+    try:
+        raw = fernet.decrypt(bytes(token), ttl=None)
+        pw = raw.decode("utf-8", errors="replace")
+    except InvalidToken:
+        return jsonify({"ok": False, "error": "invalid token"}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": type(exc).__name__}), 500
+
+    try:
+        log_event(
+            "ADMIN_LOGIN_FAILURE_DECRYPT",
+            user_id=getattr(get_current_user(), "id", None),
+            details=f"id={failure_id}, ip={_client_ip()}",
+        )
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "password": pw})
 
 
 @bp.post("/git-pull/start")

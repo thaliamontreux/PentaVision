@@ -20,3 +20,4 @@ psutil
 mega.py
 paramiko
 scp
+cryptography

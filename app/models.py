@@ -107,6 +107,19 @@ class User(UserBase):
     )
 
 
+class LoginFailure(UserBase):
+    __tablename__ = "login_failures"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    when: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    password_enc: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+
 class PropertyScheduleTemplate(UserBase):
     __tablename__ = "property_schedule_templates"
 

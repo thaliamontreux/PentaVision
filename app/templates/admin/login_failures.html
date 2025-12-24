@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Login failures · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section pv-admin">
+    <h1>Login failures</h1>
+
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        {% if errors %}
+          <div class="pv-alert pv-alert-error">
+            {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="pv-card" style="padding: 1rem;">
+          <div class="pv-card-title" style="margin-bottom: 0.5rem;">Recent attempts</div>
+          <div class="pv-card-subtitle" style="margin-bottom: 0.75rem;">Passwords are encrypted at rest. Click Decrypt to reveal (admin-only).</div>
+
+          <div style="overflow:auto;">
+            <table class="pv-table" style="min-width: 980px; width: 100%;">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>IP</th>
+                  <th>Username</th>
+                  <th>Reason</th>
+                  <th>Password</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in rows %}
+                  <tr data-id="{{ r.id }}">
+                    <td style="white-space:nowrap;">{{ r.when|local_dt('%m/%d/%Y %H:%M:%S') }}</td>
+                    <td style="white-space:nowrap;">{{ r.ip or '' }}</td>
+                    <td>{{ r.username or '' }}</td>
+                    <td style="white-space:nowrap;">{{ r.reason or '' }}</td>
+                    <td class="pv-mono" data-pw>••••••••</td>
+                    <td style="white-space:nowrap; text-align:right;">
+                      <button type="button" class="pv-button pv-button-small" data-decrypt>Decrypt</button>
+                    </td>
+                  </tr>
+                {% endfor %}
+                {% if not rows %}
+                  <tr><td colspan="6" style="opacity:0.7;">No failures recorded.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      function postDecrypt(id) {
+        var form = new FormData();
+        form.append('csrf_token', '{{ csrf_token|default('') }}');
+        return fetch('/admin/login-failures/' + encodeURIComponent(String(id)) + '/decrypt', {
+          method: 'POST',
+          body: form,
+          credentials: 'same-origin',
+          cache: 'no-store'
+        }).then(function (r) {
+          return r.json().catch(function () {
+            return { ok: false, error: 'invalid JSON response', status: r.status };
+          });
+        });
+      }
+
+      document.addEventListener('click', function (ev) {
+        var btn = ev.target && ev.target.closest ? ev.target.closest('button[data-decrypt]') : null;
+        if (!btn) return;
+        var tr = btn.closest('tr');
+        if (!tr) return;
+        var id = tr.getAttribute('data-id');
+        var pwCell = tr.querySelector('[data-pw]');
+        if (!id || !pwCell) return;
+
+        btn.disabled = true;
+        postDecrypt(id).then(function (data) {
+          btn.disabled = false;
+          if (!data || !data.ok) {
+            if (window.pvToastError) {
+              window.pvToastError((data && data.error) ? data.error : 'Decrypt failed');
+            } else {
+              alert((data && data.error) ? data.error : 'Decrypt failed');
+            }
+            return;
+          }
+          pwCell.textContent = String(data.password || '');
+        }).catch(function () {
+          btn.disabled = false;
+          if (window.pvToastError) {
+            window.pvToastError('Decrypt failed');
+          } else {
+            alert('Decrypt failed');
+          }
+        });
+      });
+    })();
+  </script>
+{% endblock %}

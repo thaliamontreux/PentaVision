@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -19,15 +20,58 @@ from fido2.webauthn import (
     PublicKeyCredentialUserEntity,
 )
 
+from cryptography.fernet import Fernet
+
 from .db import get_user_engine
-from .logging_utils import ip_is_locked, log_event, pv_log, update_ip_lockout_after_failure
-from .models import User, WebAuthnCredential
+from .logging_utils import _client_ip, ip_is_locked, log_event, pv_log, update_ip_lockout_after_failure
+from .models import LoginFailure, User, WebAuthnCredential
 from .security import seed_system_admin_role_for_email, login_user
 
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 _ph = PasswordHasher()
+
+
+def _login_failures_fernet() -> Fernet | None:
+    key = str(os.environ.get("PENTAVISION_LOGIN_FAILURES_KEY") or "").strip()
+    if not key:
+        return None
+    try:
+        return Fernet(key.encode("utf-8"))
+    except Exception:
+        return None
+
+
+def _record_login_failure(*, username: str, password: str, reason: str) -> None:
+    engine = get_user_engine()
+    if engine is None:
+        return
+
+    ip = _client_ip()
+    user_val = str(username or "")[:255]
+    pw_val = str(password or "")
+    reason_val = str(reason or "")[:64]
+
+    token: bytes | None = None
+    try:
+        fernet = _login_failures_fernet()
+        if fernet is not None and pw_val:
+            token = fernet.encrypt(pw_val.encode("utf-8", errors="replace"))
+    except Exception:
+        token = None
+
+    try:
+        with Session(engine) as session_db:
+            try:
+                LoginFailure.__table__.create(bind=engine, checkfirst=True)
+            except Exception:
+                pass
+            row = LoginFailure(ip=str(ip or "")[:64] if ip else None, username=user_val or None, password_enc=token, reason=reason_val or None)
+            session_db.add(row)
+            session_db.commit()
+    except Exception:
+        return
 
 
 def _webauthn_server() -> Fido2Server:
@@ -226,6 +270,7 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
     with Session(engine, expire_on_commit=False) as session_db:
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
+            _record_login_failure(username=email, password=password, reason="unknown_email")
             log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
             pv_log(
                 "security",
@@ -257,6 +302,7 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
         try:
             _ph.verify(user.password_hash, password)
         except VerifyMismatchError:
+            _record_login_failure(username=email, password=password, reason="bad_password")
             user.failed_pin_attempts = (user.failed_pin_attempts or 0) + 1
             if user.failed_pin_attempts >= 5:
                 user.pin_locked_until = now + timedelta(minutes=15)
@@ -290,6 +336,7 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
 
         if user.totp_secret:
             if not _verify_totp(user, totp_code.strip()):
+                _record_login_failure(username=email, password=password, reason="bad_2fa")
                 log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user.id)
                 pv_log(
                     "security",
@@ -339,6 +386,7 @@ def _authenticate_primary_factor(email: str, password: str):
     with Session(engine, expire_on_commit=False) as session_db:
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
+            _record_login_failure(username=email, password=password, reason="unknown_email")
             log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
             update_ip_lockout_after_failure()
             return None, "invalid credentials", 401, False
@@ -355,6 +403,7 @@ def _authenticate_primary_factor(email: str, password: str):
         try:
             _ph.verify(user.password_hash, password)
         except VerifyMismatchError:
+            _record_login_failure(username=email, password=password, reason="bad_password")
             user.failed_pin_attempts = (user.failed_pin_attempts or 0) + 1
             if user.failed_pin_attempts >= 5:
                 user.pin_locked_until = now + timedelta(minutes=15)

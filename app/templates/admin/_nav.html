@@ -39,6 +39,8 @@
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Services</a>
     {% set href = url_for('admin.audit_alias') %}
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Audit log</a>
+    {% set href = url_for('admin.login_failures_list') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Login failures</a>
     {% set href = url_for('installer.install') %}
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Installer & databases</a>
   {% endif %}
