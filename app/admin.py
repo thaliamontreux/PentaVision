@@ -181,6 +181,7 @@ def index():
 
 
 @bp.get("/login-failures")
+@bp.get("/login-failures/")
 def login_failures_list():
     engine = get_user_engine()
     errors: List[str] = []
