@@ -71,24 +71,14 @@
       }
       select.pv-input {
         color: rgba(229,231,235,0.92);
+        color-scheme: light;
       }
-      @media (prefers-color-scheme: light) {
-        select.pv-input option {
-          background: #ffffff;
-          color: rgba(17,24,39,0.82);
-        }
-        select.pv-input option:checked {
-          color: rgba(17,24,39,0.96);
-        }
+      select.pv-input option {
+        background: #ffffff !important;
+        color: rgba(17,24,39,0.82) !important;
       }
-      @media (prefers-color-scheme: dark) {
-        select.pv-input option {
-          background: #062534;
-          color: rgba(229,231,235,0.78);
-        }
-        select.pv-input option:checked {
-          color: rgba(229,231,235,0.98);
-        }
+      select.pv-input option:checked {
+        color: rgba(17,24,39,0.96) !important;
       }
       .pv-btn {
         background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
