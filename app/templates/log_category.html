@@ -63,6 +63,9 @@
       .pv-line.is-warn { color: #fde68a; }
       .pv-line.is-info { color: #86efac; }
       .pv-line.is-debug { color: rgba(229,231,235,0.85); }
+      .pv-line.pv-recent-0 { color: #22c55e; }
+      .pv-line.pv-recent-1 { color: #facc15; }
+      .pv-line.pv-recent-2 { color: #ff69b4; }
     </style>
   </head>
   <body>
@@ -88,6 +91,20 @@
         var maxLines = 2000;
         var pollMs = 30000;
         var pos = 0;
+
+        function applyRecentColors() {
+          if (!out || !out.children) return;
+          var kids = out.children;
+          try {
+            for (var i = 0; i < kids.length; i++) {
+              kids[i].classList.remove('pv-recent-0', 'pv-recent-1', 'pv-recent-2');
+            }
+            var n = kids.length;
+            if (n >= 1) kids[n - 1].classList.add('pv-recent-0');
+            if (n >= 2) kids[n - 2].classList.add('pv-recent-1');
+            if (n >= 3) kids[n - 3].classList.add('pv-recent-2');
+          } catch (e) {}
+        }
 
         function addLine(raw) {
           if (!out) return;
@@ -115,6 +132,7 @@
               out.removeChild(out.firstChild);
             }
           } catch (e) {}
+          applyRecentColors();
           out.scrollTop = out.scrollHeight;
         }
 
