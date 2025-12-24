@@ -3,7 +3,11 @@ from __future__ import annotations
 import base64
 import json
 from datetime import datetime, timedelta, timezone
+import glob
 import ipaddress
+import os
+import re
+import time
 from typing import Optional
 
 from argon2 import PasswordHasher
@@ -27,6 +31,14 @@ except Exception:  # noqa: BLE001
 
 
 _ph = PasswordHasher()
+
+
+_apache_cache: dict[str, object] = {
+    "ts": 0.0,
+    "rows": [],
+    "subnets": [],
+    "err": "",
+}
 
 
 def _client_ip() -> str:
@@ -172,6 +184,228 @@ def _codes_from_raw(raw: str) -> list[str]:
     return out
 
 
+def _tail_lines(path: str, *, max_lines: int = 5000, max_bytes: int = 512 * 1024) -> list[str]:
+    p = str(path or "").strip()
+    if not p or not os.path.exists(p):
+        return []
+    try:
+        with open(p, "rb") as f:
+            try:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                start = max(0, size - int(max_bytes))
+                f.seek(start)
+                data = f.read()
+            except Exception:
+                f.seek(0)
+                data = f.read()
+        text = data.decode("utf-8", errors="replace")
+        lines = text.splitlines()
+        if len(lines) > int(max_lines):
+            lines = lines[-int(max_lines):]
+        return [str(ln) for ln in lines if ln is not None]
+    except Exception:
+        return []
+
+
+def _apache_log_candidates() -> list[str]:
+    cands: list[str] = []
+    for base in ("/etc/apache2", "/etc/apache", "/var/log/apache2", "/var/log/httpd"):
+        for pat in ("*_access*", "*_error*", "access.log*", "error.log*"):
+            try:
+                cands.extend(glob.glob(os.path.join(base, pat)))
+            except Exception:
+                continue
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in cands:
+        p = str(p or "").strip()
+        if not p:
+            continue
+        if p in seen:
+            continue
+        seen.add(p)
+        if os.path.isdir(p):
+            continue
+        out.append(p)
+    return out
+
+
+def _scan_apache_findings(*, cache_ttl_seconds: int = 10) -> tuple[list[dict], list[dict], str]:
+    now = time.time()
+    try:
+        ts = float(_apache_cache.get("ts") or 0.0)
+    except Exception:
+        ts = 0.0
+    if (now - ts) < float(cache_ttl_seconds or 10):
+        return (
+            list(_apache_cache.get("rows") or []),
+            list(_apache_cache.get("subnets") or []),
+            str(_apache_cache.get("err") or ""),
+        )
+
+    paths = _apache_log_candidates()
+
+    access_re = re.compile(
+        r"^(?P<ip>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+\"(?P<m>\S+)\s+(?P<path>\S+)\s+\S+\"\s+(?P<status>\d{3})\s+",
+        re.IGNORECASE,
+    )
+    error_client_re = re.compile(r"\bclient\s+(?P<ip>\d{1,3}(?:\.\d{1,3}){3})\b", re.IGNORECASE)
+    status_404 = 0
+
+    def _parse_access_ts(raw: str) -> Optional[datetime]:
+        s = str(raw or "").strip()
+        if not s:
+            return None
+        try:
+            # Example: 24/Dec/2025:07:00:29 -0600
+            return datetime.strptime(s, "%d/%b/%Y:%H:%M:%S %z").astimezone(timezone.utc)
+        except Exception:
+            return None
+
+    stats: dict[str, dict] = {}
+
+    for p in paths:
+        lines = _tail_lines(p, max_lines=5000, max_bytes=512 * 1024)
+        if not lines:
+            continue
+        is_access = ("access" in os.path.basename(p).lower()) or (p.endswith("_access") or "_access" in p)
+        for ln in lines:
+            s = str(ln or "")
+            if not s:
+                continue
+
+            ip = ""
+            when = None
+            path = ""
+            status = ""
+
+            if is_access:
+                m = access_re.match(s)
+                if not m:
+                    continue
+                ip = str(m.group("ip") or "").strip()
+                when = _parse_access_ts(m.group("ts"))
+                path = str(m.group("path") or "")
+                status = str(m.group("status") or "")
+            else:
+                em = error_client_re.search(s)
+                if not em:
+                    continue
+                ip = str(em.group("ip") or "").strip()
+                path = s
+
+            if not ip:
+                continue
+
+            row = stats.get(ip)
+            if row is None:
+                row = {
+                    "ip": ip,
+                    "count_404": 0,
+                    "count_login": 0,
+                    "count_total": 0,
+                    "last_seen": None,
+                    "examples": [],
+                }
+                stats[ip] = row
+
+            is_404 = (status == "404") or (" 404 " in s)
+
+            login_hit = False
+            if is_access:
+                pth = (path or "").lower()
+                if any(k in pth for k in ("/login", "/auth", "/signin", "/webauthn", "/totp")):
+                    if status in {"401", "403"}:
+                        login_hit = True
+            else:
+                ls = s.lower()
+                if any(k in ls for k in ("auth", "login", "invalid credentials", "authentication failure", "password")):
+                    login_hit = True
+
+            if is_404:
+                row["count_404"] = int(row["count_404"] or 0) + 1
+            if login_hit:
+                row["count_login"] = int(row["count_login"] or 0) + 1
+            row["count_total"] = int(row["count_total"] or 0) + 1
+
+            if when is not None:
+                try:
+                    cur = row.get("last_seen")
+                    if cur is None or (isinstance(cur, datetime) and when > cur):
+                        row["last_seen"] = when
+                except Exception:
+                    pass
+
+            ex = row.get("examples")
+            if isinstance(ex, list) and len(ex) < 3:
+                ex.append(s[:200])
+
+    rows_out: list[dict] = []
+    for ip, row in stats.items():
+        try:
+            if row.get("count_total"):
+                rows_out.append(row)
+        except Exception:
+            continue
+
+    def _row_sort_key(r: dict):
+        return (
+            -int(r.get("count_total") or 0),
+            -int(r.get("count_404") or 0),
+            -int(r.get("count_login") or 0),
+            str(r.get("ip") or ""),
+        )
+
+    rows_out.sort(key=_row_sort_key)
+    rows_out = rows_out[:200]
+
+    subnet_counts: dict[str, dict] = {}
+    for r in rows_out:
+        ip = str(r.get("ip") or "").strip()
+        try:
+            addr = ipaddress.ip_address(ip)
+        except Exception:
+            continue
+        if addr.version != 4:
+            continue
+        try:
+            net24 = str(ipaddress.ip_network(f"{ip}/24", strict=False))
+        except Exception:
+            continue
+        sc = subnet_counts.get(net24)
+        if sc is None:
+            sc = {"cidr": net24, "hosts": set(), "count_total": 0, "count_404": 0, "count_login": 0}
+            subnet_counts[net24] = sc
+        sc["hosts"].add(ip)
+        sc["count_total"] = int(sc.get("count_total") or 0) + int(r.get("count_total") or 0)
+        sc["count_404"] = int(sc.get("count_404") or 0) + int(r.get("count_404") or 0)
+        sc["count_login"] = int(sc.get("count_login") or 0) + int(r.get("count_login") or 0)
+
+    subnets_out: list[dict] = []
+    for cidr, sc in subnet_counts.items():
+        hosts = sc.get("hosts")
+        host_count = len(hosts) if isinstance(hosts, set) else 0
+        if host_count >= 3:
+            subnets_out.append(
+                {
+                    "cidr": cidr,
+                    "host_count": host_count,
+                    "count_total": int(sc.get("count_total") or 0),
+                    "count_404": int(sc.get("count_404") or 0),
+                    "count_login": int(sc.get("count_login") or 0),
+                }
+            )
+    subnets_out.sort(key=lambda d: (-int(d.get("host_count") or 0), -int(d.get("count_total") or 0), str(d.get("cidr") or "")))
+    subnets_out = subnets_out[:100]
+
+    _apache_cache["ts"] = now
+    _apache_cache["rows"] = rows_out
+    _apache_cache["subnets"] = subnets_out
+    _apache_cache["err"] = ""
+    return rows_out, subnets_out, ""
+
+
 def create_blocklist_admin_service() -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(load_config())
@@ -183,12 +417,18 @@ def create_blocklist_admin_service() -> Flask:
         policy: Optional[CountryAccessPolicy],
         error: str = "",
         message: str = "",
+        apache_rows: Optional[list[dict]] = None,
+        apache_subnets: Optional[list[dict]] = None,
+        apache_error: str = "",
     ) -> str:
         mode = (policy.mode if policy and policy.mode else "disabled") if policy else "disabled"
         allowed = (policy.allowed_countries if policy and policy.allowed_countries else "") if policy else ""
         blocked = (policy.blocked_countries if policy and policy.blocked_countries else "") if policy else ""
         allowed_set = set(_codes_from_raw(allowed))
         blocked_set = set(_codes_from_raw(blocked))
+
+        apache_rows = list(apache_rows or [])
+        apache_subnets = list(apache_subnets or [])
 
         def _chips(raw: str) -> str:
             parts = [c.strip().upper() for c in (raw or "").split(",") if c.strip()]
@@ -341,6 +581,86 @@ def create_blocklist_admin_service() -> Flask:
 
     {error_html}
     {msg_html}
+
+    <div class=\"panel\">
+      <div class=\"panel-top\">
+        <div><strong>Apache findings</strong></div>
+        <div class=\"kpis\">
+          <div><strong>{len(apache_rows)}</strong> IPs</div>
+          <div><strong>{len(apache_subnets)}</strong> /24 suggestions</div>
+        </div>
+      </div>
+      <div style=\"padding: 12px 14px;\">
+        <div class=\"muted\" style=\"font-size: 0.9rem;\">Scans recent lines from <span class=\"mono\">*_access*</span> and <span class=\"mono\">*_error*</span>. Use buttons to add permanent blocks to the database (admin credentials required per action).</div>
+        {f'<div class="alert err" style="margin-top:10px;">{str(apache_error).replace("<","&lt;").replace(">","&gt;")}</div>' if apache_error else ''}
+      </div>
+
+      <div style=\"overflow:auto;\">
+        <table>
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th style=\"width:120px;\">404s</th>
+              <th style=\"width:140px;\">Login fails</th>
+              <th style=\"width:120px;\">Total</th>
+              <th style=\"width:260px;\">Last seen (UTC)</th>
+              <th style=\"width:1%;\"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {(''.join([
+              '<tr>'
+              + f'<td class="mono">{str(r.get("ip") or "").replace("<","&lt;").replace(">","&gt;")}</td>'
+              + f'<td>{int(r.get("count_404") or 0)}</td>'
+              + f'<td>{int(r.get("count_login") or 0)}</td>'
+              + f'<td><strong>{int(r.get("count_total") or 0)}</strong></td>'
+              + f'<td class="mono">{(r.get("last_seen").astimezone(timezone.utc).isoformat() if isinstance(r.get("last_seen"), datetime) else "")}</td>'
+              + '<td style="white-space:nowrap;">'
+              + f'<form method="post" action="/add/block" style="display:inline-block; margin-right:8px;">'
+              + f'<input type="hidden" name="cidr" value="{str(r.get("ip") or "").replace("\"","&quot;")}/32" />'
+              + f'<input type="hidden" name="description" value="apache_findings" />'
+              + '<button class="btn danger" type="submit">Block IP</button>'
+              + '</form>'
+              + '</td>'
+              + '</tr>'
+            ]) if apache_rows else '<tr><td colspan=6 class="muted">(no findings)</td></tr>')}
+          </tbody>
+        </table>
+      </div>
+
+      <div style=\"overflow:auto; border-top: 1px solid rgba(255,255,255,0.08);\">
+        <table>
+          <thead>
+            <tr>
+              <th>Suggested /24</th>
+              <th style=\"width:140px;\">Hosts</th>
+              <th style=\"width:120px;\">404s</th>
+              <th style=\"width:140px;\">Login fails</th>
+              <th style=\"width:120px;\">Total</th>
+              <th style=\"width:1%;\"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {(''.join([
+              '<tr>'
+              + f'<td class="mono">{str(s.get("cidr") or "").replace("<","&lt;").replace(">","&gt;")}</td>'
+              + f'<td>{int(s.get("host_count") or 0)}</td>'
+              + f'<td>{int(s.get("count_404") or 0)}</td>'
+              + f'<td>{int(s.get("count_login") or 0)}</td>'
+              + f'<td><strong>{int(s.get("count_total") or 0)}</strong></td>'
+              + '<td style="white-space:nowrap;">'
+              + f'<form method="post" action="/add/block" style="display:inline-block;">'
+              + f'<input type="hidden" name="cidr" value="{str(s.get("cidr") or "").replace("\"","&quot;")}" />'
+              + f'<input type="hidden" name="description" value="apache_findings_subnet" />'
+              + '<button class="btn danger" type="submit">Block /24</button>'
+              + '</form>'
+              + '</td>'
+              + '</tr>'
+            ]) if apache_subnets else '<tr><td colspan=6 class="muted">(no /24 suggestions)</td></tr>')}
+          </tbody>
+        </table>
+      </div>
+    </div>
 
     <div class=\"panel\">
       <div class=\"panel-top\">
@@ -580,7 +900,16 @@ def create_blocklist_admin_service() -> Flask:
         with Session(engine) as db:
             allow_rows, blocked, policy = _load_view_model(db)
 
-        html = _render_page(allow_rows, blocked, policy)
+        apache_rows, apache_subnets, apache_err = _scan_apache_findings()
+
+        html = _render_page(
+            allow_rows,
+            blocked,
+            policy,
+            apache_rows=apache_rows,
+            apache_subnets=apache_subnets,
+            apache_error=apache_err,
+        )
         return Response(html, mimetype="text/html; charset=utf-8")
 
     @app.post("/remove/allow/<int:entry_id>")
@@ -656,7 +985,79 @@ def create_blocklist_admin_service() -> Flask:
                 blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
         msg = "Added." if exists is None else "Already present."
-        html = _render_page(allow_rows, blocked, policy, message=msg)
+        apache_rows, apache_subnets, apache_err = _scan_apache_findings()
+        html = _render_page(
+            allow_rows,
+            blocked,
+            policy,
+            message=msg,
+            apache_rows=apache_rows,
+            apache_subnets=apache_subnets,
+            apache_error=apache_err,
+        )
+        return Response(html, mimetype="text/html; charset=utf-8")
+
+    @app.post("/add/block")
+    def add_block() -> Response:
+        cidr = (request.form.get("cidr") or "").strip()
+        desc = (request.form.get("description") or "").strip()
+        realm = f"PentaVision Admin Add Block {cidr}"
+        maybe = _require_admin_basic_auth(realm)
+        if maybe is not None:
+            return maybe
+
+        engine = get_user_engine()
+        if engine is None:
+            abort(503)
+
+        try:
+            cidr_norm = _normalize_cidr(cidr)
+        except Exception:
+            with Session(engine) as db:
+                allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+                policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+                blocked = []
+                for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                    _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                    blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
+            apache_rows, apache_subnets, apache_err = _scan_apache_findings()
+            html = _render_page(
+                allow_rows,
+                blocked,
+                policy,
+                error="Invalid IP/CIDR",
+                apache_rows=apache_rows,
+                apache_subnets=apache_subnets,
+                apache_error=apache_err,
+            )
+            return Response(html, status=400, mimetype="text/html; charset=utf-8")
+
+        with Session(engine) as db:
+            IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+            exists = db.scalar(select(IpBlocklist).where(IpBlocklist.cidr == cidr_norm))
+            if exists is None:
+                entry = IpBlocklist(cidr=cidr_norm, description=(desc or "manual")[:256])
+                db.add(entry)
+                db.commit()
+
+            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            blocked = []
+            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
+
+        msg = "Blocked." if exists is None else "Already blocked."
+        apache_rows, apache_subnets, apache_err = _scan_apache_findings()
+        html = _render_page(
+            allow_rows,
+            blocked,
+            policy,
+            message=msg,
+            apache_rows=apache_rows,
+            apache_subnets=apache_subnets,
+            apache_error=apache_err,
+        )
         return Response(html, mimetype="text/html; charset=utf-8")
 
     @app.post("/remove/suspend")
