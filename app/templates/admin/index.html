@@ -55,10 +55,10 @@
         <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
       </a>
 
-      <button type="button" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}">
+      <a href="#" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}" role="button">
         <h2 class="pv-card-title">Pull GitHub Update</h2>
         <p class="pv-card-subtitle">Run scripts/git_pull.sh on the server and watch output live (read-only).</p>
-      </button>
+      </a>
 
       <a href="{{ url_for('installer.install') }}" class="pv-card">
         <h2 class="pv-card-title">Installer & databases</h2>
@@ -86,7 +86,7 @@
           alert('Git Pull endpoint not available yet. Please restart pentavision-web after pulling updates.');
           return;
         }
-        btn.disabled = true;
+        btn.classList.add('is-disabled');
         try {
           const form = new FormData();
           form.append('csrf_token', csrf);
@@ -97,29 +97,33 @@
           });
           const data = await r.json();
           if (!data || !data.ok || !data.view_url) {
-            btn.disabled = false;
+            btn.classList.remove('is-disabled');
             alert((data && data.error) ? data.error : 'Failed to start git pull');
             return;
           }
           const w = window.open(data.view_url, 'pvGitPull', 'popup=yes,width=980,height=680');
           if (!w) {
-            btn.disabled = false;
+            btn.classList.remove('is-disabled');
             alert('Popup blocked. Please allow popups for this site.');
             return;
           }
           const timer = setInterval(() => {
             if (w.closed) {
               clearInterval(timer);
-              btn.disabled = false;
+              btn.classList.remove('is-disabled');
             }
           }, 800);
         } catch (e) {
-          btn.disabled = false;
+          btn.classList.remove('is-disabled');
           alert('Failed to start git pull');
         }
       }
 
-      btn.addEventListener('click', startRun);
+      btn.addEventListener('click', function (ev) {
+        try { ev.preventDefault(); } catch (e) {}
+        if (btn.classList.contains('is-disabled')) return;
+        startRun();
+      });
     })();
   </script>
 {% endblock %}

@@ -72,13 +72,11 @@
             {# Camera administration is allowed for System Administrators and Technicians #}
             {% if is_system_admin or is_technician %}
               <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
-              <a href="{{ url_for('camera_admin.list_patterns') }}">Camera URLs</a>
             {% endif %}
 
             {# Admin and advanced configuration links for System Administrators only #}
             {% if is_system_admin %}
               <a href="{{ url_for('admin.index') }}">Admin</a>
-              <a href="{{ url_for('main.storage_settings') }}">Storage</a>
               <a href="{{ url_for('main.audit_events') }}">Audit</a>
               <a href="{{ url_for('installer.install') }}">Installer</a>
             {% endif %}
