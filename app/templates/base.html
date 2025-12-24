@@ -5,6 +5,45 @@
     <title>{% block title %}PentaVision{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+    <style>
+      .pv-toast {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 9999;
+        display: none;
+        max-width: min(520px, calc(100vw - 32px));
+        padding: 0.85rem 1rem;
+        border-radius: 16px;
+        font-weight: 800;
+        box-shadow:
+          0 24px 55px rgba(0,0,0,0.48),
+          0 10px 18px rgba(0,0,0,0.30),
+          inset 0 1px 0 rgba(255,255,255,0.75),
+          inset 0 -1px 0 rgba(0,0,0,0.10);
+        background: linear-gradient(180deg, rgba(134,239,172,0.98), rgba(74,222,128,0.94));
+        color: #111827;
+        border: 1px solid rgba(17,24,39,0.18);
+        backdrop-filter: blur(10px);
+        transform: translateY(14px) scale(0.985);
+        opacity: 0;
+        transition: opacity 180ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .pv-toast.is-showing {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+      .pv-toast .pv-toast-title {
+        font-size: 0.9rem;
+        letter-spacing: 0.3px;
+      }
+      .pv-toast .pv-toast-msg {
+        font-size: 0.92rem;
+        font-weight: 700;
+        margin-top: 0.35rem;
+        white-space: pre-wrap;
+      }
+    </style>
   </head>
   <body>
     <a href="#pv-main-content" class="pv-skip-link">Skip to main content</a>
@@ -99,7 +138,7 @@
       id="pv-global-toast"
       role="status"
       aria-live="polite"
-      style="position: fixed; right: 16px; bottom: 16px; z-index: 9999; display: none; max-width: 520px; padding: 0.75rem 1rem; border-radius: 10px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background: #86efac; color: #111827;"
+      class="pv-toast"
     ></div>
 
     <script>
@@ -221,15 +260,38 @@
           }
         } catch (e) {}
 
-        function showToast(message) {
-          toastEl.textContent = String(message || '');
+        function showToast(message, kind) {
+          var title = kind === 'success' ? 'SUCCESS' : (kind === 'error' ? 'ERROR' : 'NOTICE');
+          var msg = String(message || '');
+
+          toastEl.innerHTML = '';
+          var titleEl = document.createElement('div');
+          titleEl.className = 'pv-toast-title';
+          titleEl.textContent = title;
+          var msgEl = document.createElement('div');
+          msgEl.className = 'pv-toast-msg';
+          msgEl.textContent = msg;
+          toastEl.appendChild(titleEl);
+          toastEl.appendChild(msgEl);
+
           toastEl.style.display = 'block';
-          setLastError(message);
+          void toastEl.offsetWidth;
+          toastEl.classList.add('is-showing');
+          setLastError(msg);
+
           window.clearTimeout(showToast._t);
           showToast._t = window.setTimeout(function () {
-            toastEl.style.display = 'none';
-          }, 10000);
+            toastEl.classList.remove('is-showing');
+            window.clearTimeout(showToast._h);
+            showToast._h = window.setTimeout(function () {
+              toastEl.style.display = 'none';
+            }, 240);
+          }, 15000);
         }
+
+        window.pvToastError = function (message) { showToast(message, 'error'); };
+        window.pvToastSuccess = function (message) { showToast(message, 'success'); };
+        window.pvToast = function (message) { showToast(message, 'notice'); };
 
         var queue = [];
         try {
@@ -258,10 +320,10 @@
 
         function drain(i) {
           if (!queue || i >= queue.length) return;
-          showToast(queue[i]);
+          showToast(queue[i], 'error');
           window.setTimeout(function () {
             drain(i + 1);
-          }, 10500);
+          }, 15500);
         }
 
         if (document.readyState === 'loading') {

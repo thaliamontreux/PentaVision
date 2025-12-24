@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import datetime, timezone
+import ipaddress
 from typing import Optional
 
 from argon2 import PasswordHasher
@@ -69,6 +70,19 @@ def _require_admin_basic_auth(realm: str) -> Optional[Response]:
             return Response("forbidden\n", status=403, mimetype="text/plain; charset=utf-8")
 
     return None
+
+
+def _normalize_cidr(raw: str) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        raise ValueError("missing")
+    if "/" in value:
+        net = ipaddress.ip_network(value, strict=False)
+        return str(net)
+    addr = ipaddress.ip_address(value)
+    if addr.version == 6:
+        return f"{addr}/128"
+    return f"{addr}/32"
 
 
 def create_blocklist_admin_service() -> Flask:
@@ -213,6 +227,14 @@ def create_blocklist_admin_service() -> Flask:
           <div><strong>IP allowlist (exemptions)</strong></div>
           <div class=\"kpis\"><div><strong>{len(allow_rows)}</strong> entries</div></div>
         </div>
+        <div style=\"padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08);\">
+          <form method=\"post\" action=\"/add/allow\" style=\"display:flex; gap:10px; flex-wrap:wrap; align-items:center;\">
+            <input name=\"cidr\" placeholder=\"IP or CIDR (e.g. 203.0.113.5 or 192.0.2.0/24)\" style=\"flex: 1 1 18rem; min-width: 220px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text);\" />
+            <input name=\"description\" placeholder=\"Description (optional)\" style=\"flex: 1 1 14rem; min-width: 180px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text);\" />
+            <button class=\"btn\" type=\"submit\">Add to allowlist</button>
+          </form>
+          <div class=\"muted\" style=\"margin-top: 8px; font-size: 0.9rem;\">Adding requires System Administrator credentials.</div>
+        </div>
         <table>
           <thead><tr><th>CIDR / IP</th><th>Description</th><th></th></tr></thead>
           <tbody>{allow_body or '<tr><td colspan=3 class="muted">(none)</td></tr>'}</tbody>
@@ -291,6 +313,46 @@ def create_blocklist_admin_service() -> Flask:
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
 
         msg = "Removed." if deleted else "Entry not found."
+        html = _render_page(allow_rows, block_rows, policy, message=msg)
+        return Response(html, mimetype="text/html; charset=utf-8")
+
+    @app.post("/add/allow")
+    def add_allow() -> Response:
+        realm = "PentaVision Admin Add Allow"
+        maybe = _require_admin_basic_auth(realm)
+        if maybe is not None:
+            return maybe
+
+        raw_cidr = (request.form.get("cidr") or "").strip()
+        description = (request.form.get("description") or "").strip() or None
+
+        engine = get_user_engine()
+        if engine is None:
+            abort(503)
+
+        try:
+            cidr = _normalize_cidr(raw_cidr)
+        except Exception:
+            with Session(engine) as db:
+                allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+                block_rows = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
+                policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            html = _render_page(allow_rows, block_rows, policy, error="Invalid IP/CIDR")
+            return Response(html, status=400, mimetype="text/html; charset=utf-8")
+
+        with Session(engine) as db:
+            IpAllowlist.__table__.create(bind=engine, checkfirst=True)
+            exists = db.scalar(select(IpAllowlist).where(IpAllowlist.cidr == cidr))
+            if exists is None:
+                entry = IpAllowlist(cidr=cidr, description=description)
+                db.add(entry)
+                db.commit()
+
+            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            block_rows = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
+            policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+
+        msg = "Added." if exists is None else "Already present."
         html = _render_page(allow_rows, block_rows, policy, message=msg)
         return Response(html, mimetype="text/html; charset=utf-8")
 
