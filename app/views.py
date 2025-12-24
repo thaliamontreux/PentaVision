@@ -478,6 +478,16 @@ def index():
                 except Exception:  # noqa: BLE001
                     continue
 
+        def _as_utc(dt: datetime | None) -> datetime | None:
+            if dt is None:
+                return None
+            try:
+                if getattr(dt, "tzinfo", None) is None:
+                    return dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            except Exception:  # noqa: BLE001
+                return None
+
             links = session_db.query(CameraPropertyLink).all()
             camera_property_map = {
                 int(link.device_id): int(link.property_id) for link in links
@@ -525,8 +535,8 @@ def index():
                 recording_status[device_id] = "not_active"
                 continue
 
-            last_ok = last_ok_map.get(device_id)
-            last_err = last_err_map.get(device_id)
+            last_ok = _as_utc(last_ok_map.get(device_id))
+            last_err = _as_utc(last_err_map.get(device_id))
             if (
                 last_err is not None
                 and (last_ok is None or last_err > last_ok)
@@ -535,7 +545,7 @@ def index():
                 recording_status[device_id] = "error"
                 continue
 
-            last_rec = last_recording_map.get(device_id)
+            last_rec = _as_utc(last_recording_map.get(device_id))
             if last_rec is not None and (now_utc - last_rec) <= active_window:
                 recording_status[device_id] = "active"
             else:
