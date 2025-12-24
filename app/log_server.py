@@ -247,6 +247,15 @@ def create_log_server() -> Flask:
             audit_cache["refreshing"] = False
 
     def _start_apache_log_ingestion() -> None:
+        enable_ingest = str(os.environ.get("PENTAVISION_LOGSERVER_ENABLE_APACHE_INGEST", "0") or "0").strip() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if not enable_ingest:
+            return
+
         access_path = (os.environ.get("PENTAVISION_APACHE_ACCESS_LOG") or "").strip()
         error_path = (os.environ.get("PENTAVISION_APACHE_ERROR_LOG") or "").strip()
 
@@ -285,6 +294,35 @@ def create_log_server() -> Flask:
             "yes",
             "on",
         }
+
+        enable_escalation = str(os.environ.get("PENTAVISION_LOGSERVER_ENABLE_APACHE_ESCALATION", "0") or "0").strip() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+        esc_lock = threading.Lock()
+        esc_last_by_ip: dict[str, float] = {}
+        esc_last_global: list[float] = [0.0]
+
+        def _may_escalate(ip: str) -> bool:
+            if not enable_escalation:
+                return False
+            now = time.monotonic()
+            with esc_lock:
+                last_global = float(esc_last_global[0] or 0.0)
+                if now - last_global < 0.2:
+                    return False
+                last_ip = float(esc_last_by_ip.get(ip) or 0.0)
+                if now - last_ip < 1.0:
+                    return False
+                esc_last_global[0] = now
+                esc_last_by_ip[ip] = now
+                # Keep the dict bounded.
+                if len(esc_last_by_ip) > 5000:
+                    esc_last_by_ip.clear()
+                return True
 
         access_re = re.compile(r"^(?P<ip>\S+)\s+\S+\s+\S+\s+\[[^\]]+\]\s+\"(?P<method>[A-Z]+)\s+(?P<path>[^\s\"]+)\s+[^\"]+\"\s+(?P<status>\d{3})\s+")
 
@@ -351,7 +389,8 @@ def create_log_server() -> Flask:
                     clean_path = path.split("?", 1)[0].strip().lower()
                     if clean_path in {"/favicon.ico", "/index.html", "/index.php", "/robots.txt"}:
                         return
-                    record_invalid_url_attempt_for_ip(ip, path)
+                    if _may_escalate(ip):
+                        record_invalid_url_attempt_for_ip(ip, path)
             except Exception:
                 return
 
