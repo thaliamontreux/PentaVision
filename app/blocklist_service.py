@@ -492,7 +492,8 @@ def create_blocklist_service() -> Flask:
         <div class=\"sub\">Generated at <span class=\"mono\">{now}</span>. This view matches published output after allowlist exclusions.</div>
       </div>
       <div class=\"actions\">
-        <a class=\"btn\" href=\"/blocklist.csv\">Download CSV</a>
+        <a class=\"btn\" href=\"/blocklist.csv\">Download Published CSV</a>
+        <a class=\"btn\" href=\"/blocklist_all.csv\">Download All Configured CSV</a>
       </div>
     </div>
 
@@ -604,6 +605,129 @@ def create_blocklist_service() -> Flask:
 
         blocks, _ = _load_blocks_for_publication(engine)
 
+        def _write_csv(rows: List[Tuple[str, Optional[datetime], Optional[str]]]) -> str:
+            # Deterministic ordering: type then ip/cidr text
+            def _sort_key(row: Tuple[str, Optional[datetime], Optional[str]]):
+                cidr = row[0]
+                t = _determine_type(cidr)
+                try:
+                    net = ipaddress.ip_network(cidr, strict=False)
+                    addr_int = int(net.network_address)
+                    plen = int(net.prefixlen)
+                except Exception:  # noqa: BLE001
+                    addr_int = 0
+                    plen = 0
+                return (0 if t == "host" else 1, addr_int, plen, cidr)
+
+            rows.sort(key=_sort_key)
+
+            now = datetime.now(timezone.utc)
+            source_system = os.environ.get("PENTAVISION_SOURCE_SYSTEM", "pentavision").strip() or "pentavision"
+
+            output = io.StringIO(newline="")
+            writer = csv.writer(output, lineterminator="\n")
+            writer.writerow(
+                [
+                    "type",
+                    "ip_or_cidr",
+                    "first_detected_timestamp",
+                    "last_detected_timestamp",
+                    "block_expiry_timestamp",
+                    "reason_code",
+                    "risk_score",
+                    "source_system",
+                    "asn",
+                    "attack_category",
+                    "enforcement_level",
+                ]
+            )
+
+            for cidr, created_at, desc in rows:
+                detected = created_at
+                first_ts = _dt_iso(detected)
+                last_ts = _dt_iso(detected)
+                expiry_ts = ""  # no expiry model yet
+
+                reason_code = "BLOCKLIST"
+                attack_category = ""
+                risk_score = "50"
+                enforcement_level = "persistent"
+                asn = ""
+
+                if desc:
+                    d = str(desc).strip()
+                    if d:
+                        reason_code = d[:64]
+
+                writer.writerow(
+                    [
+                        _determine_type(cidr),
+                        cidr,
+                        first_ts,
+                        last_ts,
+                        expiry_ts,
+                        reason_code,
+                        risk_score,
+                        source_system,
+                        asn,
+                        attack_category,
+                        enforcement_level,
+                    ]
+                )
+
+            csv_text = output.getvalue()
+
+            try:
+                ip = _client_ip()
+                app.logger.info(
+                    "blocklist_csv_published ip=%s blocks=%s at=%s",
+                    ip,
+                    len(rows),
+                    now.isoformat(),
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+            try:
+                log_event(
+                    "BLOCKLIST_PUBLISHED",
+                    user_id=None,
+                    details=f"ip={_client_ip()}, blocks={len(rows)}",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+            return csv_text
+
+        csv_text = _write_csv(list(blocks or []))
+
+        settings = _effective_settings()
+        ttl = int(settings.get("ttl_seconds") or 5)
+        generated_at = datetime.now(timezone.utc).isoformat()
+
+        resp = Response(csv_text, mimetype="text/csv; charset=utf-8")
+        resp.headers["Cache-Control"] = f"no-store, no-cache, max-age={ttl}, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["X-Blocklist-Generated-At"] = generated_at
+        resp.headers["Content-Disposition"] = "attachment; filename=blocklist.csv"
+        return resp
+
+    @app.get("/blocklist_all.csv")
+    def blocklist_all_csv() -> Response:
+        engine = get_user_engine()
+        if engine is None:
+            abort(503)
+
+        IpAllowlist.__table__.create(bind=engine, checkfirst=True)
+        IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+
+        with Session(engine) as session:
+            block_rows = session.query(IpBlocklist.cidr, IpBlocklist.created_at, IpBlocklist.description).all()
+
+        blocks_all: List[Tuple[str, Optional[datetime], Optional[str]]] = [
+            (str(c), a, d) for (c, a, d) in (block_rows or [])
+        ]
+
         # Deterministic ordering: type then ip/cidr text
         def _sort_key(row: Tuple[str, Optional[datetime], Optional[str]]):
             cidr = row[0]
@@ -617,11 +741,9 @@ def create_blocklist_service() -> Flask:
                 plen = 0
             return (0 if t == "host" else 1, addr_int, plen, cidr)
 
-        blocks.sort(key=_sort_key)
+        blocks_all.sort(key=_sort_key)
 
-        now = datetime.now(timezone.utc)
         source_system = os.environ.get("PENTAVISION_SOURCE_SYSTEM", "pentavision").strip() or "pentavision"
-
         output = io.StringIO(newline="")
         writer = csv.writer(output, lineterminator="\n")
         writer.writerow(
@@ -639,26 +761,15 @@ def create_blocklist_service() -> Flask:
                 "enforcement_level",
             ]
         )
-
-        for cidr, created_at, desc in blocks:
-            detected = created_at
-            # We only have one timestamp today; publish it as both first+last.
-            first_ts = _dt_iso(detected)
-            last_ts = _dt_iso(detected)
-            expiry_ts = ""  # no expiry model yet
-
+        for cidr, created_at, desc in blocks_all:
+            first_ts = _dt_iso(created_at)
+            last_ts = _dt_iso(created_at)
+            expiry_ts = ""
             reason_code = "BLOCKLIST"
-            attack_category = ""
-            risk_score = "50"
-            enforcement_level = "persistent"
-            asn = ""
-
             if desc:
-                # Keep it strict and machine-friendly; no presentation formatting.
                 d = str(desc).strip()
                 if d:
                     reason_code = d[:64]
-
             writer.writerow(
                 [
                     _determine_type(cidr),
@@ -667,44 +778,24 @@ def create_blocklist_service() -> Flask:
                     last_ts,
                     expiry_ts,
                     reason_code,
-                    risk_score,
+                    "50",
                     source_system,
-                    asn,
-                    attack_category,
-                    enforcement_level,
+                    "",
+                    "",
+                    "persistent",
                 ]
             )
-
-        csv_text = output.getvalue()
-
-        try:
-            ip = _client_ip()
-            app.logger.info(
-                "blocklist_csv_published ip=%s blocks=%s at=%s",
-                ip,
-                len(blocks),
-                now.isoformat(),
-            )
-        except Exception:  # noqa: BLE001
-            pass
-
-        try:
-            log_event(
-                "BLOCKLIST_PUBLISHED",
-                user_id=None,
-                details=f"ip={_client_ip()}, blocks={len(blocks)}",
-            )
-        except Exception:  # noqa: BLE001
-            pass
+        csv_body = output.getvalue()
 
         settings = _effective_settings()
         ttl = int(settings.get("ttl_seconds") or 5)
         generated_at = datetime.now(timezone.utc).isoformat()
 
-        resp = Response(csv_text, mimetype="text/csv; charset=utf-8")
+        resp = Response(csv_body, mimetype="text/csv; charset=utf-8")
         resp.headers["Cache-Control"] = f"no-store, no-cache, max-age={ttl}, must-revalidate"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["X-Blocklist-Generated-At"] = generated_at
+        resp.headers["Content-Disposition"] = "attachment; filename=blocklist_all.csv"
         return resp
 
     return app
