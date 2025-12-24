@@ -55,6 +55,11 @@
         <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
       </a>
 
+      <button type="button" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" style="text-align:left;">
+        <h2 class="pv-card-title">Pull GitHub Update</h2>
+        <p class="pv-card-subtitle">Run <span class="pv-mono">scripts/git_pull.sh</span> on the server and watch output live (read-only).</p>
+      </button>
+
       <a href="{{ url_for('installer.install') }}" class="pv-card">
         <h2 class="pv-card-title">Installer & databases</h2>
         <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
@@ -68,4 +73,48 @@
       </div>
     </div>
   </section>
+
+  <script>
+    (function () {
+      const btn = document.getElementById('pvGitPullBtn');
+      if (!btn) return;
+
+      async function startRun() {
+        const csrf = btn.getAttribute('data-csrf') || '';
+        btn.disabled = true;
+        try {
+          const form = new FormData();
+          form.append('csrf_token', csrf);
+          const r = await fetch('{{ url_for("admin.git_pull_start") }}', {
+            method: 'POST',
+            body: form,
+            cache: 'no-store'
+          });
+          const data = await r.json();
+          if (!data || !data.ok || !data.view_url) {
+            btn.disabled = false;
+            alert((data && data.error) ? data.error : 'Failed to start git pull');
+            return;
+          }
+          const w = window.open(data.view_url, 'pvGitPull', 'popup=yes,width=980,height=680');
+          if (!w) {
+            btn.disabled = false;
+            alert('Popup blocked. Please allow popups for this site.');
+            return;
+          }
+          const timer = setInterval(() => {
+            if (w.closed) {
+              clearInterval(timer);
+              btn.disabled = false;
+            }
+          }, 800);
+        } catch (e) {
+          btn.disabled = false;
+          alert('Failed to start git pull');
+        }
+      }
+
+      btn.addEventListener('click', startRun);
+    })();
+  </script>
 {% endblock %}

@@ -3,6 +3,9 @@ from __future__ import annotations
 import secrets
 import subprocess
 from datetime import datetime, timezone
+import json
+import os
+import uuid
 from urllib.request import urlopen
 
 from typing import Dict, List, Sequence, Set
@@ -49,9 +52,56 @@ from .models import (
 from .security import get_current_user, user_has_role
 from .storage_settings_page import storage_settings_page
 
+import psutil
+
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 _ph = PasswordHasher()
+
+
+def _git_pull_runs_dir() -> str:
+    base = os.environ.get("PENTAVISION_RUN_LOG_DIR") or "/tmp/pentavision"
+    out = os.path.join(str(base), "git_pull_runs")
+    try:
+        os.makedirs(out, exist_ok=True)
+    except Exception:
+        pass
+    return out
+
+
+def _git_pull_paths(run_id: str) -> tuple[str, str]:
+    safe_id = str(run_id or "").strip()
+    safe_id = safe_id.replace("/", "").replace("\\", "")
+    base = _git_pull_runs_dir()
+    meta_path = os.path.join(base, f"{safe_id}.json")
+    log_path = os.path.join(base, f"{safe_id}.log")
+    return meta_path, log_path
+
+
+def _read_text_tail(path: str, *, offset: int, max_bytes: int = 64 * 1024) -> tuple[str, int]:
+    try:
+        size = os.path.getsize(path)
+    except Exception:
+        size = 0
+    if size <= 0:
+        return "", int(offset or 0)
+
+    start = max(0, int(offset or 0))
+    if start > size:
+        start = size
+
+    try:
+        with open(path, "rb") as f:
+            f.seek(start)
+            data = f.read(int(max_bytes))
+    except Exception:
+        return "", start
+
+    try:
+        text = data.decode("utf-8", errors="replace")
+    except Exception:
+        text = ""
+    return text, start + len(data)
 
 
 def _ensure_csrf_token() -> str:
@@ -82,7 +132,150 @@ def _require_system_admin():
 
 @bp.get("/")
 def index():
-    return render_template("admin/index.html")
+    csrf_token = _ensure_csrf_token()
+    return render_template("admin/index.html", csrf_token=csrf_token)
+
+
+@bp.post("/git-pull/start")
+def git_pull_start():
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    run_id = uuid.uuid4().hex
+    meta_path, log_path = _git_pull_paths(run_id)
+
+    app_root = os.path.abspath(os.path.join(current_app.root_path, os.pardir))
+    script_path = os.path.join(app_root, "scripts", "git_pull.sh")
+
+    try:
+        with open(log_path, "wb") as logf:
+            logf.write(
+                (
+                    f"== PentaVision git pull run {run_id} ==\n"
+                    f"started_utc={datetime.now(timezone.utc).isoformat()}\n"
+                    f"script={script_path}\n\n"
+                ).encode("utf-8")
+            )
+            logf.flush()
+
+            proc = subprocess.Popen(  # noqa: S603
+                ["bash", script_path],
+                cwd=app_root,
+                stdout=logf,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                close_fds=True,
+            )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": f"failed_to_start: {type(exc).__name__}"}), 500
+
+    meta = {
+        "run_id": run_id,
+        "pid": int(proc.pid),
+        "log_path": log_path,
+        "started_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f)
+    except Exception:
+        pass
+
+    try:
+        log_event(
+            "ADMIN_GIT_PULL_START",
+            user_id=getattr(get_current_user(), "id", None),
+            details=f"run_id={run_id}, ip={_client_ip()}",
+        )
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "run_id": run_id, "view_url": url_for("admin.git_pull_view", run_id=run_id)})
+
+
+@bp.get("/git-pull/view/<run_id>")
+def git_pull_view(run_id: str):
+    csrf_token = _ensure_csrf_token()
+    safe_run_id = str(run_id or "").strip()
+    return (
+        "<!doctype html>"
+        "<html lang=\"en\">"
+        "<head>"
+        "  <meta charset=\"utf-8\">"
+        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "  <title>PentaVision · Git Pull Output</title>"
+        "  <style>"
+        "    body{margin:0;background:#050b14;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}"
+        "    .top{position:sticky;top:0;padding:10px 12px;background:rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(12px);}"
+        "    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;}"
+        "    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.08);color:#e5e7eb;font-weight:800;cursor:pointer;}"
+        "    .btn:hover{border-color:rgba(34,211,238,0.55);}"
+        "    pre{margin:0;padding:12px;white-space:pre-wrap;word-break:break-word;}"
+        "  </style>"
+        "</head>"
+        "<body>"
+        f"<div class=\"top\"><strong>Git Pull</strong> <span class=\"mono\">{safe_run_id}</span> "
+        "<button class=\"btn\" id=\"pvCopy\" type=\"button\">Copy</button>"
+        "<span id=\"pvStatus\" style=\"margin-left:10px;opacity:.8\">starting...</span>"
+        "</div>"
+        f"<pre id=\"pvOut\" class=\"mono\" data-run=\"{safe_run_id}\" data-csrf=\"{csrf_token}\"></pre>"
+        "<script>"
+        "(function(){"
+        "  const pre=document.getElementById('pvOut');"
+        "  const statusEl=document.getElementById('pvStatus');"
+        "  const runId=pre.getAttribute('data-run');"
+        "  const csrf=pre.getAttribute('data-csrf');"
+        "  let offset=0;"
+        "  async function poll(){"
+        "    try{"
+        "      const url='/admin/git-pull/poll/'+encodeURIComponent(runId)+'?offset='+offset;"
+        "      const r=await fetch(url,{cache:'no-store',headers:{'X-CSRF-Token':csrf}});"
+        "      const data=await r.json();"
+        "      if(data && data.append){pre.textContent+=data.append;offset=data.offset||offset;}"
+        "      statusEl.textContent=(data && data.running)?'running...':'finished';"
+        "      if(data && data.running){setTimeout(poll,1000);}"
+        "    }catch(e){statusEl.textContent='error';setTimeout(poll,2000);}"
+        "  }"
+        "  document.getElementById('pvCopy').addEventListener('click', async function(){"
+        "    try{await navigator.clipboard.writeText(pre.textContent||'');}catch(e){}"
+        "  });"
+        "  poll();"
+        "})();"
+        "</script>"
+        "</body>"
+        "</html>"
+    )
+
+
+@bp.get("/git-pull/poll/<run_id>")
+def git_pull_poll(run_id: str):
+    # Lightweight CSRF: require header token matching admin session.
+    if not _validate_csrf_token(request.headers.get("X-CSRF-Token")):
+        abort(400)
+
+    meta_path, log_path = _git_pull_paths(run_id)
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+    except Exception:
+        meta = {"pid": None, "log_path": log_path}
+
+    pid = meta.get("pid")
+    running = False
+    try:
+        if pid is not None:
+            p = psutil.Process(int(pid))
+            running = p.is_running() and p.status() != psutil.STATUS_ZOMBIE
+    except Exception:
+        running = False
+
+    try:
+        offset = int(request.args.get("offset") or 0)
+    except Exception:
+        offset = 0
+
+    append, new_offset = _read_text_tail(str(meta.get("log_path") or log_path), offset=offset)
+    return jsonify({"ok": True, "run_id": run_id, "running": bool(running), "append": append, "offset": int(new_offset)})
 
 
 @bp.get("/recordings")
