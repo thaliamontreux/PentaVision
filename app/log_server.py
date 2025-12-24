@@ -81,6 +81,13 @@ def create_log_server() -> Flask:
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+    try:
+        poll_seconds = float(os.environ.get("PENTAVISION_LOG_TAIL_POLL_SECONDS", "30") or "30")
+    except Exception:
+        poll_seconds = 30.0
+    if poll_seconds < 1.0:
+        poll_seconds = 1.0
+
     def _start_apache_log_ingestion() -> None:
         access_path = (os.environ.get("PENTAVISION_APACHE_ACCESS_LOG") or "").strip()
         error_path = (os.environ.get("PENTAVISION_APACHE_ERROR_LOG") or "").strip()
@@ -277,7 +284,7 @@ def create_log_server() -> Flask:
                     if not warned_missing:
                         warned_missing = True
                         yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"log file not found\"}\n\n"
-                    time.sleep(1.0)
+                    time.sleep(min(5.0, poll_seconds))
                     continue
                 try:
                     with open(path, "rb") as f:
@@ -301,7 +308,7 @@ def create_log_server() -> Flask:
                 except Exception:
                     # Do not break the SSE stream.
                     yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"tail error\"}\n\n"
-                time.sleep(0.5)
+                time.sleep(poll_seconds)
 
         return Response(gen(), mimetype="text/event-stream")
 

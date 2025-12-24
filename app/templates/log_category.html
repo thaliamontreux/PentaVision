@@ -85,6 +85,7 @@
         var btnClear = document.getElementById('pv-clear');
         var btnPause = document.getElementById('pv-pause');
         var paused = false;
+        var maxLines = 2000;
 
         function addLine(raw) {
           if (!out) return;
@@ -107,6 +108,11 @@
           div.className = cls;
           div.textContent = text;
           out.appendChild(div);
+          try {
+            while (out.childNodes && out.childNodes.length > maxLines) {
+              out.removeChild(out.firstChild);
+            }
+          } catch (e) {}
           out.scrollTop = out.scrollHeight;
         }
 
