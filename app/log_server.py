@@ -94,6 +94,158 @@ def create_log_server() -> Flask:
     if poll_seconds < 1.0:
         poll_seconds = 1.0
 
+    audit_cache_lock = threading.Lock()
+    audit_cache: dict[str, Any] = {
+        "ts": 0.0,
+        "data": None,
+        "refreshing": False,
+        "error": None,
+    }
+    audit_cache_ttl_seconds = 25.0
+
+    def _fetch_audit_storage(limit: int) -> dict[str, Any]:
+        limit = max(1, min(int(limit or 200), 500))
+
+        engine = get_record_engine()
+        if engine is None:
+            return {"error": "RecordDB is not configured"}
+
+        events: list[dict[str, Any]] = []
+        health: list[dict[str, Any]] = []
+        writes: list[dict[str, Any]] = []
+        user_events: list[dict[str, Any]] = []
+
+        with engine.connect() as conn:
+            ev_rows = conn.execute(
+                text(
+                    """
+                    SELECT created_at, level, action, message, module_id, module_name
+                    FROM storage_module_events
+                    ORDER BY created_at DESC
+                    LIMIT :lim
+                    """
+                ),
+                {"lim": limit},
+            ).mappings().all()
+            events = [dict(r) for r in ev_rows]
+
+            hc_rows = conn.execute(
+                text(
+                    """
+                    SELECT created_at, module_id, module_name, provider_type, ok, message, duration_ms
+                    FROM storage_module_health_checks
+                    ORDER BY created_at DESC
+                    LIMIT :lim
+                    """
+                ),
+                {"lim": limit},
+            ).mappings().all()
+            health = [dict(r) for r in hc_rows]
+
+            ws_rows = conn.execute(
+                text(
+                    """
+                    SELECT created_at, module_id, module_name, provider_type, ok, storage_key, bytes, duration_ms, error
+                    FROM storage_module_write_stats
+                    ORDER BY created_at DESC
+                    LIMIT :lim
+                    """
+                ),
+                {"lim": limit},
+            ).mappings().all()
+            writes = [dict(r) for r in ws_rows]
+
+            try:
+                ue_rows = conn.execute(
+                    text(
+                        """
+                        SELECT created_at, event_type, severity, message, user_id, ip
+                        FROM audit_events
+                        ORDER BY created_at DESC
+                        LIMIT :lim
+                        """
+                    ),
+                    {"lim": limit},
+                ).mappings().all()
+                user_events = [dict(r) for r in ue_rows]
+            except Exception:  # noqa: BLE001
+                user_events = []
+
+        def _dt(val: Any) -> str:
+            if not val:
+                return ""
+            try:
+                if isinstance(val, datetime):
+                    return val.astimezone(timezone.utc).isoformat()
+            except Exception:  # noqa: BLE001
+                pass
+            return str(val)
+
+        return {
+            "events": [
+                {
+                    "created_at": _dt(r.get("created_at")),
+                    "level": str(r.get("level") or ""),
+                    "action": str(r.get("action") or ""),
+                    "message": str(r.get("message") or ""),
+                    "module_id": r.get("module_id"),
+                    "module_name": str(r.get("module_name") or ""),
+                }
+                for r in events
+            ],
+            "health": [
+                {
+                    "created_at": _dt(r.get("created_at")),
+                    "module_id": r.get("module_id"),
+                    "module_name": str(r.get("module_name") or ""),
+                    "provider_type": str(r.get("provider_type") or ""),
+                    "ok": bool(r.get("ok") or 0),
+                    "message": str(r.get("message") or ""),
+                    "duration_ms": r.get("duration_ms"),
+                }
+                for r in health
+            ],
+            "writes": [
+                {
+                    "created_at": _dt(r.get("created_at")),
+                    "module_id": r.get("module_id"),
+                    "module_name": str(r.get("module_name") or ""),
+                    "provider_type": str(r.get("provider_type") or ""),
+                    "ok": bool(r.get("ok") or 0),
+                    "storage_key": str(r.get("storage_key") or ""),
+                    "bytes": int(r.get("bytes") or 0),
+                    "duration_ms": r.get("duration_ms"),
+                    "error": str(r.get("error") or ""),
+                }
+                for r in writes
+            ],
+            "user_events": [
+                {
+                    "created_at": _dt(r.get("created_at")),
+                    "event_type": str(r.get("event_type") or ""),
+                    "severity": str(r.get("severity") or ""),
+                    "message": str(r.get("message") or ""),
+                    "user_id": r.get("user_id"),
+                    "ip": str(r.get("ip") or ""),
+                }
+                for r in user_events
+            ],
+        }
+
+    def _refresh_audit_cache(limit: int) -> None:
+        try:
+            data = _fetch_audit_storage(limit)
+            err = data.get("error") if isinstance(data, dict) else None
+        except Exception as exc:  # noqa: BLE001
+            data = {"error": str(exc)}
+            err = str(exc)
+
+        with audit_cache_lock:
+            audit_cache["ts"] = time.time()
+            audit_cache["data"] = data
+            audit_cache["error"] = err
+            audit_cache["refreshing"] = False
+
     def _start_apache_log_ingestion() -> None:
         access_path = (os.environ.get("PENTAVISION_APACHE_ACCESS_LOG") or "").strip()
         error_path = (os.environ.get("PENTAVISION_APACHE_ERROR_LOG") or "").strip()
@@ -360,137 +512,38 @@ def create_log_server() -> Flask:
             limit = int(limit_raw)
         except ValueError:
             limit = 200
-        limit = max(1, min(limit, 2000))
+        limit = max(1, min(limit, 500))
 
-        engine = get_record_engine()
-        if engine is None:
-            return jsonify({"error": "RecordDB is not configured"}), 503
+        now_ts = time.time()
+        with audit_cache_lock:
+            cached_ts = float(audit_cache.get("ts") or 0.0)
+            cached_data = audit_cache.get("data")
+            refreshing = bool(audit_cache.get("refreshing"))
+            cached_error = audit_cache.get("error")
 
-        events: list[dict[str, Any]] = []
-        health: list[dict[str, Any]] = []
-        writes: list[dict[str, Any]] = []
-        user_events: list[dict[str, Any]] = []
-        try:
-            with engine.connect() as conn:
-                ev_rows = conn.execute(
-                    text(
-                        """
-                        SELECT created_at, level, action, message, module_id, module_name
-                        FROM storage_module_events
-                        ORDER BY created_at DESC
-                        LIMIT :lim
-                        """
-                    ),
-                    {"lim": limit},
-                ).mappings().all()
-                events = [dict(r) for r in ev_rows]
+            fresh = cached_data is not None and (now_ts - cached_ts) <= audit_cache_ttl_seconds
+            if not refreshing and not fresh:
+                audit_cache["refreshing"] = True
+                threading.Thread(
+                    target=_refresh_audit_cache,
+                    args=(limit,),
+                    daemon=True,
+                    name="pv_audit_cache_refresh",
+                ).start()
 
-                hc_rows = conn.execute(
-                    text(
-                        """
-                        SELECT created_at, module_id, module_name, provider_type, ok, message, duration_ms
-                        FROM storage_module_health_checks
-                        ORDER BY created_at DESC
-                        LIMIT :lim
-                        """
-                    ),
-                    {"lim": limit},
-                ).mappings().all()
-                health = [dict(r) for r in hc_rows]
+        if cached_data is None:
+            # First request after boot: return a lightweight response immediately,
+            # and the background refresh will populate data on next poll.
+            return jsonify({"events": [], "health": [], "writes": [], "user_events": [], "pending": True}), 200
 
-                ws_rows = conn.execute(
-                    text(
-                        """
-                        SELECT created_at, module_id, module_name, provider_type, ok, storage_key, bytes, duration_ms, error
-                        FROM storage_module_write_stats
-                        ORDER BY created_at DESC
-                        LIMIT :lim
-                        """
-                    ),
-                    {"lim": limit},
-                ).mappings().all()
-                writes = [dict(r) for r in ws_rows]
+        if isinstance(cached_data, dict) and cached_data.get("error"):
+            return jsonify({"error": str(cached_data.get("error") or cached_error or "error"), "cached": True}), 200
 
-                try:
-                    ue_rows = conn.execute(
-                        text(
-                            """
-                            SELECT created_at, event_type, severity, message, user_id, ip
-                            FROM audit_events
-                            ORDER BY created_at DESC
-                            LIMIT :lim
-                            """
-                        ),
-                        {"lim": limit},
-                    ).mappings().all()
-                    user_events = [dict(r) for r in ue_rows]
-                except Exception:  # noqa: BLE001
-                    user_events = []
-        except Exception as exc:  # noqa: BLE001
-            return jsonify({"error": f"Failed to load audit tables: {exc}"}), 500
-
-        def _dt(val: Any) -> str:
-            if not val:
-                return ""
-            try:
-                if isinstance(val, datetime):
-                    return val.astimezone(timezone.utc).isoformat()
-            except Exception:  # noqa: BLE001
-                pass
-            return str(val)
-
-        return jsonify(
-            {
-                "events": [
-                    {
-                        "created_at": _dt(r.get("created_at")),
-                        "level": str(r.get("level") or ""),
-                        "action": str(r.get("action") or ""),
-                        "message": str(r.get("message") or ""),
-                        "module_id": r.get("module_id"),
-                        "module_name": str(r.get("module_name") or ""),
-                    }
-                    for r in events
-                ],
-                "health": [
-                    {
-                        "created_at": _dt(r.get("created_at")),
-                        "module_id": r.get("module_id"),
-                        "module_name": str(r.get("module_name") or ""),
-                        "provider_type": str(r.get("provider_type") or ""),
-                        "ok": bool(r.get("ok") or 0),
-                        "message": str(r.get("message") or ""),
-                        "duration_ms": r.get("duration_ms"),
-                    }
-                    for r in health
-                ],
-                "writes": [
-                    {
-                        "created_at": _dt(r.get("created_at")),
-                        "module_id": r.get("module_id"),
-                        "module_name": str(r.get("module_name") or ""),
-                        "provider_type": str(r.get("provider_type") or ""),
-                        "ok": bool(r.get("ok") or 0),
-                        "storage_key": str(r.get("storage_key") or ""),
-                        "bytes": int(r.get("bytes") or 0),
-                        "duration_ms": r.get("duration_ms"),
-                        "error": str(r.get("error") or ""),
-                    }
-                    for r in writes
-                ],
-                "user_events": [
-                    {
-                        "created_at": _dt(r.get("created_at")),
-                        "event_type": str(r.get("event_type") or ""),
-                        "severity": str(r.get("severity") or ""),
-                        "message": str(r.get("message") or ""),
-                        "user_id": r.get("user_id"),
-                        "ip": str(r.get("ip") or ""),
-                    }
-                    for r in user_events
-                ],
-            }
-        )
+        payload = dict(cached_data)
+        payload["cached"] = True
+        payload["age_seconds"] = max(0.0, now_ts - float(cached_ts or 0.0))
+        payload["refreshing"] = bool(refreshing)
+        return jsonify(payload)
 
     @app.get("/api/ping")
     def ping():
