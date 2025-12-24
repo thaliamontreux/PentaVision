@@ -79,6 +79,7 @@
         <div style="margin-top: 0.25rem; color: #9ca3af;">Live system logs and audit events</div>
       </div>
       <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <select id="pv-tz" class="pv-input" style="min-width: 260px;"></select>
         <button id="pv-open-system" class="pv-button-secondary" type="button">System</button>
         <button id="pv-open-modules" class="pv-button-secondary" type="button">Modules</button>
         <button id="pv-open-rtsp" class="pv-button-secondary" type="button">RTSP</button>
@@ -157,6 +158,87 @@
 
   <script>
     (function () {
+      var tzKey = 'pvLogTimezone';
+      var defaultTz = 'America/Chicago';
+      var tzOptions = [
+        { label: 'US (CST/CDT) - America/Chicago', value: 'America/Chicago' },
+        { label: 'US (EST/EDT) - America/New_York', value: 'America/New_York' },
+        { label: 'US (MST/MDT) - America/Denver', value: 'America/Denver' },
+        { label: 'US (PST/PDT) - America/Los_Angeles', value: 'America/Los_Angeles' },
+        { label: 'Canada - America/Toronto', value: 'America/Toronto' },
+        { label: 'Mexico - America/Mexico_City', value: 'America/Mexico_City' },
+        { label: 'UK - Europe/London', value: 'Europe/London' },
+        { label: 'France - Europe/Paris', value: 'Europe/Paris' },
+        { label: 'Germany - Europe/Berlin', value: 'Europe/Berlin' },
+        { label: 'Spain - Europe/Madrid', value: 'Europe/Madrid' },
+        { label: 'Italy - Europe/Rome', value: 'Europe/Rome' },
+        { label: 'Brazil - America/Sao_Paulo', value: 'America/Sao_Paulo' },
+        { label: 'India - Asia/Kolkata', value: 'Asia/Kolkata' },
+        { label: 'China - Asia/Shanghai', value: 'Asia/Shanghai' },
+        { label: 'Japan - Asia/Tokyo', value: 'Asia/Tokyo' },
+        { label: 'Australia - Australia/Sydney', value: 'Australia/Sydney' }
+      ];
+
+      function getTz() {
+        try {
+          var tz = window.localStorage.getItem(tzKey) || '';
+          tz = String(tz || '').trim();
+          return tz || defaultTz;
+        } catch (e) {
+          return defaultTz;
+        }
+      }
+
+      function setTz(tz) {
+        try {
+          window.localStorage.setItem(tzKey, String(tz || '').trim() || defaultTz);
+        } catch (e) {}
+      }
+
+      function fmtTs(iso) {
+        var d = new Date(String(iso || ''));
+        if (isNaN(d.getTime())) return String(iso || '');
+        try {
+          var parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: getTz(),
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          }).formatToParts(d);
+          var map = {};
+          for (var i = 0; i < parts.length; i++) {
+            map[parts[i].type] = parts[i].value;
+          }
+          return (map.month || '') + '/' + (map.day || '') + '/' + (map.year || '') + ' ' + (map.hour || '') + ':' + (map.minute || '') + ':' + (map.second || '');
+        } catch (e) {
+          return String(iso || '');
+        }
+      }
+
+      function initTimezoneSelect() {
+        var tzSel = document.getElementById('pv-tz');
+        if (!tzSel) return;
+        try {
+          tzSel.innerHTML = '';
+          for (var i = 0; i < tzOptions.length; i++) {
+            var opt = document.createElement('option');
+            opt.value = tzOptions[i].value;
+            opt.textContent = tzOptions[i].label;
+            tzSel.appendChild(opt);
+          }
+          tzSel.value = getTz();
+          tzSel.addEventListener('change', function () {
+            setTz(tzSel.value || defaultTz);
+            try { fetchJournal(); } catch (e) {}
+            try { fetchAudit(!!auditOnlyErrors); } catch (e) {}
+          });
+        } catch (e) {}
+      }
+
       function openCat(cat) {
         try {
           var w = window.open(
@@ -233,16 +315,10 @@
               var rest = m[3];
 
               var d = new Date(isoTs);
-              var tsText = isoTs;
+              var tsText = fmtTs(isoTs);
               var tsMs = NaN;
               if (!isNaN(d.getTime())) {
                 tsMs = d.getTime();
-                var mm = String(d.getMonth() + 1).padStart(2, '0');
-                var dd = String(d.getDate()).padStart(2, '0');
-                var hh = String(d.getHours()).padStart(2, '0');
-                var mi = String(d.getMinutes()).padStart(2, '0');
-                var ss = String(d.getSeconds()).padStart(2, '0');
-                tsText = mm + '-' + dd + ' ' + hh + ':' + mi + ':' + ss;
               }
 
               rest = rest.replace(/^\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{4}\]\s*/, '');
@@ -366,7 +442,7 @@
                 html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
                   + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
                   + '<div style="font-weight: 600;">' + esc(e.level) + '</div>'
-                  + '<div style="color: #9ca3af;">' + esc(e.created_at) + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(fmtTs(e.created_at)) + '</div>'
                   + '</div>'
                   + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(e.module_name) + ' · ' + esc(e.action) + '</div>'
                   + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(e.message) + '</div>'
@@ -384,7 +460,7 @@
                 html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
                   + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
                   + '<div style="font-weight: 600;">' + (h.ok ? 'ok' : 'error') + '</div>'
-                  + '<div style="color: #9ca3af;">' + esc(h.created_at) + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(fmtTs(h.created_at)) + '</div>'
                   + '</div>'
                   + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(h.module_name) + ' · ' + esc(h.provider_type) + '</div>'
                   + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(h.message) + '</div>'
@@ -402,7 +478,7 @@
                 html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
                   + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
                   + '<div style="font-weight: 600;">' + (w.ok ? 'ok' : 'error') + '</div>'
-                  + '<div style="color: #9ca3af;">' + esc(w.created_at) + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(fmtTs(w.created_at)) + '</div>'
                   + '</div>'
                   + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(w.module_name) + ' · ' + esc(w.provider_type) + '</div>'
                   + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">Key: <code>' + esc(w.storage_key) + '</code></div>'
@@ -420,7 +496,7 @@
                 html += '<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.5rem;">'
                   + '<div style="display:flex; justify-content: space-between; gap: 0.5rem;">'
                   + '<div style="font-weight: 600;">' + esc(u.severity) + '</div>'
-                  + '<div style="color: #9ca3af;">' + esc(u.created_at) + '</div>'
+                  + '<div style="color: #9ca3af;">' + esc(fmtTs(u.created_at)) + '</div>'
                   + '</div>'
                   + '<div style="color: #9ca3af; margin-top: 0.2rem;">' + esc(u.event_type) + ' · user ' + esc(u.user_id) + ' · ' + esc(u.ip) + '</div>'
                   + '<div style="margin-top: 0.3rem; white-space: pre-wrap;">' + esc(u.message) + '</div>'
@@ -569,6 +645,8 @@
       fetchJournal();
       fetchAudit(false);
 
+      initTimezoneSelect();
+
       startAutoRefresh();
       startAuditAutoRefresh();
     })();
@@ -578,19 +656,31 @@
     (function () {
       var el = document.getElementById('pv-status-datetime');
       if (!el) return;
-
-      function pad(n) {
-        return String(n).padStart(2, '0');
-      }
-
       function tick() {
-        var d = new Date();
-        var mm = pad(d.getMonth() + 1);
-        var dd = pad(d.getDate());
-        var yy = pad(d.getFullYear() % 100);
-        var hh = pad(d.getHours());
-        var mi = pad(d.getMinutes());
-        el.textContent = mm + '/' + dd + '/' + yy + ' ' + hh + ':' + mi;
+        try {
+          var d = new Date();
+          var tz = 'America/Chicago';
+          try {
+            tz = window.localStorage.getItem('pvLogTimezone') || 'America/Chicago';
+          } catch (e) {}
+          var parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: String(tz || 'America/Chicago'),
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          }).formatToParts(d);
+          var map = {};
+          for (var i = 0; i < parts.length; i++) {
+            map[parts[i].type] = parts[i].value;
+          }
+          el.textContent = (map.month || '') + '/' + (map.day || '') + '/' + (map.year || '') + ' ' + (map.hour || '') + ':' + (map.minute || '') + ':' + (map.second || '');
+        } catch (e) {
+          el.textContent = '';
+        }
       }
 
       tick();

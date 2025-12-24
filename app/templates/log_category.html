@@ -39,6 +39,14 @@
         align-items: center;
         gap: 0.5rem;
       }
+      .pv-input {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.14);
+        color: #e5e7eb;
+        border-radius: 10px;
+        padding: 0.35rem 0.5rem;
+        font-size: 12px;
+      }
       .pv-btn {
         background: rgba(255,255,255,0.08);
         border: 1px solid rgba(255,255,255,0.14);
@@ -75,6 +83,13 @@
         <div class="pv-sub">Live tail from /dev/shm/pentavision/logs/{{ category }}/logfile</div>
       </div>
       <div class="pv-controls">
+        <select id="pv-tz" class="pv-input" style="min-width: 220px;"></select>
+        <div style="display: inline-flex; align-items: center; gap: 0.4rem; color: #9ca3af;">
+          <label for="pv-refresh" style="font-size: 12px;">Refresh</label>
+          <input id="pv-refresh" type="range" min="0" max="7" step="1" value="3" style="width: 140px;" />
+          <span id="pv-refresh-label" style="min-width: 3.25rem; text-align: right; font-size: 12px;">15s</span>
+        </div>
+        <button class="pv-btn" id="pv-copy" type="button">Copy All</button>
         <button class="pv-btn" id="pv-clear" type="button">Clear</button>
         <button class="pv-btn" id="pv-pause" type="button">Pause</button>
       </div>
@@ -87,10 +102,120 @@
         var out = document.getElementById('pv-log');
         var btnClear = document.getElementById('pv-clear');
         var btnPause = document.getElementById('pv-pause');
+        var btnCopy = document.getElementById('pv-copy');
+        var tzSel = document.getElementById('pv-tz');
+        var refreshEl = document.getElementById('pv-refresh');
+        var refreshLabelEl = document.getElementById('pv-refresh-label');
         var paused = false;
         var maxLines = 2000;
-        var pollMs = 30000;
+        var pollTimer = null;
         var pos = 0;
+
+        var tzKey = 'pvLogTimezone';
+        var defaultTz = 'America/Chicago';
+        var tzOptions = [
+          { label: 'US (CST/CDT) - America/Chicago', value: 'America/Chicago' },
+          { label: 'US (EST/EDT) - America/New_York', value: 'America/New_York' },
+          { label: 'US (MST/MDT) - America/Denver', value: 'America/Denver' },
+          { label: 'US (PST/PDT) - America/Los_Angeles', value: 'America/Los_Angeles' },
+          { label: 'Canada - America/Toronto', value: 'America/Toronto' },
+          { label: 'Mexico - America/Mexico_City', value: 'America/Mexico_City' },
+          { label: 'UK - Europe/London', value: 'Europe/London' },
+          { label: 'France - Europe/Paris', value: 'Europe/Paris' },
+          { label: 'Germany - Europe/Berlin', value: 'Europe/Berlin' },
+          { label: 'Spain - Europe/Madrid', value: 'Europe/Madrid' },
+          { label: 'Italy - Europe/Rome', value: 'Europe/Rome' },
+          { label: 'Brazil - America/Sao_Paulo', value: 'America/Sao_Paulo' },
+          { label: 'India - Asia/Kolkata', value: 'Asia/Kolkata' },
+          { label: 'China - Asia/Shanghai', value: 'Asia/Shanghai' },
+          { label: 'Japan - Asia/Tokyo', value: 'Asia/Tokyo' },
+          { label: 'Australia - Australia/Sydney', value: 'Australia/Sydney' }
+        ];
+
+        function getTz() {
+          try {
+            var tz = window.localStorage.getItem(tzKey) || '';
+            tz = String(tz || '').trim();
+            return tz || defaultTz;
+          } catch (e) {
+            return defaultTz;
+          }
+        }
+
+        function setTz(tz) {
+          try {
+            window.localStorage.setItem(tzKey, String(tz || '').trim() || defaultTz);
+          } catch (e) {}
+        }
+
+        function fmtTs(iso) {
+          var d = new Date(String(iso || ''));
+          if (isNaN(d.getTime())) return '';
+          try {
+            var parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: getTz(),
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            }).formatToParts(d);
+            var map = {};
+            for (var i = 0; i < parts.length; i++) {
+              map[parts[i].type] = parts[i].value;
+            }
+            return (map.month || '') + '/' + (map.day || '') + '/' + (map.year || '') + ' ' + (map.hour || '') + ':' + (map.minute || '') + ':' + (map.second || '');
+          } catch (e) {
+            return '';
+          }
+        }
+
+        function initTimezoneSelect() {
+          if (!tzSel) return;
+          try {
+            tzSel.innerHTML = '';
+            for (var i = 0; i < tzOptions.length; i++) {
+              var opt = document.createElement('option');
+              opt.value = tzOptions[i].value;
+              opt.textContent = tzOptions[i].label;
+              tzSel.appendChild(opt);
+            }
+            tzSel.value = getTz();
+            tzSel.addEventListener('change', function () {
+              setTz(tzSel.value || defaultTz);
+              applyRecentColors();
+              try { poll(); } catch (e) {}
+            });
+          } catch (e) {}
+        }
+
+        function currentPollMs() {
+          if (!refreshEl) return 15000;
+          var idx = parseInt(refreshEl.value || '3', 10);
+          if (isNaN(idx)) idx = 3;
+          idx = Math.max(0, Math.min(idx, 7));
+          var values = [2, 5, 10, 15, 30, 60, 120, 240];
+          return values[idx] * 1000;
+        }
+
+        function updateRefreshLabel() {
+          if (!refreshEl || !refreshLabelEl) return;
+          var idx = parseInt(refreshEl.value || '3', 10);
+          if (isNaN(idx)) idx = 3;
+          idx = Math.max(0, Math.min(idx, 7));
+          var values = [2, 5, 10, 15, 30, 60, 120, 240];
+          refreshLabelEl.textContent = String(values[idx]) + 's';
+        }
+
+        function startPollTimer() {
+          if (pollTimer) {
+            try { clearInterval(pollTimer); } catch (e) {}
+            pollTimer = null;
+          }
+          pollTimer = setInterval(poll, currentPollMs());
+        }
 
         function applyRecentColors() {
           if (!out || !out.children) return;
@@ -119,6 +244,12 @@
             else if (level === 'warn' || level === 'warning') cls += ' is-warn';
             else if (level === 'debug') cls += ' is-debug';
             else cls += ' is-info';
+
+            var ts = '';
+            try { ts = fmtTs(obj.ts); } catch (e) { ts = ''; }
+            if (ts) {
+              text = ts + ' ' + text;
+            }
           } catch (e) {
             cls += ' is-debug';
           }
@@ -148,6 +279,46 @@
           });
         }
 
+        if (btnCopy) {
+          btnCopy.addEventListener('click', function () {
+            if (!out) return;
+            var text = '';
+            try {
+              text = out.innerText || '';
+            } catch (e) {
+              text = out.textContent || '';
+            }
+            try {
+              if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text);
+                return;
+              }
+            } catch (e) {}
+            try {
+              var ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.position = 'fixed';
+              ta.style.left = '-9999px';
+              document.body.appendChild(ta);
+              ta.focus();
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+            } catch (e) {}
+          });
+        }
+
+        if (refreshEl) {
+          updateRefreshLabel();
+          refreshEl.addEventListener('input', function () {
+            updateRefreshLabel();
+          });
+          refreshEl.addEventListener('change', function () {
+            updateRefreshLabel();
+            startPollTimer();
+          });
+        }
+
         function poll() {
           try {
             fetch('/api/tail_poll?cat=' + encodeURIComponent(category) + '&start=' + encodeURIComponent(String(pos)))
@@ -169,8 +340,9 @@
           } catch (e) {}
         }
 
+        initTimezoneSelect();
         poll();
-        try { setInterval(poll, pollMs); } catch (e) {}
+        startPollTimer();
       })();
     </script>
   </body>
