@@ -770,7 +770,7 @@ def create_blocklist_admin_service() -> Flask:
         allowed_str = ",".join(allowed_norm)
         blocked_str = ",".join(blocked_norm)
 
-        with Session(engine) as db:
+        with Session(engine, expire_on_commit=False) as db:
             CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
             if policy is None:
@@ -781,6 +781,12 @@ def create_blocklist_admin_service() -> Flask:
             policy.blocked_countries = blocked_str or None
             db.add(policy)
             db.commit()
+
+            try:
+                db.refresh(policy)
+                db.expunge(policy)
+            except Exception:
+                pass
 
             allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
             blocked_rows = []
