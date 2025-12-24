@@ -420,6 +420,10 @@
       var feedIntervalLabelEl = document.getElementById('pv-feed-interval-label');
       var feedClearBtn = document.getElementById('pv-feed-clear');
 
+      if (feedAutoEl) {
+        feedAutoEl.checked = true;
+      }
+
       var feedPos = { system: 0, modules: 0, rtsp: 0, rtmp: 0, security: 0 };
       var feedMaxBlocks = 2000;
 
@@ -885,7 +889,6 @@
       }
 
       if (feedAutoEl) {
-        feedAutoEl.checked = true;
         feedAutoEl.addEventListener('change', function () {
           if (feedAutoEl.checked) {
             pollFeedAll();
