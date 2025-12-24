@@ -1,0 +1,16 @@
+[Unit]
+Description=PentaVision Access Control Admin Service (8124)
+After=network.target
+
+[Service]
+User=pentavision
+Group=pentavision
+WorkingDirectory=/opt/pentavision/app
+Environment="PATH=/opt/pentavision/venv/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/pentavision/app"
+EnvironmentFile=/opt/pentavision/app/.env
+ExecStart=/opt/pentavision/venv/bin/gunicorn --chdir /opt/pentavision/app "app.blocklist_admin_service:create_blocklist_admin_service()" --bind 0.0.0.0:8124 --workers 1 --threads 4
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
