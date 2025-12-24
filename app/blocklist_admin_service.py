@@ -10,6 +10,8 @@ import re
 import time
 from typing import Optional
 
+import gzip
+
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from flask import Flask, Response, abort, request
@@ -208,6 +210,97 @@ def _tail_lines(path: str, *, max_lines: int = 5000, max_bytes: int = 512 * 1024
         return []
 
 
+def _tail_lines_since(
+    path: str,
+    *,
+    cutoff_utc: datetime,
+    parse_ts,
+    max_lines: int = 250_000,
+    max_bytes: int = 32 * 1024 * 1024,
+    chunk_bytes: int = 512 * 1024,
+) -> list[str]:
+    p = str(path or "").strip()
+    if not p or not os.path.exists(p):
+        return []
+
+    # For .gz, we can't efficiently seek from the end. We read forward with safety limits.
+    if p.lower().endswith(".gz"):
+        out: list[str] = []
+        try:
+            with gzip.open(p, "rt", encoding="utf-8", errors="replace") as f:
+                for ln in f:
+                    s = str(ln or "").rstrip("\n")
+                    if not s:
+                        continue
+                    ts = None
+                    try:
+                        ts = parse_ts(s)
+                    except Exception:
+                        ts = None
+                    if ts is None or ts >= cutoff_utc:
+                        out.append(s)
+                        if len(out) >= int(max_lines):
+                            break
+            return out
+        except Exception:
+            return []
+
+    try:
+        size = int(os.path.getsize(p) or 0)
+    except Exception:
+        size = 0
+    if size <= 0:
+        return []
+
+    read_total = 0
+    buf = b""
+    pos = size
+    out: list[str] = []
+    saw_newer = False
+
+    try:
+        with open(p, "rb") as f:
+            while pos > 0 and read_total < int(max_bytes) and len(out) < int(max_lines):
+                step = min(int(chunk_bytes), pos)
+                pos -= step
+                f.seek(pos)
+                data = f.read(step)
+                read_total += len(data)
+                buf = data + buf
+
+                lines = buf.split(b"\n")
+                buf = lines[0]
+                tail_lines = lines[1:]
+
+                for raw in reversed(tail_lines):
+                    try:
+                        s = raw.decode("utf-8", errors="replace")
+                    except Exception:
+                        continue
+                    s = s.strip("\r")
+                    if not s:
+                        continue
+                    ts = None
+                    try:
+                        ts = parse_ts(s)
+                    except Exception:
+                        ts = None
+
+                    if ts is not None and ts < cutoff_utc:
+                        if saw_newer:
+                            return out
+                        continue
+
+                    saw_newer = True
+                    out.append(s)
+                    if len(out) >= int(max_lines):
+                        return out
+
+        return out
+    except Exception:
+        return []
+
+
 def _apache_log_candidates() -> list[str]:
     cands: list[str] = []
 
@@ -218,7 +311,16 @@ def _apache_log_candidates() -> list[str]:
         if os.path.exists(p):
             cands.append(p)
     for base in ("/etc/apache2", "/etc/apache", "/var/log/apache2", "/var/log/httpd"):
-        for pat in ("*_access*", "*_error*", "access.log*", "error.log*"):
+        for pat in (
+            "*_access*",
+            "*_error*",
+            "access.log*",
+            "error.log*",
+            "pentavision_access.log*",
+            "pentavision_error.log*",
+            "*.log.*",
+            "*.log.*.gz",
+        ):
             try:
                 cands.extend(glob.glob(os.path.join(base, pat)))
             except Exception:
@@ -251,6 +353,7 @@ def _scan_apache_findings(*, cache_ttl_seconds: int = 10) -> tuple[list[dict], l
             str(_apache_cache.get("err") or ""),
         )
 
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
     paths = _apache_log_candidates()
 
     access_re = re.compile(
@@ -258,6 +361,7 @@ def _scan_apache_findings(*, cache_ttl_seconds: int = 10) -> tuple[list[dict], l
         re.IGNORECASE,
     )
     error_client_re = re.compile(r"\bclient\s+(?P<ip>\d{1,3}(?:\.\d{1,3}){3})\b", re.IGNORECASE)
+    error_ts_re = re.compile(r"^\[(?P<ts>[^\]]+)\]", re.IGNORECASE)
     status_404 = 0
 
     def _parse_access_ts(raw: str) -> Optional[datetime]:
@@ -270,13 +374,43 @@ def _scan_apache_findings(*, cache_ttl_seconds: int = 10) -> tuple[list[dict], l
         except Exception:
             return None
 
+    def _parse_error_ts(line: str) -> Optional[datetime]:
+        s = str(line or "").strip()
+        if not s:
+            return None
+        m = error_ts_re.match(s)
+        if not m:
+            return None
+        ts = str(m.group("ts") or "").strip()
+        if not ts:
+            return None
+        # Common Apache 2.4 error_log formats:
+        # [Wed Oct 11 14:32:52.123456 2025]
+        # [Wed Oct 11 14:32:52 2025]
+        for fmt in ("%a %b %d %H:%M:%S.%f %Y", "%a %b %d %H:%M:%S %Y"):
+            try:
+                dt = datetime.strptime(ts, fmt)
+                return dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+        return None
+
     stats: dict[str, dict] = {}
 
     for p in paths:
-        lines = _tail_lines(p, max_lines=5000, max_bytes=512 * 1024)
+        is_access = ("access" in os.path.basename(p).lower()) or (p.endswith("_access") or "_access" in p)
+        if is_access:
+            def _parse_ts_line(line: str) -> Optional[datetime]:
+                m = access_re.match(str(line or ""))
+                if not m:
+                    return None
+                return _parse_access_ts(m.group("ts"))
+
+            lines = _tail_lines_since(p, cutoff_utc=cutoff, parse_ts=_parse_ts_line)
+        else:
+            lines = _tail_lines_since(p, cutoff_utc=cutoff, parse_ts=_parse_error_ts)
         if not lines:
             continue
-        is_access = ("access" in os.path.basename(p).lower()) or (p.endswith("_access") or "_access" in p)
         for ln in lines:
             s = str(ln or "")
             if not s:
@@ -301,6 +435,7 @@ def _scan_apache_findings(*, cache_ttl_seconds: int = 10) -> tuple[list[dict], l
                     continue
                 ip = str(em.group("ip") or "").strip()
                 path = s
+                when = _parse_error_ts(s)
 
             if not ip:
                 continue
