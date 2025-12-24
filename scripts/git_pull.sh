@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cd /opt/pentavision/opt
+cd /opt/pentavision/app
 
 git fetch origin
 
