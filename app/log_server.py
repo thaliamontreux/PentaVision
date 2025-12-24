@@ -259,12 +259,26 @@ def create_log_server() -> Flask:
             # Simple best-effort tail that polls for changes.
             # SSE framing: 'data: ...\n\n'
             pos = 0
+            warned_missing = False
             try:
                 if start_pos is not None and start_pos >= 0:
                     pos = start_pos
             except Exception:
                 pos = 0
             while True:
+                # Ensure log directory exists and the logfile exists so the UI doesn't
+                # spam a warning on fresh boots.
+                try:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    if not os.path.exists(path):
+                        with open(path, "ab"):
+                            pass
+                except Exception:
+                    if not warned_missing:
+                        warned_missing = True
+                        yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"log file not found\"}\n\n"
+                    time.sleep(1.0)
+                    continue
                 try:
                     with open(path, "rb") as f:
                         try:
@@ -281,7 +295,9 @@ def create_log_server() -> Flask:
                                     continue
                                 yield f"data: {line}\n\n"
                 except FileNotFoundError:
-                    yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"log file not found\"}\n\n"
+                    if not warned_missing:
+                        warned_missing = True
+                        yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"log file not found\"}\n\n"
                 except Exception:
                     # Do not break the SSE stream.
                     yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"tail error\"}\n\n"
