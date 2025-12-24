@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 from ipaddress import ip_address, ip_network, IPv4Address, IPv6Address
@@ -209,7 +209,12 @@ def log_event(event_type: str, user_id: Optional[int] = None, details: str = "")
 
 
 def _env_consumer_allow_networks() -> list:
+    # Backwards/forwards compatible: support both env var spellings.
     raw = os.environ.get("PENTAVISION_BLOCKLIST_CONSUMER_ALLOW_CIDRS", "").strip()
+    if not raw:
+        raw = os.environ.get("PENTAVISION_BLOCKLIST_CONSUMER_ALLOW_CIDR", "").strip()
+    if not raw:
+        raw = os.environ.get("PENTAVISION_BLOCKLIST_ALLOW_CIDRS", "").strip()
     parts = [c.strip() for c in raw.split(",") if c.strip()]
     nets = []
     for c in parts + ["127.0.0.1/32", "::1/128"]:
@@ -218,6 +223,70 @@ def _env_consumer_allow_networks() -> list:
         except ValueError:
             continue
     return nets
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_until(details: str) -> Optional[datetime]:
+    # details format: "until=<iso> ..."
+    text = str(details or "")
+    for part in text.split():
+        if part.startswith("until="):
+            val = part.split("=", 1)[1].strip()
+            try:
+                return datetime.fromisoformat(val)
+            except Exception:  # noqa: BLE001
+                return None
+    return None
+
+
+def _ip_in_blocklist(ip: str) -> bool:
+    engine = get_user_engine()
+    if engine is None:
+        return False
+    try:
+        addr = ip_address(str(ip))
+    except ValueError:
+        return False
+    try:
+        with Session(engine) as session:
+            IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+            rows = session.query(IpBlocklist.cidr).all()
+        for (cidr,) in rows:
+            try:
+                net = ip_network(str(cidr), strict=False)
+            except ValueError:
+                continue
+            try:
+                if addr in net:
+                    return True
+            except Exception:
+                continue
+    except Exception:  # noqa: BLE001
+        return False
+    return False
+
+
+def _set_ip_suspend(event_type: str, ip: str, until: datetime, details: str = "") -> None:
+    engine = get_user_engine()
+    if engine is None:
+        return
+    try:
+        with Session(engine) as session:
+            AuditEvent.__table__.create(bind=engine, checkfirst=True)
+            session.add(
+                AuditEvent(
+                    user_id=None,
+                    event_type=str(event_type),
+                    ip=str(ip),
+                    details=(f"until={until.isoformat()} " + str(details or "")).strip(),
+                )
+            )
+            session.commit()
+    except Exception:  # noqa: BLE001
+        return
 
 
 def _ip_is_allowlisted(ip: str) -> bool:
@@ -332,24 +401,43 @@ def record_invalid_url_attempt(path: str) -> None:
         path=str(path or "")[:512],
     )
     try:
+        now = _utcnow()
+        day_ago = now - timedelta(days=1)
         with Session(engine) as session:
             AuditEvent.__table__.create(bind=engine, checkfirst=True)
             cnt = (
                 session.query(func.count(AuditEvent.id))
-                .filter(AuditEvent.ip == ip, AuditEvent.event_type == "SECURITY_URL_404")
+                .filter(
+                    AuditEvent.ip == ip,
+                    AuditEvent.event_type == "SECURITY_URL_404",
+                    AuditEvent.when >= day_ago,
+                )
                 .scalar()
             )
-            if cnt is not None and int(cnt) > 5:
+            count = int(cnt or 0)
+            if count >= 10:
                 pv_log(
                     "security",
                     "error",
-                    "security_too_many_invalid_urls",
+                    "security_bad_urls_permanent_block",
                     component="logging_utils",
                     ip=str(ip),
-                    count=int(cnt),
+                    count=int(count),
                 )
-                _add_blocklist_cidr(f"{ip}/32", reason="too_many_invalid_urls")
+                _add_blocklist_cidr(f"{ip}/32", reason="bad_urls>=10_in_1d")
                 _escalate_network_if_needed(ip)
+            elif count >= 5:
+                until = now + timedelta(minutes=30)
+                pv_log(
+                    "security",
+                    "warn",
+                    "security_bad_urls_suspend_30m",
+                    component="logging_utils",
+                    ip=str(ip),
+                    count=int(count),
+                    until=until.isoformat(),
+                )
+                _set_ip_suspend("SECURITY_URL_SUSPEND", ip, until, details=f"count={count}")
     except Exception:
         return
 
@@ -410,17 +498,32 @@ def ip_is_locked() -> bool:
     if _ip_is_allowlisted(ip):
         return False
 
+    # If permanently blocklisted, treat as locked.
+    if _ip_in_blocklist(ip):
+        return True
+
     try:
+        now = _utcnow()
+        day_ago = now - timedelta(days=1)
         with Session(engine) as session:
-            exists = (
-                session.query(AuditEvent.id)
+            AuditEvent.__table__.create(bind=engine, checkfirst=True)
+
+            # Temporary suspensions
+            row = (
+                session.query(AuditEvent.details)
                 .filter(
                     AuditEvent.ip == ip,
-                    AuditEvent.event_type == "AUTH_IP_LOCKED",
+                    AuditEvent.event_type == "AUTH_IP_SUSPEND",
+                    AuditEvent.when >= day_ago,
                 )
+                .order_by(AuditEvent.when.desc())
                 .first()
             )
-            return exists is not None
+            if row and row[0]:
+                until = _parse_until(str(row[0]))
+                if until and now < until:
+                    return True
+            return False
     except Exception:  # noqa: BLE001
         return False
 
@@ -446,61 +549,67 @@ def update_ip_lockout_after_failure(threshold: int = 4) -> None:
         return
 
     try:
+        now = _utcnow()
+        day_ago = now - timedelta(days=1)
+        failure_events = (
+            "AUTH_LOGIN_FAILURE",
+            "AUTH_LOGIN_2FA_FAILURE",
+            "AUTH_TOTP_VERIFY_FAILURE",
+            "AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE",
+        )
+
         with Session(engine) as session:
-            # If already locked, nothing to do.
-            locked = (
-                session.query(AuditEvent.id)
-                .filter(
-                    AuditEvent.ip == ip,
-                    AuditEvent.event_type == "AUTH_IP_LOCKED",
-                )
-                .first()
-            )
-            if locked is not None:
-                return
-
-            failure_events = (
-                "AUTH_LOGIN_FAILURE",
-                "AUTH_LOGIN_2FA_FAILURE",
-                "AUTH_TOTP_VERIFY_FAILURE",
-                "AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE",
-            )
-
+            AuditEvent.__table__.create(bind=engine, checkfirst=True)
             failure_count = (
                 session.query(func.count(AuditEvent.id))
                 .filter(
                     AuditEvent.ip == ip,
                     AuditEvent.event_type.in_(failure_events),
+                    AuditEvent.when >= day_ago,
                 )
                 .scalar()
             )
+        count = int(failure_count or 0)
 
-            if failure_count is None or failure_count < threshold:
-                return
-
-            lock_event = AuditEvent(
-                user_id=None,
-                event_type="AUTH_IP_LOCKED",
-                ip=ip,
-                details=f"ip lockout after {int(failure_count)} failures",
-            )
-            session.add(lock_event)
-            session.commit()
+        # Rules:
+        # - 3 failures in 1 day => 5 min
+        # - 6 failures in 1 day => 30 min
+        # - 9 failures in 1 day => 6 hours
+        # - 12 failures in 1 day => permanent blocklist
+        if count >= 12:
             pv_log(
                 "security",
                 "error",
-                "auth_ip_locked",
+                "auth_ip_permanent_block",
                 component="logging_utils",
                 ip=str(ip),
-                failures=int(failure_count),
-                threshold=int(threshold),
+                failures=int(count),
             )
-            # Also add to central blocklist and consider network escalation
-            if not _ip_is_allowlisted(ip):
-                _add_blocklist_cidr(f"{ip}/32", reason=f"auth_failures>={int(failure_count)}")
-                _escalate_network_if_needed(ip)
+            _add_blocklist_cidr(f"{ip}/32", reason="auth_failures>=12_in_1d")
+            _escalate_network_if_needed(ip)
+            return
+
+        until: Optional[datetime] = None
+        if count >= 9:
+            until = now + timedelta(hours=6)
+        elif count >= 6:
+            until = now + timedelta(minutes=30)
+        elif count >= 3:
+            until = now + timedelta(minutes=5)
+        else:
+            return
+
+        pv_log(
+            "security",
+            "warn",
+            "auth_ip_suspend",
+            component="logging_utils",
+            ip=str(ip),
+            failures=int(count),
+            until=until.isoformat(),
+        )
+        _set_ip_suspend("AUTH_IP_SUSPEND", ip, until, details=f"failures={count}")
     except Exception:  # noqa: BLE001
-        # Never raise from IP lockout bookkeeping.
         return
 
 
