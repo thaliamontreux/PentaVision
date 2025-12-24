@@ -347,6 +347,8 @@ def create_blocklist_service() -> Flask:
         health_text = "ok"
         health_ok = True
         blocks: List[Tuple[str, Optional[datetime], Optional[str]]] = []
+        blocks_raw: List[Tuple[str, Optional[datetime], Optional[str]]] = []
+        published_set: set[str] = set()
         if engine is None:
             health_text = "not_ok: no_user_db"
             health_ok = False
@@ -355,6 +357,15 @@ def create_blocklist_service() -> Flask:
                 with engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
                 blocks, _ = _load_blocks_for_publication(engine)
+                published_set = {str(c) for (c, _, _) in (blocks or [])}
+                try:
+                    IpAllowlist.__table__.create(bind=engine, checkfirst=True)
+                    IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+                    with Session(engine) as session:
+                        block_rows = session.query(IpBlocklist.cidr, IpBlocklist.created_at, IpBlocklist.description).all()
+                    blocks_raw = [(str(c), a, d) for (c, a, d) in (block_rows or [])]
+                except Exception:
+                    blocks_raw = []
             except Exception as exc:  # noqa: BLE001
                 health_text = f"not_ok: db_error: {type(exc).__name__}"
                 health_ok = False
@@ -372,6 +383,7 @@ def create_blocklist_service() -> Flask:
             return (0 if t == "host" else 1, addr_int, plen, cidr)
 
         blocks.sort(key=_sort_key)
+        blocks_raw.sort(key=_sort_key)
 
         now = datetime.now(timezone.utc).isoformat()
         badge_bg = "#22c55e" if health_ok and health_text.strip().lower() == "ok" else "#ef4444"
@@ -488,6 +500,7 @@ def create_blocklist_service() -> Flask:
       <div class=\"panel-top\">
         <div class=\"kpis\">
           <div class=\"kpi\"><strong>{len(blocks)}</strong> published blocks</div>
+          <div class=\"kpi\"><strong>{len(blocks_raw)}</strong> configured permanent blocks</div>
           <div class=\"kpi\">Source: <strong class=\"mono\">USER_DB_URL</strong></div>
         </div>
         <div class=\"kpis\">Tip: point pfSense alias URL to <strong class=\"mono\">/blocklist.csv</strong></div>
@@ -501,25 +514,29 @@ def create_blocklist_service() -> Flask:
               <th>IP / CIDR</th>
               <th style=\"width:240px;\">Detected</th>
               <th>Reason</th>
+              <th style=\"width:120px;\">Published</th>
             </tr>
           </thead>
           <tbody>
 """
 
-        if not blocks:
-            html += "<tr><td colspan=\"4\" class=\"empty\">No blocks currently published.</td></tr>"
+        if not blocks_raw and not blocks:
+            html += "<tr><td colspan=\"5\" class=\"empty\">No blocks currently configured.</td></tr>"
         else:
-            for cidr, created_at, desc in blocks:
+            rows = blocks_raw if blocks_raw else blocks
+            for cidr, created_at, desc in rows:
                 t = _determine_type(cidr)
                 detected = _dt_iso(created_at)
                 reason = (str(desc).strip() if desc else "BLOCKLIST")
                 reason = reason.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                pub = "Yes" if str(cidr) in published_set else "No"
                 html += (
                     "<tr>"
                     f"<td>{t}</td>"
                     f"<td class=\"mono\">{cidr}</td>"
                     f"<td class=\"mono\">{detected}</td>"
                     f"<td>{reason}</td>"
+                    f"<td>{pub}</td>"
                     "</tr>"
                 )
 
