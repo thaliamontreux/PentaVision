@@ -283,6 +283,7 @@ def _ip_in_blocklist(ip: str) -> bool:
     except ValueError:
         return False
 
+    # Built-in safety allowlist for local management subnet
     builtin_cidrs = ("192.168.250.0/24",)
     for cidr in builtin_cidrs:
         try:
@@ -292,7 +293,7 @@ def _ip_in_blocklist(ip: str) -> bool:
         if addr in net:
             return True
 
-    # Environment-based consumer allowlist (never block)
+    # Environment allowlist (never block)
     for net in _env_consumer_allow_networks():
         try:
             if addr in net:
@@ -314,27 +315,6 @@ def _ip_in_blocklist(ip: str) -> bool:
     except Exception:  # noqa: BLE001
         return False
 
-    return False
-    try:
-        addr = ip_address(str(ip))
-    except ValueError:
-        return False
-    try:
-        with Session(engine) as session:
-            IpBlocklist.__table__.create(bind=engine, checkfirst=True)
-            rows = session.query(IpBlocklist.cidr).all()
-        for (cidr,) in rows:
-            try:
-                net = ip_network(str(cidr), strict=False)
-            except ValueError:
-                continue
-            try:
-                if addr in net:
-                    return True
-            except Exception:
-                continue
-    except Exception:  # noqa: BLE001
-        return False
     return False
 
 
