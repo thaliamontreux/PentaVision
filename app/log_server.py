@@ -444,6 +444,21 @@ def create_log_server() -> Flask:
         pass
 
     try:
+        for _cat in ("system", "modules", "rtsp", "rtmp", "security"):
+            _path = f"/dev/shm/pentavision/logs/{_cat}/logfile"
+            try:
+                os.makedirs(os.path.dirname(_path), exist_ok=True)
+                if not os.path.exists(_path):
+                    with open(_path, "ab"):
+                        pass
+            except Exception:
+                pass
+        pv_log("system", "info", "logserver_started", component="log_server")
+        pv_log("security", "info", "logserver_started", component="log_server")
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
         _start_apache_log_ingestion()
     except Exception:  # noqa: BLE001
         pass
