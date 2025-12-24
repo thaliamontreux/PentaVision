@@ -210,6 +210,13 @@ def _tail_lines(path: str, *, max_lines: int = 5000, max_bytes: int = 512 * 1024
 
 def _apache_log_candidates() -> list[str]:
     cands: list[str] = []
+
+    for p in (
+        "/var/log/apache2/pentavision_access.log",
+        "/var/log/apache2/pentavision_error.log",
+    ):
+        if os.path.exists(p):
+            cands.append(p)
     for base in ("/etc/apache2", "/etc/apache", "/var/log/apache2", "/var/log/httpd"):
         for pat in ("*_access*", "*_error*", "access.log*", "error.log*"):
             try:
