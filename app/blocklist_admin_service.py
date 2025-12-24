@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import ipaddress
 from typing import Optional
 
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .config import load_config
 from .db import get_user_engine
-from .models import CountryAccessPolicy, IpAllowlist, IpBlocklist, Role, User, UserRole
+from .models import AuditEvent, CountryAccessPolicy, IpAllowlist, IpBlocklist, Role, User, UserRole
 
 
 _ph = PasswordHasher()
@@ -85,6 +85,70 @@ def _normalize_cidr(raw: str) -> str:
     return f"{addr}/32"
 
 
+def _parse_until(details: str) -> Optional[datetime]:
+    text = str(details or "")
+    for part in text.split():
+        if part.startswith("until="):
+            val = part.split("=", 1)[1].strip()
+            try:
+                return datetime.fromisoformat(val)
+            except Exception:
+                return None
+    return None
+
+
+def _offense_from_counts(rule: str, count: int) -> str:
+    r = (rule or "").strip().lower()
+    try:
+        n = int(count)
+    except Exception:
+        n = 0
+
+    if r == "login":
+        if n >= 12:
+            return "Permanently Blocked"
+        if n >= 9:
+            return "3rd offense"
+        if n >= 6:
+            return "2nd offense"
+        if n >= 3:
+            return "1st offense"
+        return ""
+    if r == "bad_url":
+        if n >= 10:
+            return "Permanently Blocked"
+        if n >= 5:
+            return "1st offense"
+        return ""
+    return ""
+
+
+def _rule_label(rule: str) -> str:
+    r = (rule or "").strip().lower()
+    if r == "login":
+        return "login"
+    if r == "bad_url":
+        return "bad url"
+    if r == "network_escalation":
+        return "network escalation"
+    if r == "manual":
+        return "manual"
+    return r or "unknown"
+
+
+def _blocked_reason_from_desc(desc: str) -> tuple[str, str, str]:
+    d = str(desc or "").strip().lower()
+    if "auth_failures" in d:
+        return "login", "Permanently Blocked", "login"
+    if "bad_urls" in d:
+        return "bad_url", "Permanently Blocked", "bad url"
+    if "escalate_network" in d:
+        return "network_escalation", "Permanently Blocked", "network escalation"
+    if d:
+        return "manual", "Permanently Blocked", "manual"
+    return "manual", "Permanently Blocked", "manual"
+
+
 def create_blocklist_admin_service() -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(load_config())
@@ -92,7 +156,7 @@ def create_blocklist_admin_service() -> Flask:
 
     def _render_page(
         allow_rows: list[IpAllowlist],
-        block_rows: list[IpBlocklist],
+        blocked_rows: list[dict],
         policy: Optional[CountryAccessPolicy],
         error: str = "",
         message: str = "",
@@ -128,9 +192,56 @@ def create_blocklist_admin_service() -> Flask:
         allow_body = "".join(
             [_row_html("allow", int(r.id), str(r.cidr), r.description) for r in allow_rows]
         )
-        block_body = "".join(
-            [_row_html("block", int(r.id), str(r.cidr), r.description) for r in block_rows]
-        )
+        def _blocked_row_html(row: dict) -> str:
+            cidr = str(row.get("cidr") or "")
+            desc = str(row.get("description") or "")
+            status = str(row.get("status") or "")
+            rule = str(row.get("rule") or "")
+            until = row.get("until")
+            until_text = ""
+            if isinstance(until, datetime):
+                until_text = until.astimezone(timezone.utc).isoformat()
+            elif until is None:
+                until_text = "permanent"
+            else:
+                until_text = str(until)
+
+            safe_cidr = cidr.replace("<", "&lt;").replace(">", "&gt;")
+            safe_desc = desc.replace("<", "&lt;").replace(">", "&gt;")
+            safe_status = status.replace("<", "&lt;").replace(">", "&gt;")
+            safe_rule = rule.replace("<", "&lt;").replace(">", "&gt;")
+            safe_until = until_text.replace("<", "&lt;").replace(">", "&gt;")
+
+            action_html = ""
+            if row.get("kind") == "block" and row.get("id") is not None:
+                entry_id = int(row.get("id"))
+                action_html = (
+                    f"<form method=\"post\" action=\"/remove/block/{entry_id}\" onsubmit=\"return confirm('Remove this entry?');\">"
+                    "<button class=\"btn danger\" type=\"submit\">Remove</button>"
+                    "</form>"
+                )
+            elif row.get("kind") == "suspend" and row.get("ip"):
+                ip = str(row.get("ip"))
+                safe_ip = ip.replace("<", "&lt;").replace(">", "&gt;")
+                action_html = (
+                    "<form method=\"post\" action=\"/remove/suspend\" onsubmit=\"return confirm('Clear temporary suspension for this IP?');\">"
+                    f"<input type=\"hidden\" name=\"ip\" value=\"{safe_ip}\" />"
+                    "<button class=\"btn danger\" type=\"submit\">Clear</button>"
+                    "</form>"
+                )
+
+            return (
+                "<tr>"
+                f"<td class=\"mono\">{safe_cidr}</td>"
+                f"<td class=\"mono\">{safe_until}</td>"
+                f"<td>{safe_status or '&nbsp;'}</td>"
+                f"<td>{safe_rule or '&nbsp;'}</td>"
+                f"<td>{safe_desc or '&nbsp;'}</td>"
+                f"<td style=\"width:1%;white-space:nowrap;\">{action_html}</td>"
+                "</tr>"
+            )
+
+        block_body = "".join([_blocked_row_html(r) for r in (blocked_rows or [])])
 
         error_html = ""
         if error:
@@ -244,11 +355,11 @@ def create_blocklist_admin_service() -> Flask:
       <div class=\"panel\">
         <div class=\"panel-top\">
           <div><strong>IP / network blocklist</strong></div>
-          <div class=\"kpis\"><div><strong>{len(block_rows)}</strong> entries</div></div>
+          <div class=\"kpis\"><div><strong>{len(blocked_rows)}</strong> entries</div></div>
         </div>
         <table>
-          <thead><tr><th>CIDR / IP</th><th>Description</th><th></th></tr></thead>
-          <tbody>{block_body or '<tr><td colspan=3 class="muted">(none)</td></tr>'}</tbody>
+          <thead><tr><th>CIDR / IP</th><th>Blocked until (UTC)</th><th>Status</th><th>Rule</th><th>Notes</th><th></th></tr></thead>
+          <tbody>{block_body or '<tr><td colspan=6 class="muted">(none)</td></tr>'}</tbody>
         </table>
       </div>
     </div>
@@ -279,15 +390,146 @@ def create_blocklist_admin_service() -> Flask:
             html = _render_page([], [], None, error="User database is not configured.")
             return Response(html, status=503, mimetype="text/html; charset=utf-8")
 
-        with Session(engine) as db:
+        def _load_view_model(db: Session):
+            now_local = datetime.now(timezone.utc)
+            day_ago = now_local - timedelta(days=1)
+
             IpAllowlist.__table__.create(bind=engine, checkfirst=True)
             IpBlocklist.__table__.create(bind=engine, checkfirst=True)
             CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
-            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
-            block_rows = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
-            policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            AuditEvent.__table__.create(bind=engine, checkfirst=True)
 
-        html = _render_page(allow_rows, block_rows, policy)
+            allow_rows_local = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            block_rows_local = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
+            policy_local = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+
+            allow_nets: list[ipaddress._BaseNetwork] = []
+            for a in allow_rows_local:
+                try:
+                    allow_nets.append(ipaddress.ip_network(str(a.cidr), strict=False))
+                except Exception:
+                    continue
+
+            def _ip_is_allowlisted_local(ip_str: str) -> bool:
+                try:
+                    addr = ipaddress.ip_address(str(ip_str))
+                except Exception:
+                    return False
+                for net in allow_nets:
+                    try:
+                        if addr in net:
+                            return True
+                    except Exception:
+                        continue
+                return False
+
+            suspend_rows = (
+                db.query(AuditEvent)
+                .filter(
+                    AuditEvent.when >= day_ago,
+                    AuditEvent.event_type.in_(["AUTH_IP_SUSPEND", "SECURITY_URL_SUSPEND"]),
+                )
+                .order_by(AuditEvent.when.desc())
+                .all()
+            )
+
+            def _count_login_failures(ip: str) -> int:
+                failure_events = [
+                    "AUTH_LOGIN_FAILURE",
+                    "AUTH_LOGIN_2FA_FAILURE",
+                    "AUTH_TOTP_VERIFY_FAILURE",
+                    "AUTH_WEBAUTHN_LOGIN_COMPLETE_FAILURE",
+                ]
+                return int(
+                    (
+                        db.query(AuditEvent.id)
+                        .filter(
+                            AuditEvent.when >= day_ago,
+                            AuditEvent.ip == ip,
+                            AuditEvent.event_type.in_(failure_events),
+                        )
+                        .count()
+                    )
+                    or 0
+                )
+
+            def _count_bad_urls(ip: str) -> int:
+                return int(
+                    (
+                        db.query(AuditEvent.id)
+                        .filter(
+                            AuditEvent.when >= day_ago,
+                            AuditEvent.ip == ip,
+                            AuditEvent.event_type == "SECURITY_URL_404",
+                        )
+                        .count()
+                    )
+                    or 0
+                )
+
+            blocked_local: list[dict] = []
+
+            for r in block_rows_local:
+                cidr = str(r.cidr)
+                _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                blocked_local.append(
+                    {
+                        "kind": "block",
+                        "id": int(r.id),
+                        "cidr": cidr,
+                        "until": None,
+                        "status": status,
+                        "rule": rule_label,
+                        "description": str(r.description or ""),
+                    }
+                )
+
+            seen_ips: set[str] = set()
+            for ev in suspend_rows:
+                ip = str(ev.ip or "").strip()
+                if not ip or ip in seen_ips:
+                    continue
+                if _ip_is_allowlisted_local(ip):
+                    continue
+                until = _parse_until(str(ev.details or ""))
+                if until is None or now_local >= until:
+                    continue
+                seen_ips.add(ip)
+
+                rule_key = "login" if str(ev.event_type) == "AUTH_IP_SUSPEND" else "bad_url"
+                count = _count_login_failures(ip) if rule_key == "login" else _count_bad_urls(ip)
+                offense = _offense_from_counts(rule_key, count)
+                blocked_local.append(
+                    {
+                        "kind": "suspend",
+                        "ip": ip,
+                        "cidr": f"{ip}/32" if ":" not in ip else f"{ip}/128",
+                        "until": until,
+                        "status": offense or "Temporary Block",
+                        "rule": _rule_label(rule_key),
+                        "description": str(ev.details or ""),
+                    }
+                )
+
+            def _sort_key(row: dict):
+                cidr = str(row.get("cidr") or "")
+                kind = str(row.get("kind") or "")
+                until = row.get("until")
+                until_ts = 0
+                if isinstance(until, datetime):
+                    try:
+                        until_ts = int(until.timestamp())
+                    except Exception:
+                        until_ts = 0
+                return (0 if kind == "suspend" else 1, -until_ts, cidr)
+
+            blocked_local.sort(key=_sort_key)
+            return allow_rows_local, blocked_local, policy_local
+
+        with Session(engine) as db:
+            allow_rows, blocked, policy = _load_view_model(db)
+
+        html = _render_page(allow_rows, blocked, policy)
         return Response(html, mimetype="text/html; charset=utf-8")
 
     @app.post("/remove/allow/<int:entry_id>")
@@ -308,12 +550,16 @@ def create_blocklist_admin_service() -> Flask:
                 .delete(synchronize_session=False)
             )
             db.commit()
+
             allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
-            block_rows = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            blocked = []
+            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
         msg = "Removed." if deleted else "Entry not found."
-        html = _render_page(allow_rows, block_rows, policy, message=msg)
+        html = _render_page(allow_rows, blocked, policy, message=msg)
         return Response(html, mimetype="text/html; charset=utf-8")
 
     @app.post("/add/allow")
@@ -335,9 +581,12 @@ def create_blocklist_admin_service() -> Flask:
         except Exception:
             with Session(engine) as db:
                 allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
-                block_rows = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
                 policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
-            html = _render_page(allow_rows, block_rows, policy, error="Invalid IP/CIDR")
+                blocked = []
+                for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                    _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                    blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
+            html = _render_page(allow_rows, blocked, policy, error="Invalid IP/CIDR")
             return Response(html, status=400, mimetype="text/html; charset=utf-8")
 
         with Session(engine) as db:
@@ -349,11 +598,69 @@ def create_blocklist_admin_service() -> Flask:
                 db.commit()
 
             allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
-            block_rows = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            blocked = []
+            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
         msg = "Added." if exists is None else "Already present."
-        html = _render_page(allow_rows, block_rows, policy, message=msg)
+        html = _render_page(allow_rows, blocked, policy, message=msg)
+        return Response(html, mimetype="text/html; charset=utf-8")
+
+    @app.post("/remove/suspend")
+    def remove_suspend() -> Response:
+        ip = (request.form.get("ip") or "").strip()
+        realm = f"PentaVision Admin Clear Suspend {ip}"
+        maybe = _require_admin_basic_auth(realm)
+        if maybe is not None:
+            return maybe
+
+        engine = get_user_engine()
+        if engine is None:
+            abort(503)
+
+        now = datetime.now(timezone.utc)
+        day_ago = now - timedelta(days=1)
+
+        with Session(engine) as db:
+            IpAllowlist.__table__.create(bind=engine, checkfirst=True)
+            IpBlocklist.__table__.create(bind=engine, checkfirst=True)
+            CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
+            AuditEvent.__table__.create(bind=engine, checkfirst=True)
+
+            deleted = 0
+            if ip:
+                deleted = (
+                    db.query(AuditEvent)
+                    .filter(
+                        AuditEvent.when >= day_ago,
+                        AuditEvent.ip == ip,
+                        AuditEvent.event_type.in_(["AUTH_IP_SUSPEND", "SECURITY_URL_SUSPEND"]),
+                    )
+                    .delete(synchronize_session=False)
+                )
+                db.commit()
+
+            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            blocked = []
+            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                blocked.append(
+                    {
+                        "kind": "block",
+                        "id": int(r.id),
+                        "cidr": str(r.cidr),
+                        "until": None,
+                        "status": status,
+                        "rule": rule_label,
+                        "description": str(r.description or ""),
+                    }
+                )
+
+        msg = "Cleared." if deleted else "No active suspension found."
+        html = _render_page(allow_rows, blocked, policy, message=msg)
         return Response(html, mimetype="text/html; charset=utf-8")
 
     @app.post("/remove/block/<int:entry_id>")
@@ -375,11 +682,14 @@ def create_blocklist_admin_service() -> Flask:
             )
             db.commit()
             allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
-            block_rows = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            blocked = []
+            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
         msg = "Removed." if deleted else "Entry not found."
-        html = _render_page(allow_rows, block_rows, policy, message=msg)
+        html = _render_page(allow_rows, blocked, policy, message=msg)
         return Response(html, mimetype="text/html; charset=utf-8")
 
     return app
