@@ -434,65 +434,17 @@ def create_log_server() -> Flask:
 
     @app.get("/api/tail")
     def api_tail():
-        cat = (request.args.get("cat") or "system").strip().lower()
-        if cat not in {"system", "modules", "rtsp", "rtmp", "security"}:
-            cat = "system"
-        path = _cat_path(cat)
-        try:
-            start_raw = request.args.get("start")
-            start_pos = int(start_raw) if start_raw is not None else None
-        except Exception:
-            start_pos = None
-
-        def gen():
-            # Simple best-effort tail that polls for changes.
-            # SSE framing: 'data: ...\n\n'
-            pos = 0
-            warned_missing = False
-            try:
-                if start_pos is not None and start_pos >= 0:
-                    pos = start_pos
-            except Exception:
-                pos = 0
-            while True:
-                # Ensure log directory exists and the logfile exists so the UI doesn't
-                # spam a warning on fresh boots.
-                try:
-                    os.makedirs(os.path.dirname(path), exist_ok=True)
-                    if not os.path.exists(path):
-                        with open(path, "ab"):
-                            pass
-                except Exception:
-                    if not warned_missing:
-                        warned_missing = True
-                        yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"log file not found\"}\n\n"
-                    time.sleep(min(5.0, poll_seconds))
-                    continue
-                try:
-                    with open(path, "rb") as f:
-                        try:
-                            f.seek(pos)
-                        except Exception:
-                            f.seek(0)
-                            pos = 0
-                        chunk = f.read()
-                        if chunk:
-                            pos = f.tell()
-                            text_chunk = chunk.decode("utf-8", errors="replace")
-                            for line in text_chunk.splitlines():
-                                if not line.strip():
-                                    continue
-                                yield f"data: {line}\n\n"
-                except FileNotFoundError:
-                    if not warned_missing:
-                        warned_missing = True
-                        yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"log file not found\"}\n\n"
-                except Exception:
-                    # Do not break the SSE stream.
-                    yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"tail error\"}\n\n"
-                time.sleep(poll_seconds)
-
-        return Response(gen(), mimetype="text/event-stream")
+        # NOTE: SSE tail was replaced with /api/tail_poll because SSE streams can
+        # consume all gunicorn threads and make the logserver unresponsive.
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "SSE tail disabled; use /api/tail_poll",
+                }
+            ),
+            410,
+        )
 
     @app.get("/api/tail_poll")
     def api_tail_poll():
