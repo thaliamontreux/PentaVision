@@ -765,13 +765,23 @@ def create_blocklist_admin_service() -> Flask:
             now_local = datetime.now(timezone.utc)
             day_ago = now_local - timedelta(days=1)
 
+            def _cidr_sort_key(cidr: str):
+                try:
+                    net = ipaddress.ip_network(str(cidr), strict=False)
+                    return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
+                except Exception:
+                    return (99, 0, 0, str(cidr))
+
             IpAllowlist.__table__.create(bind=engine, checkfirst=True)
             IpBlocklist.__table__.create(bind=engine, checkfirst=True)
             CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
             AuditEvent.__table__.create(bind=engine, checkfirst=True)
 
-            allow_rows_local = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
-            block_rows_local = db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all()
+            allow_rows_local = db.query(IpAllowlist).all()
+            allow_rows_local.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+
+            block_rows_local = db.query(IpBlocklist).all()
+            block_rows_local.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
             policy_local = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
 
             allow_nets: list[ipaddress._BaseNetwork] = []
@@ -892,7 +902,7 @@ def create_blocklist_admin_service() -> Flask:
                         until_ts = int(until.timestamp())
                     except Exception:
                         until_ts = 0
-                return (0 if kind == "suspend" else 1, -until_ts, cidr)
+                return (0 if kind == "suspend" else 1, -until_ts, *_cidr_sort_key(cidr))
 
             blocked_local.sort(key=_sort_key)
             return allow_rows_local, blocked_local, policy_local
@@ -923,6 +933,20 @@ def create_blocklist_admin_service() -> Flask:
         if engine is None:
             abort(503)
 
+        def _cidr_sort_key(cidr: str):
+            try:
+                net = ipaddress.ip_network(str(cidr), strict=False)
+                return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
+            except Exception:
+                return (99, 0, 0, str(cidr))
+
+        def _cidr_sort_key(cidr: str):
+            try:
+                net = ipaddress.ip_network(str(cidr), strict=False)
+                return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
+            except Exception:
+                return (99, 0, 0, str(cidr))
+
         with Session(engine) as db:
             deleted = (
                 db.query(IpAllowlist)
@@ -931,10 +955,13 @@ def create_blocklist_admin_service() -> Flask:
             )
             db.commit()
 
-            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            allow_rows = db.query(IpAllowlist).all()
+            allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
             blocked = []
-            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+            block_rows = db.query(IpBlocklist).all()
+            block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+            for r in block_rows:
                 _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                 blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
@@ -956,14 +983,24 @@ def create_blocklist_admin_service() -> Flask:
         if engine is None:
             abort(503)
 
+        def _cidr_sort_key(cidr: str):
+            try:
+                net = ipaddress.ip_network(str(cidr), strict=False)
+                return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
+            except Exception:
+                return (99, 0, 0, str(cidr))
+
         try:
             cidr = _normalize_cidr(raw_cidr)
         except Exception:
             with Session(engine) as db:
-                allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+                allow_rows = db.query(IpAllowlist).all()
+                allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
                 policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
                 blocked = []
-                for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                block_rows = db.query(IpBlocklist).all()
+                block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+                for r in block_rows:
                     _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                     blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
             html = _render_page(allow_rows, blocked, policy, error="Invalid IP/CIDR")
@@ -977,10 +1014,13 @@ def create_blocklist_admin_service() -> Flask:
                 db.add(entry)
                 db.commit()
 
-            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            allow_rows = db.query(IpAllowlist).all()
+            allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
             blocked = []
-            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+            block_rows = db.query(IpBlocklist).all()
+            block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+            for r in block_rows:
                 _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                 blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
@@ -1010,14 +1050,24 @@ def create_blocklist_admin_service() -> Flask:
         if engine is None:
             abort(503)
 
+        def _cidr_sort_key(cidr: str):
+            try:
+                net = ipaddress.ip_network(str(cidr), strict=False)
+                return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
+            except Exception:
+                return (99, 0, 0, str(cidr))
+
         try:
             cidr_norm = _normalize_cidr(cidr)
         except Exception:
             with Session(engine) as db:
-                allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+                allow_rows = db.query(IpAllowlist).all()
+                allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
                 policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
                 blocked = []
-                for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                block_rows = db.query(IpBlocklist).all()
+                block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+                for r in block_rows:
                     _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                     blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
             apache_rows, apache_subnets, apache_err = _scan_apache_findings()
@@ -1040,10 +1090,13 @@ def create_blocklist_admin_service() -> Flask:
                 db.add(entry)
                 db.commit()
 
-            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            allow_rows = db.query(IpAllowlist).all()
+            allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
             blocked = []
-            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+            block_rows = db.query(IpBlocklist).all()
+            block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+            for r in block_rows:
                 _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                 blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
@@ -1094,10 +1147,13 @@ def create_blocklist_admin_service() -> Flask:
                 )
                 db.commit()
 
-            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            allow_rows = db.query(IpAllowlist).all()
+            allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
             blocked = []
-            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+            block_rows = db.query(IpBlocklist).all()
+            block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+            for r in block_rows:
                 _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                 blocked.append(
                     {
@@ -1133,10 +1189,14 @@ def create_blocklist_admin_service() -> Flask:
                 .delete(synchronize_session=False)
             )
             db.commit()
-            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+
+            allow_rows = db.query(IpAllowlist).all()
+            allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
             policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
             blocked = []
-            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+            block_rows = db.query(IpBlocklist).all()
+            block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+            for r in block_rows:
                 _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                 blocked.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 
@@ -1189,9 +1249,20 @@ def create_blocklist_admin_service() -> Flask:
             except Exception:
                 pass
 
-            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            def _cidr_sort_key(cidr: str):
+                try:
+                    net = ipaddress.ip_network(str(cidr), strict=False)
+                    return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
+                except Exception:
+                    return (99, 0, 0, str(cidr))
+
+            allow_rows = db.query(IpAllowlist).all()
+            allow_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+
             blocked_rows = []
-            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+            block_rows = db.query(IpBlocklist).all()
+            block_rows.sort(key=lambda r: _cidr_sort_key(str(r.cidr)))
+            for r in block_rows:
                 _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
                 blocked_rows.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
 

@@ -372,15 +372,11 @@ def create_blocklist_service() -> Flask:
 
         def _sort_key(row: Tuple[str, Optional[datetime], Optional[str]]):
             cidr = row[0]
-            t = _determine_type(cidr)
             try:
-                net = ipaddress.ip_network(cidr, strict=False)
-                addr_int = int(net.network_address)
-                plen = int(net.prefixlen)
+                net = ipaddress.ip_network(str(cidr), strict=False)
+                return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
             except Exception:  # noqa: BLE001
-                addr_int = 0
-                plen = 0
-            return (0 if t == "host" else 1, addr_int, plen, cidr)
+                return (99, 0, 0, str(cidr))
 
         blocks.sort(key=_sort_key)
         blocks_raw.sort(key=_sort_key)
@@ -609,15 +605,11 @@ def create_blocklist_service() -> Flask:
             # Deterministic ordering: type then ip/cidr text
             def _sort_key(row: Tuple[str, Optional[datetime], Optional[str]]):
                 cidr = row[0]
-                t = _determine_type(cidr)
                 try:
-                    net = ipaddress.ip_network(cidr, strict=False)
-                    addr_int = int(net.network_address)
-                    plen = int(net.prefixlen)
+                    net = ipaddress.ip_network(str(cidr), strict=False)
+                    return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
                 except Exception:  # noqa: BLE001
-                    addr_int = 0
-                    plen = 0
-                return (0 if t == "host" else 1, addr_int, plen, cidr)
+                    return (99, 0, 0, str(cidr))
 
             rows.sort(key=_sort_key)
 
@@ -731,15 +723,11 @@ def create_blocklist_service() -> Flask:
         # Deterministic ordering: type then ip/cidr text
         def _sort_key(row: Tuple[str, Optional[datetime], Optional[str]]):
             cidr = row[0]
-            t = _determine_type(cidr)
             try:
-                net = ipaddress.ip_network(cidr, strict=False)
-                addr_int = int(net.network_address)
-                plen = int(net.prefixlen)
+                net = ipaddress.ip_network(str(cidr), strict=False)
+                return (int(net.version), int(net.network_address), int(net.prefixlen), str(cidr))
             except Exception:  # noqa: BLE001
-                addr_int = 0
-                plen = 0
-            return (0 if t == "host" else 1, addr_int, plen, cidr)
+                return (99, 0, 0, str(cidr))
 
         blocks_all.sort(key=_sort_key)
 
