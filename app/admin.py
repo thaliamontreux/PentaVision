@@ -22,6 +22,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.routing import BuildError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -153,7 +154,16 @@ def _require_system_admin():
 @bp.get("/")
 def index():
     csrf_token = _ensure_csrf_token()
-    return render_template("admin/index.html", csrf_token=csrf_token)
+    git_pull_start_url = ""
+    try:
+        git_pull_start_url = url_for("admin.git_pull_start")
+    except BuildError:
+        git_pull_start_url = ""
+    return render_template(
+        "admin/index.html",
+        csrf_token=csrf_token,
+        git_pull_start_url=git_pull_start_url,
+    )
 
 
 @bp.post("/git-pull/start")

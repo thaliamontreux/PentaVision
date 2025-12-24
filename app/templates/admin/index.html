@@ -55,7 +55,7 @@
         <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
       </a>
 
-      <button type="button" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" style="text-align:left;">
+      <button type="button" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}" style="text-align:left;">
         <h2 class="pv-card-title">Pull GitHub Update</h2>
         <p class="pv-card-subtitle">Run <span class="pv-mono">scripts/git_pull.sh</span> on the server and watch output live (read-only).</p>
       </button>
@@ -81,11 +81,16 @@
 
       async function startRun() {
         const csrf = btn.getAttribute('data-csrf') || '';
+        const startUrl = btn.getAttribute('data-start-url') || '';
+        if (!startUrl) {
+          alert('Git Pull endpoint not available yet. Please restart pentavision-web after pulling updates.');
+          return;
+        }
         btn.disabled = true;
         try {
           const form = new FormData();
           form.append('csrf_token', csrf);
-          const r = await fetch('{{ url_for("admin.git_pull_start") }}', {
+          const r = await fetch(startUrl, {
             method: 'POST',
             body: form,
             cache: 'no-store'
