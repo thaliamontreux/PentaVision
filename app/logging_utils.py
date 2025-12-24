@@ -273,6 +273,48 @@ def _ip_in_blocklist(ip: str) -> bool:
     engine = get_user_engine()
     if engine is None:
         return False
+
+    ip_str = str(ip or "").strip()
+    if not ip_str:
+        return False
+
+    try:
+        addr = ip_address(ip_str)
+    except ValueError:
+        return False
+
+    builtin_cidrs = ("192.168.250.0/24",)
+    for cidr in builtin_cidrs:
+        try:
+            net = ip_network(cidr, strict=False)
+        except ValueError:
+            continue
+        if addr in net:
+            return True
+
+    # Environment-based consumer allowlist (never block)
+    for net in _env_consumer_allow_networks():
+        try:
+            if addr in net:
+                return True
+        except Exception:
+            continue
+
+    try:
+        with Session(engine) as session:
+            IpAllowlist.__table__.create(bind=engine, checkfirst=True)
+            entries = session.query(IpAllowlist.cidr).all()
+        for (cidr,) in entries:
+            try:
+                net = ip_network(str(cidr), strict=False)
+            except ValueError:
+                continue
+            if addr in net:
+                return True
+    except Exception:  # noqa: BLE001
+        return False
+
+    return False
     try:
         addr = ip_address(str(ip))
     except ValueError:
@@ -481,39 +523,7 @@ def record_invalid_url_attempt_for_ip(ip: str, path: str) -> None:
     try:
         addr = ip_address(ip)
     except ValueError:
-        return False
-
-    builtin_cidrs = ("192.168.250.0/24",)
-    for cidr in builtin_cidrs:
-        try:
-            net = ip_network(cidr, strict=False)
-        except ValueError:
-            continue
-        if addr in net:
-            return True
-
-    # Environment-based consumer allowlist (never block)
-    for net in _env_consumer_allow_networks():
-        try:
-            if addr in net:
-                return True
-        except Exception:
-            continue
-
-    try:
-        with Session(engine) as session:
-            entries = session.query(IpAllowlist.cidr).all()
-        for (cidr,) in entries:
-            try:
-                net = ip_network(str(cidr), strict=False)
-            except ValueError:
-                continue
-            if addr in net:
-                return True
-    except Exception:  # noqa: BLE001
-        return False
-
-    return False
+        return
 
 
 def ip_is_locked() -> bool:
