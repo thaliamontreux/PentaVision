@@ -14,6 +14,7 @@ from typing import Any
 from flask import Flask, Response, abort, jsonify, render_template, request
 from sqlalchemy import text
 
+from .config import load_config
 from .db import get_record_engine
 from .logging_utils import pv_log, pv_rotate_logs_on_startup, record_invalid_url_attempt_for_ip
 
@@ -80,6 +81,11 @@ def _run_journalctl(unit: str, lines: int) -> str:
 def create_log_server() -> Flask:
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
+
+    try:
+        app.config.from_mapping(load_config())
+    except Exception:
+        pass
 
     try:
         poll_seconds = float(os.environ.get("PENTAVISION_LOG_TAIL_POLL_SECONDS", "30") or "30")
