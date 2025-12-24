@@ -40,6 +40,35 @@
         box-shadow: var(--pv-shadow-soft);
         backdrop-filter: blur(10px);
       }
+      .pv-screwed {
+        position: relative;
+        overflow: hidden;
+      }
+      .pv-screwed::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(12px 12px at 14px 14px, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
+          radial-gradient(12px 12px at calc(100% - 14px) 14px, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
+          radial-gradient(12px 12px at 14px calc(100% - 14px), rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
+          radial-gradient(12px 12px at calc(100% - 14px) calc(100% - 14px), rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%);
+        mix-blend-mode: screen;
+        opacity: 0.7;
+      }
+      .pv-screwed::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) 7px 14px / 14px 2px no-repeat,
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) calc(100% - 21px) 14px / 14px 2px no-repeat,
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) 7px calc(100% - 16px) / 14px 2px no-repeat,
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) calc(100% - 21px) calc(100% - 16px) / 14px 2px no-repeat;
+        opacity: 0.55;
+      }
       .pv-card-title {
         font-weight: 650;
         font-size: 14px;
@@ -111,7 +140,7 @@
   </head>
   <body>
   <section class="pv-page" style="padding: 1.15rem 1rem 3.25rem;">
-    <div class="pv-header">
+    <div class="pv-header pv-screwed">
       <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
         <div>
           <h2 style="margin: 0; letter-spacing: 0.2px;">PentaVision Log Server</h2>
@@ -142,7 +171,7 @@
     </div>
 
     <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 0.9rem; margin-top: 1rem; align-items: start;">
-      <div class="pv-card" style="height: calc(100vh - 210px); overflow: hidden; display: flex; flex-direction: column;">
+      <div class="pv-card pv-screwed" style="height: calc(100vh - 210px); overflow: hidden; display: flex; flex-direction: column;">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
           <div>
             <div class="pv-card-title" style="margin: 0;">Journal</div>
@@ -165,7 +194,7 @@
         <div id="pv-log-output" style="margin: 0; padding: 0.75rem; overflow: auto; flex: 1;"></div>
       </div>
 
-      <div class="pv-card" style="height: calc(100vh - 210px); overflow: hidden; display: flex; flex-direction: column;">
+      <div class="pv-card pv-screwed" style="height: calc(100vh - 210px); overflow: hidden; display: flex; flex-direction: column;">
         <div style="padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
           <div class="pv-card-title" style="margin: 0;">Audit</div>
           <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Storage module events + health checks</div>
