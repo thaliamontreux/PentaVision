@@ -23,6 +23,7 @@ from flask import Flask
 from sqlalchemy.orm import Session
 
 from .db import get_record_engine
+from .logging_utils import pv_log, pv_log_exception
 from .models import (
     CameraDevice,
     CameraPropertyLink,
@@ -42,6 +43,44 @@ from .storage_providers import StorageProvider, build_storage_providers
 from .preview_history import write_frame
 from .storage_csal import get_storage_router
 from .camera_utils import build_camera_url
+
+
+_rtsp_host_lock = threading.Lock()
+_rtsp_host_next_allowed_ts: dict[str, float] = {}
+
+
+def _rtsp_host_from_url(url: str) -> str:
+    try:
+        parsed = urlparse(str(url or ""))
+        host = str(parsed.hostname or "").strip().lower()
+        if host:
+            return host
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def _wait_for_rtsp_host_slot(host: str, cooldown_seconds: float) -> None:
+    host = str(host or "").strip().lower()
+    if not host:
+        return
+    try:
+        cooldown = float(cooldown_seconds)
+    except Exception:  # noqa: BLE001
+        cooldown = 30.0
+    if cooldown <= 0:
+        return
+
+    while True:
+        sleep_s = 0.0
+        with _rtsp_host_lock:
+            now = time.time()
+            next_allowed = float(_rtsp_host_next_allowed_ts.get(host, 0.0) or 0.0)
+            if now >= next_allowed:
+                _rtsp_host_next_allowed_ts[host] = now + cooldown
+                return
+            sleep_s = max(0.0, next_allowed - now)
+        time.sleep(min(sleep_s, cooldown))
 
 
 def _normalize_bool(value: str) -> bool:
@@ -535,20 +574,82 @@ class CameraWorker(threading.Thread):
         ):
             time.sleep(5)
             return
-        use_gst = bool(self.app.config.get("USE_GSTREAMER_RECORDING"))
-        if use_gst:
-            try:
-                self._record_segment_gstreamer()
-                return
-            except Exception as exc:  # noqa: BLE001
+        try:
+            cooldown_s = float(self.app.config.get("RTSP_HOST_COOLDOWN_SECONDS", 30) or 30)
+        except Exception:  # noqa: BLE001
+            cooldown_s = 30.0
+        if cooldown_s < 0:
+            cooldown_s = 0.0
+        host = _rtsp_host_from_url(self.config.url)
+
+        # Hard rule: avoid RTSP session storms. Never attempt a new RTSP connection to the
+        # same camera host more often than the configured cooldown.
+        if host and cooldown_s:
+            _wait_for_rtsp_host_slot(host, cooldown_s)
+
+        try:
+            use_gst = bool(self.app.config.get("USE_GSTREAMER_RECORDING"))
+        except Exception:
+            use_gst = False
+        try:
+            gst_attempts = int(self.app.config.get("RECORD_GSTREAMER_ATTEMPTS", 3) or 3)
+        except Exception:
+            gst_attempts = 3
+        if gst_attempts <= 0:
+            gst_attempts = 0
+
+        if use_gst and gst_attempts:
+            last_exc: Optional[Exception] = None
+            for attempt in range(int(gst_attempts)):
+                if attempt > 0 and host and cooldown_s:
+                    _wait_for_rtsp_host_slot(host, cooldown_s)
                 try:
-                    self.app.logger.warning(
-                        "Recording GStreamer failed for device=%s; falling back to ffmpeg. err=%s",
-                        self.config.device_id,
-                        str(exc)[:200],
+                    self._record_segment_gstreamer()
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    last_exc = exc
+                    pv_log_exception(
+                        "rtsp",
+                        "recording_gstreamer_error",
+                        component="recording_service",
+                        exc=exc,
+                        device_id=int(self.config.device_id),
+                        host=str(host or ""),
+                        attempt=int(attempt + 1),
+                        attempts=int(gst_attempts),
                     )
-                except Exception:
-                    pass
+                    try:
+                        self.app.logger.warning(
+                            "Recording GStreamer error device=%s attempt=%s/%s; retrying. err=%s",
+                            self.config.device_id,
+                            attempt + 1,
+                            gst_attempts,
+                            str(exc)[:200],
+                        )
+                    except Exception:
+                        pass
+
+            try:
+                self.app.logger.warning(
+                    "Recording GStreamer failed for device=%s after %s attempts; falling back to ffmpeg. err=%s",
+                    self.config.device_id,
+                    gst_attempts,
+                    str(last_exc)[:200] if last_exc else "",
+                )
+            except Exception:
+                pass
+            pv_log(
+                "rtsp",
+                "warn",
+                "recording_gstreamer_fallback_to_ffmpeg",
+                component="recording_service",
+                device_id=int(self.config.device_id),
+                host=str(host or ""),
+                attempts=int(gst_attempts),
+            )
+
+        if host and cooldown_s:
+            _wait_for_rtsp_host_slot(host, cooldown_s)
         self._record_segment_ffmpeg()
 
     def _record_segment_ffmpeg(self) -> None:
@@ -686,6 +787,17 @@ class CameraWorker(threading.Thread):
             except Exception:
                 # Logging must not crash the worker.
                 pass
+            pv_log(
+                "rtsp",
+                "error",
+                "recording_ffmpeg_error",
+                component="recording_service",
+                device_id=int(self.config.device_id),
+                host=str(_rtsp_host_from_url(self.config.url) or ""),
+                returncode=int(result.returncode),
+                stderr=str(stderr_text.strip())[:2000],
+                url=str(masked_url)[:512],
+            )
             raise RuntimeError(
                 f"recording ffmpeg failed: rc={result.returncode} err={stderr_text.strip()[:200]}"
             )
@@ -1586,6 +1698,15 @@ class UploadQueueWorker(threading.Thread):
                     item.attempts = (item.attempts or 0) + 1
                     item.status = "failed"
                     item.last_error = "Unknown provider"
+                    pv_log(
+                        "modules",
+                        "error",
+                        "upload_provider_missing",
+                        component="recording_service",
+                        provider_name=str(item.provider_name or "")[:160],
+                        device_id=int(item.device_id),
+                        attempts=int(item.attempts or 0),
+                    )
                     try:
                         session.add(
                             StorageModuleEvent(
@@ -1637,6 +1758,16 @@ class UploadQueueWorker(threading.Thread):
                     except Exception as exc:  # noqa: BLE001
                         item.attempts = (item.attempts or 0) + 1
                         item.last_error = str(exc)[:512]
+                        pv_log_exception(
+                            "modules",
+                            "upload_error",
+                            component="recording_service",
+                            exc=exc,
+                            provider_name=str(item.provider_name or "")[:160],
+                            device_id=int(item.device_id),
+                            attempts=int(item.attempts or 0),
+                            key_hint=str(item.key_hint or "")[:256],
+                        )
                         try:
                             mod = (
                                 session.query(StorageModule)
@@ -1678,6 +1809,16 @@ class UploadQueueWorker(threading.Thread):
                     device_id=item.device_id,
                     storage_provider=item.provider_name,
                     storage_key=storage_key,
+                )
+                pv_log(
+                    "modules",
+                    "info",
+                    "upload_ok",
+                    component="recording_service",
+                    provider_name=str(item.provider_name or "")[:160],
+                    device_id=int(item.device_id),
+                    storage_key=str(storage_key or "")[:512] if storage_key else None,
+                    bytes_written=int(len(item.payload or b"")),
                 )
                 try:
                     mod = (

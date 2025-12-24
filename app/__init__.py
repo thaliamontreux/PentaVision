@@ -1,4 +1,5 @@
 from flask import Flask, request
+from werkzeug.exceptions import HTTPException
 
 from jinja2 import ChoiceLoader, FileSystemLoader
 
@@ -13,6 +14,7 @@ from .security import init_security
 from .storage_startup import start_storage_startup_checks
 from .url_healthcheck import start_startup_url_healthcheck
 from .views import bp as main_bp
+from .logging_utils import pv_log, pv_log_exception
 
 
 def create_app() -> Flask:
@@ -72,6 +74,23 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(camera_admin_bp)
 
+    @app.errorhandler(Exception)
+    def _handle_uncaught(err):  # pragma: no cover - error wiring
+        if isinstance(err, HTTPException):
+            return err
+        try:
+            pv_log_exception(
+                "system",
+                "uncaught_exception",
+                component="flask",
+                exc=err,
+                path=str(getattr(request, "path", "") or "")[:512],
+                method=str(getattr(request, "method", "") or "")[:32],
+            )
+        except Exception:
+            pass
+        return ("Internal Server Error", 500)
+
     @app.errorhandler(404)
     def _handle_404(err):  # pragma: no cover - error wiring
         try:
@@ -81,4 +100,9 @@ def create_app() -> Flask:
         except Exception:
             pass
         return ("Not Found", 404)
+
+    try:
+        pv_log("system", "info", "system_startup", component="app")
+    except Exception:
+        pass
     return app

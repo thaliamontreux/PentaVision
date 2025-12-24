@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from .db import get_record_engine
+from .logging_utils import pv_log, pv_log_exception
 from .models import StorageModule, StorageModuleEvent, StorageModuleWriteStat
 from .storage_csal import get_storage_router
 
@@ -90,6 +91,16 @@ def run_startup_storage_test_write(app) -> None:
             stream = io.BytesIO(payload)
             result = router.write(instance_key, stream, {"key_hint": "startup_test"})
             storage_key = str(result.get("object_id") or "")
+            pv_log(
+                "modules",
+                "info",
+                "storage_startup_test_write_ok",
+                component="storage_startup",
+                module_id=int(module_id),
+                module_name=str(module_name or "")[:160],
+                bytes_written=int(len(payload)),
+                storage_key=str(storage_key or "")[:512] if storage_key else None,
+            )
             _record_write_stat(
                 module_id=module_id,
                 module_name=module_name,
@@ -99,6 +110,16 @@ def run_startup_storage_test_write(app) -> None:
                 error=None,
             )
         except Exception as exc:  # noqa: BLE001
+            pv_log_exception(
+                "modules",
+                "storage_startup_test_write_error",
+                component="storage_startup",
+                exc=exc,
+                module_id=int(module_id),
+                module_name=str(module_name or "")[:160],
+                bytes_written=int(len(payload)),
+                storage_key=str(storage_key or "")[:512] if storage_key else None,
+            )
             _record_write_stat(
                 module_id=module_id,
                 module_name=module_name,

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PentaVision Log · {{ category }}</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
+        background: #0b1020;
+        color: #e5e7eb;
+      }
+      .pv-top {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(11,16,32,0.92);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        padding: 0.65rem 0.9rem;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .pv-title {
+        font-weight: 700;
+        font-size: 14px;
+      }
+      .pv-sub {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 0.15rem;
+      }
+      .pv-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .pv-btn {
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.14);
+        color: #e5e7eb;
+        border-radius: 10px;
+        padding: 0.35rem 0.6rem;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .pv-btn:hover { background: rgba(255,255,255,0.12); }
+      .pv-log {
+        padding: 0.75rem;
+        height: calc(100vh - 66px);
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: pre-wrap;
+      }
+      .pv-line { padding: 0.1rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+      .pv-line.is-error { color: #fca5a5; }
+      .pv-line.is-warn { color: #fde68a; }
+      .pv-line.is-info { color: #86efac; }
+      .pv-line.is-debug { color: rgba(229,231,235,0.85); }
+    </style>
+  </head>
+  <body>
+    <div class="pv-top">
+      <div>
+        <div class="pv-title">PentaVision Log · {{ category }}</div>
+        <div class="pv-sub">Live tail from /dev/shm/pentavision/logs/{{ category }}/logfile</div>
+      </div>
+      <div class="pv-controls">
+        <button class="pv-btn" id="pv-clear" type="button">Clear</button>
+        <button class="pv-btn" id="pv-pause" type="button">Pause</button>
+      </div>
+    </div>
+    <div id="pv-log" class="pv-log"></div>
+
+    <script>
+      (function () {
+        var category = {{ category|tojson }};
+        var out = document.getElementById('pv-log');
+        var btnClear = document.getElementById('pv-clear');
+        var btnPause = document.getElementById('pv-pause');
+        var paused = false;
+
+        function addLine(raw) {
+          if (!out) return;
+          var text = String(raw || '').trim();
+          if (!text) return;
+
+          var cls = 'pv-line';
+          try {
+            var obj = JSON.parse(text);
+            var level = String(obj.level || '').toLowerCase();
+            if (level === 'error') cls += ' is-error';
+            else if (level === 'warn' || level === 'warning') cls += ' is-warn';
+            else if (level === 'debug') cls += ' is-debug';
+            else cls += ' is-info';
+          } catch (e) {
+            cls += ' is-debug';
+          }
+
+          var div = document.createElement('div');
+          div.className = cls;
+          div.textContent = text;
+          out.appendChild(div);
+          out.scrollTop = out.scrollHeight;
+        }
+
+        if (btnClear) {
+          btnClear.addEventListener('click', function () {
+            if (out) out.innerHTML = '';
+          });
+        }
+        if (btnPause) {
+          btnPause.addEventListener('click', function () {
+            paused = !paused;
+            btnPause.textContent = paused ? 'Resume' : 'Pause';
+          });
+        }
+
+        try {
+          var src = new EventSource('/api/tail?cat=' + encodeURIComponent(category));
+          src.onmessage = function (evt) {
+            if (paused) return;
+            addLine(evt.data);
+          };
+          src.onerror = function () {
+            // Keep trying; browser reconnects automatically.
+          };
+        } catch (e) {
+          addLine('{"level":"error","message":"EventSource failed"}');
+        }
+      })();
+    </script>
+  </body>
+</html>

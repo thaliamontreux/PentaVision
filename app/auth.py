@@ -20,7 +20,7 @@ from fido2.webauthn import (
 )
 
 from .db import get_user_engine
-from .logging_utils import ip_is_locked, log_event, update_ip_lockout_after_failure
+from .logging_utils import ip_is_locked, log_event, pv_log, update_ip_lockout_after_failure
 from .models import User, WebAuthnCredential
 from .security import seed_system_admin_role_for_email, login_user
 
@@ -207,6 +207,13 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
     """
 
     if ip_is_locked():
+        pv_log(
+            "security",
+            "warn",
+            "auth_login_rejected_ip_locked",
+            component="auth",
+            email=str(email or "")[:256],
+        )
         return None, "too many failed login attempts from this IP. try again later.", 403
 
     if not email or not password:
@@ -220,6 +227,13 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
         user = session_db.scalar(select(User).where(User.email == email))
         if user is None:
             log_event("AUTH_LOGIN_FAILURE", details=f"unknown email={email}")
+            pv_log(
+                "security",
+                "warn",
+                "auth_login_failure_unknown_email",
+                component="auth",
+                email=str(email or "")[:256],
+            )
             update_ip_lockout_after_failure()
             return None, "invalid credentials", 401
 
@@ -229,6 +243,14 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
                 "AUTH_LOGIN_LOCKED",
                 user_id=user.id,
                 details=f"pin_locked_until={user.pin_locked_until.isoformat()}",
+            )
+            pv_log(
+                "security",
+                "warn",
+                "auth_login_rejected_user_locked",
+                component="auth",
+                user_id=int(user.id),
+                email=str(email or "")[:256],
             )
             return None, "account locked. try again later.", 403
 
@@ -243,15 +265,40 @@ def _authenticate_user(email: str, password: str, totp_code: str = ""):
                     user_id=user.id,
                     details="failed_pin_attempts>=5",
                 )
+                pv_log(
+                    "security",
+                    "warn",
+                    "auth_user_lock_set_failed_pin_attempts",
+                    component="auth",
+                    user_id=int(user.id),
+                    email=str(email or "")[:256],
+                    failed_pin_attempts=int(user.failed_pin_attempts or 0),
+                )
             session_db.add(user)
             session_db.commit()
             log_event("AUTH_LOGIN_FAILURE", user_id=user.id, details="bad password")
+            pv_log(
+                "security",
+                "warn",
+                "auth_login_failure_bad_password",
+                component="auth",
+                user_id=int(user.id),
+                email=str(email or "")[:256],
+            )
             update_ip_lockout_after_failure()
             return None, "invalid credentials", 401
 
         if user.totp_secret:
             if not _verify_totp(user, totp_code.strip()):
                 log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user.id)
+                pv_log(
+                    "security",
+                    "warn",
+                    "auth_login_2fa_failure",
+                    component="auth",
+                    user_id=int(user.id),
+                    email=str(email or "")[:256],
+                )
                 update_ip_lockout_after_failure()
                 return None, "invalid 2FA code", 401
 

@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,7 @@ from flask import Flask, Response, abort, jsonify, render_template, request
 from sqlalchemy import text
 
 from .db import get_record_engine
+from .logging_utils import pv_rotate_logs_on_startup
 
 
 def _client_ip() -> str:
@@ -77,6 +79,11 @@ def create_log_server() -> Flask:
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+    try:
+        pv_rotate_logs_on_startup()
+    except Exception:  # noqa: BLE001
+        pass
+
     @app.before_request
     def _restrict_network() -> None:
         ip = _client_ip()
@@ -86,6 +93,65 @@ def create_log_server() -> Flask:
     @app.get("/")
     def index():
         return render_template("log_server.html")
+
+    def _cat_path(cat: str) -> str:
+        cat = (cat or "").strip().lower()
+        if cat not in {"system", "modules", "rtsp", "rtmp", "security"}:
+            cat = "system"
+        return f"/dev/shm/pentavision/logs/{cat}/logfile"
+
+    @app.get("/view")
+    def view_category():
+        cat = (request.args.get("cat") or "system").strip().lower()
+        if cat not in {"system", "modules", "rtsp", "rtmp", "security"}:
+            cat = "system"
+        return render_template("log_category.html", category=cat)
+
+    @app.get("/api/tail")
+    def api_tail():
+        cat = (request.args.get("cat") or "system").strip().lower()
+        if cat not in {"system", "modules", "rtsp", "rtmp", "security"}:
+            cat = "system"
+        path = _cat_path(cat)
+        try:
+            start_raw = request.args.get("start")
+            start_pos = int(start_raw) if start_raw is not None else None
+        except Exception:
+            start_pos = None
+
+        def gen():
+            # Simple best-effort tail that polls for changes.
+            # SSE framing: 'data: ...\n\n'
+            pos = 0
+            try:
+                if start_pos is not None and start_pos >= 0:
+                    pos = start_pos
+            except Exception:
+                pos = 0
+            while True:
+                try:
+                    with open(path, "rb") as f:
+                        try:
+                            f.seek(pos)
+                        except Exception:
+                            f.seek(0)
+                            pos = 0
+                        chunk = f.read()
+                        if chunk:
+                            pos = f.tell()
+                            text_chunk = chunk.decode("utf-8", errors="replace")
+                            for line in text_chunk.splitlines():
+                                if not line.strip():
+                                    continue
+                                yield f"data: {line}\n\n"
+                except FileNotFoundError:
+                    yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"log file not found\"}\n\n"
+                except Exception:
+                    # Do not break the SSE stream.
+                    yield "data: {\"ts\":\"\",\"level\":\"warn\",\"category\":\"system\",\"message\":\"tail error\"}\n\n"
+                time.sleep(0.5)
+
+        return Response(gen(), mimetype="text/event-stream")
 
     @app.get("/api/journal")
     def api_journal():

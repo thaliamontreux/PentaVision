@@ -79,6 +79,11 @@
         <div style="margin-top: 0.25rem; color: #9ca3af;">Live system logs and audit events</div>
       </div>
       <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button id="pv-open-system" class="pv-button-secondary" type="button">System</button>
+        <button id="pv-open-modules" class="pv-button-secondary" type="button">Modules</button>
+        <button id="pv-open-rtsp" class="pv-button-secondary" type="button">RTSP</button>
+        <button id="pv-open-rtmp" class="pv-button-secondary" type="button">RTMP</button>
+        <button id="pv-open-security" class="pv-button-secondary" type="button">Security</button>
         <label for="pv-log-unit" style="color: #9ca3af;">Unit</label>
         <select id="pv-log-unit" class="pv-input" style="min-width: 240px;">
           <option value="pentavision-web">pentavision-web</option>
@@ -152,6 +157,28 @@
 
   <script>
     (function () {
+      function openCat(cat) {
+        try {
+          var w = window.open(
+            '/view?cat=' + encodeURIComponent(cat),
+            'pvlog_' + String(cat || 'system'),
+            'noopener,noreferrer,width=1200,height=700'
+          );
+          if (w) w.focus();
+        } catch (e) {}
+      }
+
+      var btnSystem = document.getElementById('pv-open-system');
+      var btnModules = document.getElementById('pv-open-modules');
+      var btnRtsp = document.getElementById('pv-open-rtsp');
+      var btnRtmp = document.getElementById('pv-open-rtmp');
+      var btnSecurity = document.getElementById('pv-open-security');
+      if (btnSystem) btnSystem.addEventListener('click', function () { openCat('system'); });
+      if (btnModules) btnModules.addEventListener('click', function () { openCat('modules'); });
+      if (btnRtsp) btnRtsp.addEventListener('click', function () { openCat('rtsp'); });
+      if (btnRtmp) btnRtmp.addEventListener('click', function () { openCat('rtmp'); });
+      if (btnSecurity) btnSecurity.addEventListener('click', function () { openCat('security'); });
+
       var unitSel = document.getElementById('pv-log-unit');
       var out = document.getElementById('pv-log-output');
       var btn = document.getElementById('pv-log-refresh');

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .camera_utils import build_camera_url
 from .db import get_record_engine
+from .logging_utils import pv_log, pv_log_exception
 from .models import CameraDevice, CameraRtmpOutput, CameraUrlPattern
 
 
@@ -49,6 +50,13 @@ class RtmpWorker(threading.Thread):
                     self._run_once()
                     self._backoff = 1.0
                 except Exception:
+                    pv_log_exception(
+                        "rtmp",
+                        "rtmp_worker_error",
+                        component="rtmp_service",
+                        device_id=int(self.device_id),
+                        output_id=int(self.output_id),
+                    )
                     delay = min(self._backoff, 30.0)
                     time.sleep(delay)
                     self._backoff = min(self._backoff * 2.0, 30.0)
@@ -138,11 +146,27 @@ class RtmpWorker(threading.Thread):
                 text=True,
             )
         except FileNotFoundError as exc:
+            pv_log_exception(
+                "rtmp",
+                "rtmp_gst_launch_not_found",
+                component="rtmp_service",
+                exc=exc,
+                device_id=int(self.device_id),
+                output_id=int(self.output_id),
+            )
             self._update_error(
                 f"gst-launch-1.0 executable not found: {exc}"
             )
             raise
         except Exception as exc:
+            pv_log_exception(
+                "rtmp",
+                "rtmp_gst_launch_failed",
+                component="rtmp_service",
+                exc=exc,
+                device_id=int(self.device_id),
+                output_id=int(self.output_id),
+            )
             self._update_error(str(exc))
             raise
 
@@ -157,6 +181,15 @@ class RtmpWorker(threading.Thread):
                     text = (line or "").strip()
                     if not text:
                         continue
+                    pv_log(
+                        "rtmp",
+                        "warn",
+                        "rtmp_gst_stderr",
+                        component="rtmp_service",
+                        device_id=int(self.device_id),
+                        output_id=int(self.output_id),
+                        text=str(text)[:2000],
+                    )
                     try:
                         self.app.logger.warning(
                             "RTMP gst device=%s output=%s: %s",

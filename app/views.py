@@ -398,6 +398,7 @@ def index():
     patterns_index: dict[int, CameraUrlPattern] = {}
     camera_status: dict[int, str] = {}
     camera_last_seen: dict[int, datetime] = {}
+    recording_status: dict[int, str] = {}
     record_engine = get_record_engine()
     camera_property_map: dict[int, int] = {}
     camera_group_map: dict[int, tuple[int, int]] = {}
@@ -407,6 +408,7 @@ def index():
             CameraPropertyLink.__table__.create(bind=record_engine, checkfirst=True)
             CameraGroupLink.__table__.create(bind=record_engine, checkfirst=True)
             CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
+            StorageModuleWriteStat.__table__.create(bind=record_engine, checkfirst=True)
             devices = (
                 session_db.query(CameraDevice)
                 .order_by(CameraDevice.name)
@@ -431,6 +433,50 @@ def index():
                 .group_by(CameraRecording.device_id)
                 .all()
             )
+
+            last_recording_map: dict[int, datetime] = {}
+            for device_id, last_time in rows:
+                if last_time is None:
+                    continue
+                try:
+                    last_recording_map[int(device_id)] = last_time
+                except Exception:  # noqa: BLE001
+                    continue
+
+            ok_rows = (
+                session_db.query(
+                    StorageModuleWriteStat.device_id,
+                    func.max(StorageModuleWriteStat.created_at),
+                )
+                .filter(StorageModuleWriteStat.ok != 0)
+                .group_by(StorageModuleWriteStat.device_id)
+                .all()
+            )
+            err_rows = (
+                session_db.query(
+                    StorageModuleWriteStat.device_id,
+                    func.max(StorageModuleWriteStat.created_at),
+                )
+                .filter(StorageModuleWriteStat.ok == 0)
+                .group_by(StorageModuleWriteStat.device_id)
+                .all()
+            )
+            last_ok_map: dict[int, datetime] = {}
+            last_err_map: dict[int, datetime] = {}
+            for device_id, ts in ok_rows:
+                if ts is None:
+                    continue
+                try:
+                    last_ok_map[int(device_id)] = ts
+                except Exception:  # noqa: BLE001
+                    continue
+            for device_id, ts in err_rows:
+                if ts is None:
+                    continue
+                try:
+                    last_err_map[int(device_id)] = ts
+                except Exception:  # noqa: BLE001
+                    continue
 
             links = session_db.query(CameraPropertyLink).all()
             camera_property_map = {
@@ -459,6 +505,41 @@ def index():
             if last_time is None:
                 continue
             camera_last_seen[device_id] = last_time
+
+        now_utc = datetime.now(timezone.utc)
+        try:
+            segment_seconds = int(current_app.config.get("RECORD_SEGMENT_SECONDS", 60) or 60)
+        except (TypeError, ValueError):
+            segment_seconds = 60
+        if segment_seconds <= 0:
+            segment_seconds = 60
+        active_window = timedelta(seconds=int(segment_seconds) * 2 + 30)
+        error_window = timedelta(minutes=10)
+
+        for device in devices:
+            try:
+                device_id = int(getattr(device, "id", 0) or 0)
+            except Exception:  # noqa: BLE001
+                continue
+            if not bool(getattr(device, "is_active", 0)):
+                recording_status[device_id] = "not_active"
+                continue
+
+            last_ok = last_ok_map.get(device_id)
+            last_err = last_err_map.get(device_id)
+            if (
+                last_err is not None
+                and (last_ok is None or last_err > last_ok)
+                and (now_utc - last_err) <= error_window
+            ):
+                recording_status[device_id] = "error"
+                continue
+
+            last_rec = last_recording_map.get(device_id)
+            if last_rec is not None and (now_utc - last_rec) <= active_window:
+                recording_status[device_id] = "active"
+            else:
+                recording_status[device_id] = "not_active"
 
     def _ping_host(host: str) -> bool:
         host = str(host or "").strip()
@@ -554,6 +635,7 @@ def index():
         patterns=patterns_index,
         camera_status=camera_status,
         camera_last_seen=camera_last_seen,
+        recording_status=recording_status,
         dashboard_display_size=dashboard_display_size,
         preview_low_fps=preview_low_fps,
     )

@@ -751,6 +751,21 @@ body {
   color: #fecaca;
 }
 
+.pv-recording-active {
+  background: rgba(34, 197, 94, 0.22);
+  color: #bbf7d0;
+}
+
+.pv-recording-error {
+  background: rgba(248, 113, 113, 0.22);
+  color: #fecaca;
+}
+
+.pv-recording-not_active {
+  background: rgba(148, 163, 184, 0.16);
+  color: rgba(229, 231, 235, 0.88);
+}
+
 .pv-camera-status-block {
   display: flex;
   align-items: center;

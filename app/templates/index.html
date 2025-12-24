@@ -83,6 +83,17 @@
                         Status unknown
                       {% endif %}
                     </span>
+
+                    {% set rec_status = recording_status.get(d.id, 'not_active') if recording_status else 'not_active' %}
+                    <span class="pv-status-chip pv-recording-{{ rec_status }}">
+                      {% if rec_status == 'active' %}
+                        Active
+                      {% elif rec_status == 'error' %}
+                        Error
+                      {% else %}
+                        Not Active
+                      {% endif %}
+                    </span>
                   </div>
                   <div class="pv-camera-actions">
                     <a

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import json
+import threading
+import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from ipaddress import ip_address, ip_network, IPv4Address, IPv6Address
 import os
@@ -14,6 +19,158 @@ from .models import AuditEvent, CountryAccessPolicy, IpAllowlist, IpBlocklist
 
 _geoip_reader = None
 _geoip_init_attempted = False
+
+
+_PV_LOG_ROOT = Path("/dev/shm/pentavision/logs")
+_PV_LOG_MAX_BYTES = 30 * 1024 * 1024
+_pv_log_lock = threading.Lock()
+_pv_log_file_locks: dict[str, threading.Lock] = {}
+
+
+def _pv_log_path(category: str) -> Path:
+    cat = (category or "").strip().lower() or "system"
+    return _PV_LOG_ROOT / cat / "logfile"
+
+
+def _pv_log_lock_for(category: str) -> threading.Lock:
+    cat = (category or "").strip().lower() or "system"
+    with _pv_log_lock:
+        lock = _pv_log_file_locks.get(cat)
+        if lock is None:
+            lock = threading.Lock()
+            _pv_log_file_locks[cat] = lock
+        return lock
+
+
+def _pv_log_suffix_today() -> str:
+    # MM-DD-YYYY
+    now = datetime.now(timezone.utc)
+    return now.strftime("%m-%d-%Y")
+
+
+def _pv_rotate_existing(path: Path) -> None:
+    if not path.exists():
+        return
+    suffix = _pv_log_suffix_today()
+    base = path.with_name(f"{path.name}.{suffix}")
+    target = base
+    try:
+        size = path.stat().st_size
+    except Exception:  # noqa: BLE001
+        size = 0
+
+    if size >= _PV_LOG_MAX_BYTES:
+        # Always add an index when >30MB.
+        for i in range(1, 1001):
+            cand = path.with_name(f"{path.name}.{suffix}.{i}")
+            if not cand.exists():
+                target = cand
+                break
+    else:
+        if target.exists():
+            for i in range(1, 1001):
+                cand = path.with_name(f"{path.name}.{suffix}.{i}")
+                if not cand.exists():
+                    target = cand
+                    break
+
+    try:
+        path.rename(target)
+    except Exception:  # noqa: BLE001
+        return
+
+
+def pv_rotate_logs_on_startup() -> None:
+    """Rotate all category logfiles on log server startup.
+
+    Implements: upon restarting pentavision log server it is to move any log file
+    to logfile.MM-DD-YYYY (or .(1-1000)).
+    """
+
+    for cat in ("system", "modules", "rtsp", "rtmp", "security"):
+        path = _pv_log_path(cat)
+        lock = _pv_log_lock_for(cat)
+        with lock:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception:  # noqa: BLE001
+                continue
+            _pv_rotate_existing(path)
+
+
+def pv_log(
+    category: str,
+    level: str,
+    message: str,
+    *,
+    component: str = "",
+    **fields,
+) -> None:
+    """Write a JSONL log line to /dev/shm/pentavision/logs/<category>/logfile.
+
+    This is best-effort and must never raise.
+    """
+
+    cat = (category or "").strip().lower() or "system"
+    lvl = (level or "").strip().lower() or "info"
+    msg = str(message or "")
+
+    payload = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "level": lvl,
+        "category": cat,
+        "component": str(component or "") or None,
+        "message": msg,
+        "fields": fields or None,
+    }
+    line = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode(
+        "utf-8", errors="replace"
+    )
+
+    path = _pv_log_path(cat)
+    lock = _pv_log_lock_for(cat)
+    with lock:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:  # noqa: BLE001
+            return
+
+        try:
+            # Runtime size-based rollover.
+            if path.exists() and path.stat().st_size >= _PV_LOG_MAX_BYTES:
+                _pv_rotate_existing(path)
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            with open(path, "ab") as f:
+                f.write(line)
+        except Exception:  # noqa: BLE001
+            return
+
+
+def pv_log_exception(
+    category: str,
+    message: str,
+    *,
+    component: str = "",
+    exc: Optional[BaseException] = None,
+    **fields,
+) -> None:
+    text = ""
+    try:
+        if exc is not None:
+            text = f"{type(exc).__name__}: {str(exc)[:500]}"
+    except Exception:  # noqa: BLE001
+        text = ""
+    pv_log(
+        category,
+        "error",
+        message,
+        component=component,
+        exception=text,
+        **fields,
+    )
 
 
 def _client_ip() -> Optional[str]:
@@ -90,6 +247,14 @@ def _add_blocklist_cidr(cidr: str, reason: str = "") -> None:
                 session.add(entry)
                 session.commit()
                 log_event("SECURITY_IP_AUTO_BLOCK", details=f"cidr={cidr} reason={reason}")
+                pv_log(
+                    "security",
+                    "warn",
+                    "security_ip_auto_block",
+                    component="logging_utils",
+                    cidr=str(cidr),
+                    reason=str(reason or ""),
+                )
     except Exception:
         return
 
@@ -158,6 +323,14 @@ def record_invalid_url_attempt(path: str) -> None:
         return
     # Log the 404 event
     log_event("SECURITY_URL_404", details=f"path={path}")
+    pv_log(
+        "security",
+        "warn",
+        "security_url_404",
+        component="logging_utils",
+        ip=str(ip),
+        path=str(path or "")[:512],
+    )
     try:
         with Session(engine) as session:
             AuditEvent.__table__.create(bind=engine, checkfirst=True)
@@ -167,6 +340,14 @@ def record_invalid_url_attempt(path: str) -> None:
                 .scalar()
             )
             if cnt is not None and int(cnt) > 5:
+                pv_log(
+                    "security",
+                    "error",
+                    "security_too_many_invalid_urls",
+                    component="logging_utils",
+                    ip=str(ip),
+                    count=int(cnt),
+                )
                 _add_blocklist_cidr(f"{ip}/32", reason="too_many_invalid_urls")
                 _escalate_network_if_needed(ip)
     except Exception:
@@ -305,6 +486,15 @@ def update_ip_lockout_after_failure(threshold: int = 4) -> None:
             )
             session.add(lock_event)
             session.commit()
+            pv_log(
+                "security",
+                "error",
+                "auth_ip_locked",
+                component="logging_utils",
+                ip=str(ip),
+                failures=int(failure_count),
+                threshold=int(threshold),
+            )
             # Also add to central blocklist and consider network escalation
             if not _ip_is_allowlisted(ip):
                 _add_blocklist_cidr(f"{ip}/32", reason=f"auth_failures>={int(failure_count)}")
