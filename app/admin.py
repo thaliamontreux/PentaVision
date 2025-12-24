@@ -52,7 +52,27 @@ from .models import (
 from .security import get_current_user, user_has_role
 from .storage_settings_page import storage_settings_page
 
-import psutil
+
+def _pid_is_running(pid: int | None) -> bool:
+    if pid is None:
+        return False
+    try:
+        n = int(pid)
+    except Exception:
+        return False
+    if n <= 0:
+        return False
+    try:
+        # Signal 0 does not kill the process; it only checks for existence/permission.
+        os.kill(n, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # If we can't signal it, but it exists, treat as running.
+        return True
+    except Exception:
+        return False
 
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -261,13 +281,7 @@ def git_pull_poll(run_id: str):
         meta = {"pid": None, "log_path": log_path}
 
     pid = meta.get("pid")
-    running = False
-    try:
-        if pid is not None:
-            p = psutil.Process(int(pid))
-            running = p.is_running() and p.status() != psutil.STATUS_ZOMBIE
-    except Exception:
-        running = False
+    running = _pid_is_running(pid)
 
     try:
         offset = int(request.args.get("offset") or 0)
