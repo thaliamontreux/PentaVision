@@ -326,7 +326,7 @@
           ctrl = new AbortController();
           timeoutId = setTimeout(function () {
             try { ctrl.abort(); } catch (e) {}
-          }, 6000);
+          }, 20000);
         } catch (e) {
           ctrl = null;
         }
@@ -434,6 +434,11 @@
           .catch(function (e) {
             try { if (timeoutId) clearTimeout(timeoutId); } catch (e2) {}
             var msg = (e && e.message) ? e.message : String(e || 'failed');
+            try {
+              if (e && (e.name === 'AbortError' || String(msg).toLowerCase().indexOf('aborted') !== -1)) {
+                msg = 'timeout after 20s (server busy/unresponsive or RecordDB slow)';
+              }
+            } catch (e3) {}
             auditOut.textContent = 'Failed to load audit: ' + msg;
             setLastError('audit: ' + msg);
           });
