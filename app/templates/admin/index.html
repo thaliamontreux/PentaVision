@@ -55,9 +55,9 @@
         <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
       </a>
 
-      <button type="button" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}" style="text-align:left;">
+      <button type="button" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}">
         <h2 class="pv-card-title">Pull GitHub Update</h2>
-        <p class="pv-card-subtitle">Run <span class="pv-mono">scripts/git_pull.sh</span> on the server and watch output live (read-only).</p>
+        <p class="pv-card-subtitle">Run scripts/git_pull.sh on the server and watch output live (read-only).</p>
       </button>
 
       <a href="{{ url_for('installer.install') }}" class="pv-card">
