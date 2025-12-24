@@ -494,6 +494,54 @@ def create_log_server() -> Flask:
 
         return Response(gen(), mimetype="text/event-stream")
 
+    @app.get("/api/tail_poll")
+    def api_tail_poll():
+        cat = (request.args.get("cat") or "system").strip().lower()
+        if cat not in {"system", "modules", "rtsp", "rtmp", "security"}:
+            cat = "system"
+        path = _cat_path(cat)
+
+        try:
+            start_raw = request.args.get("start")
+            start_pos = int(start_raw) if start_raw is not None else 0
+        except Exception:
+            start_pos = 0
+        if start_pos < 0:
+            start_pos = 0
+
+        try:
+            max_bytes = int(request.args.get("max_bytes") or "65536")
+        except Exception:
+            max_bytes = 65536
+        max_bytes = max(1024, min(max_bytes, 512 * 1024))
+
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            if not os.path.exists(path):
+                with open(path, "ab"):
+                    pass
+        except Exception:
+            return jsonify({"ok": False, "error": "log file not found", "pos": start_pos, "lines": []})
+
+        lines: list[str] = []
+        pos = start_pos
+        try:
+            with open(path, "rb") as f:
+                try:
+                    f.seek(start_pos)
+                except Exception:
+                    f.seek(0)
+                    pos = 0
+                chunk = f.read(max_bytes)
+                pos = f.tell()
+            if chunk:
+                text_chunk = chunk.decode("utf-8", errors="replace")
+                lines = [ln for ln in text_chunk.splitlines() if ln.strip()]
+        except Exception:
+            return jsonify({"ok": False, "error": "tail error", "pos": start_pos, "lines": []})
+
+        return jsonify({"ok": True, "pos": int(pos), "lines": lines})
+
     @app.get("/api/journal")
     def api_journal():
         unit = (request.args.get("unit") or "").strip()

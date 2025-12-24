@@ -86,6 +86,8 @@
         var btnPause = document.getElementById('pv-pause');
         var paused = false;
         var maxLines = 2000;
+        var pollMs = 30000;
+        var pos = 0;
 
         function addLine(raw) {
           if (!out) return;
@@ -128,18 +130,29 @@
           });
         }
 
-        try {
-          var src = new EventSource('/api/tail?cat=' + encodeURIComponent(category));
-          src.onmessage = function (evt) {
-            if (paused) return;
-            addLine(evt.data);
-          };
-          src.onerror = function () {
-            // Keep trying; browser reconnects automatically.
-          };
-        } catch (e) {
-          addLine('{"level":"error","message":"EventSource failed"}');
+        function poll() {
+          try {
+            fetch('/api/tail_poll?cat=' + encodeURIComponent(category) + '&start=' + encodeURIComponent(String(pos)))
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (!data || data.ok !== true) {
+                  return;
+                }
+                if (typeof data.pos === 'number') {
+                  pos = data.pos;
+                }
+                if (paused) return;
+                var lines = data.lines || [];
+                for (var i = 0; i < lines.length; i++) {
+                  addLine(lines[i]);
+                }
+              })
+              .catch(function () {});
+          } catch (e) {}
         }
+
+        poll();
+        try { setInterval(poll, pollMs); } catch (e) {}
       })();
     </script>
   </body>
