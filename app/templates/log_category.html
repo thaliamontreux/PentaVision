@@ -102,10 +102,40 @@
         background: rgba(255,255,255,0.05);
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
       }
+
+      .pv-screwed {
+        position: relative;
+        overflow: hidden;
+      }
+      .pv-screwed::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(12px 12px at 14px 14px, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
+          radial-gradient(12px 12px at calc(100% - 14px) 14px, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
+          radial-gradient(12px 12px at 14px calc(100% - 14px), rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
+          radial-gradient(12px 12px at calc(100% - 14px) calc(100% - 14px), rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%);
+        mix-blend-mode: screen;
+        opacity: 0.7;
+      }
+      .pv-screwed::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) 7px 14px / 14px 2px no-repeat,
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) calc(100% - 21px) 14px / 14px 2px no-repeat,
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) 7px calc(100% - 16px) / 14px 2px no-repeat,
+          linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0) 55%) calc(100% - 21px) calc(100% - 16px) / 14px 2px no-repeat;
+        opacity: 0.55;
+      }
     </style>
   </head>
   <body>
-    <div class="pv-top">
+    <div class="pv-top pv-screwed">
       <div>
         <div class="pv-title">PentaVision Log · {{ category }}</div>
         <div class="pv-sub">Live tail from /dev/shm/pentavision/logs/{{ category }}/logfile</div>
