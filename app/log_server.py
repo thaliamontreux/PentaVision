@@ -3,8 +3,10 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
+import re
 import shutil
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -13,7 +15,7 @@ from flask import Flask, Response, abort, jsonify, render_template, request
 from sqlalchemy import text
 
 from .db import get_record_engine
-from .logging_utils import pv_rotate_logs_on_startup
+from .logging_utils import pv_log, pv_rotate_logs_on_startup, record_invalid_url_attempt_for_ip
 
 
 def _client_ip() -> str:
@@ -79,8 +81,142 @@ def create_log_server() -> Flask:
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+    def _start_apache_log_ingestion() -> None:
+        access_path = (os.environ.get("PENTAVISION_APACHE_ACCESS_LOG") or "").strip()
+        error_path = (os.environ.get("PENTAVISION_APACHE_ERROR_LOG") or "").strip()
+
+        if not access_path:
+            for cand in (
+                "/var/log/apache2/pentavision_access.log",
+                "/var/log/apache2/access.log",
+                "/var/log/httpd/access_log",
+                "/var/log/httpd/access.log",
+            ):
+                if os.path.exists(cand):
+                    access_path = cand
+                    break
+        if not error_path:
+            for cand in (
+                "/var/log/apache2/pentavision_error.log",
+                "/var/log/apache2/error.log",
+                "/var/log/httpd/error_log",
+                "/var/log/httpd/error.log",
+            ):
+                if os.path.exists(cand):
+                    error_path = cand
+                    break
+
+        access_path = access_path.strip()
+        error_path = error_path.strip()
+
+        access_enabled = bool(access_path) and os.path.exists(access_path)
+        error_enabled = bool(error_path) and os.path.exists(error_path)
+        if not (access_enabled or error_enabled):
+            return
+
+        access_re = re.compile(r"^(?P<ip>\S+)\s+\S+\s+\S+\s+\[[^\]]+\]\s+\"(?P<method>[A-Z]+)\s+(?P<path>[^\s\"]+)\s+[^\"]+\"\s+(?P<status>\d{3})\s+")
+
+        def follow(path: str, handler) -> None:
+            pos = 0
+            last_inode = None
+            while True:
+                try:
+                    st = os.stat(path)
+                    inode = getattr(st, "st_ino", None)
+                    if last_inode is not None and inode is not None and inode != last_inode:
+                        pos = 0
+                    last_inode = inode
+                    with open(path, "r", encoding="utf-8", errors="replace") as f:
+                        try:
+                            f.seek(pos)
+                        except Exception:
+                            f.seek(0)
+                            pos = 0
+                        while True:
+                            line = f.readline()
+                            if not line:
+                                break
+                            pos = f.tell()
+                            handler(line.rstrip("\n"))
+                except Exception:
+                    pass
+                time.sleep(0.5)
+
+        def handle_access(line: str) -> None:
+            if not line:
+                return
+            try:
+                pv_log("system", "info", "apache_access", component="apache", line=line[:1500])
+            except Exception:
+                pass
+            try:
+                m = access_re.match(line)
+                if not m:
+                    return
+                ip = (m.group("ip") or "").strip()
+                path = (m.group("path") or "").strip()
+                status = int(m.group("status") or 0)
+                if not ip or not path:
+                    return
+                if status >= 400:
+                    clean_path = path.split("?", 1)[0].strip().lower()
+                    if clean_path in {"/favicon.ico", "/index.html", "/index.php", "/robots.txt"}:
+                        return
+                    record_invalid_url_attempt_for_ip(ip, path)
+            except Exception:
+                return
+
+        def handle_error(line: str) -> None:
+            if not line:
+                return
+            try:
+                pv_log("system", "warn", "apache_error", component="apache", line=line[:1500])
+            except Exception:
+                pass
+
+        try:
+            if access_enabled:
+                threading.Thread(
+                    target=follow,
+                    args=(access_path, handle_access),
+                    daemon=True,
+                    name="pv_apache_access_tail",
+                ).start()
+                pv_log(
+                    "system",
+                    "info",
+                    "apache_access_tail_started",
+                    component="log_server",
+                    path=str(access_path),
+                )
+        except Exception:
+            pass
+
+        try:
+            if error_enabled:
+                threading.Thread(
+                    target=follow,
+                    args=(error_path, handle_error),
+                    daemon=True,
+                    name="pv_apache_error_tail",
+                ).start()
+                pv_log(
+                    "system",
+                    "info",
+                    "apache_error_tail_started",
+                    component="log_server",
+                    path=str(error_path),
+                )
+        except Exception:
+            pass
+
     try:
         pv_rotate_logs_on_startup()
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        _start_apache_log_ingestion()
     except Exception:  # noqa: BLE001
         pass
 

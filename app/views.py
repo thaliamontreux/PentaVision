@@ -44,7 +44,7 @@ def _get_face_recognition_lib():
 
 from .auth import _authenticate_primary_factor, _authenticate_user, _verify_totp
 from .db import get_face_engine, get_record_engine, get_user_engine
-from .logging_utils import log_event
+from .logging_utils import log_event, pv_log
 from .models import (
     AuditEvent,
     CameraDevice,
@@ -686,6 +686,17 @@ def login():
                 email, password
             )
             if user is None:
+                try:
+                    pv_log(
+                        "security",
+                        "warn",
+                        "auth_html_login_failure",
+                        component="views",
+                        email=str(email or "")[:256],
+                        status=int(status or 0),
+                    )
+                except Exception:
+                    pass
                 errors.append(error or f"Login failed (status {status}).")
             else:
                 if requires_totp:
@@ -704,6 +715,17 @@ def login():
                                 session_db.commit()
                     login_user(user)
                     log_event("AUTH_LOGIN_SUCCESS", user_id=user.id, details="html_login")
+                    try:
+                        pv_log(
+                            "security",
+                            "info",
+                            "auth_html_login_success",
+                            component="views",
+                            user_id=int(user.id),
+                            email=str(getattr(user, "email", "") or "")[:256],
+                        )
+                    except Exception:
+                        pass
                     return redirect(next_url)
 
     return render_template(
@@ -756,6 +778,17 @@ def login_totp():
             else:
                 if not _verify_totp(user_obj, totp_code):
                     log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user_obj.id)
+                    try:
+                        pv_log(
+                            "security",
+                            "warn",
+                            "auth_html_login_totp_failure",
+                            component="views",
+                            user_id=int(user_obj.id),
+                            email=str(getattr(user_obj, "email", "") or "")[:256],
+                        )
+                    except Exception:
+                        pass
                     totp_error = "Invalid authentication code."
                 else:
                     # Mark successful 2FA and complete the login.
@@ -768,6 +801,17 @@ def login_totp():
                                 session_db.commit()
                     login_user(user_obj)
                     log_event("AUTH_LOGIN_SUCCESS", user_id=user_obj.id, details="html_login_totp")
+                    try:
+                        pv_log(
+                            "security",
+                            "info",
+                            "auth_html_login_totp_success",
+                            component="views",
+                            user_id=int(user_obj.id),
+                            email=str(getattr(user_obj, "email", "") or "")[:256],
+                        )
+                    except Exception:
+                        pass
                     session.pop("pending_totp_user_id", None)
                     session.pop("pending_totp_next", None)
                     return redirect(next_url)

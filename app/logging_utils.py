@@ -208,6 +208,33 @@ def log_event(event_type: str, user_id: Optional[int] = None, details: str = "")
         return
 
 
+def log_event_for_ip(
+    event_type: str,
+    ip: str,
+    *,
+    user_id: Optional[int] = None,
+    details: str = "",
+) -> None:
+    engine = get_user_engine()
+    if engine is None:
+        return
+    ip_val = str(ip or "").strip()
+    if not ip_val:
+        return
+    try:
+        with Session(engine) as session:
+            event = AuditEvent(
+                user_id=user_id,
+                event_type=str(event_type),
+                ip=ip_val,
+                details=str(details or ""),
+            )
+            session.add(event)
+            session.commit()
+    except Exception:  # noqa: BLE001
+        return
+
+
 def _env_consumer_allow_networks() -> list:
     # Backwards/forwards compatible: support both env var spellings.
     raw = os.environ.get("PENTAVISION_BLOCKLIST_CONSUMER_ALLOW_CIDRS", "").strip()
@@ -388,10 +415,20 @@ def record_invalid_url_attempt(path: str) -> None:
     ip = _client_ip()
     if not ip:
         return
+    record_invalid_url_attempt_for_ip(ip, path)
+    return
+
+
+def record_invalid_url_attempt_for_ip(ip: str, path: str) -> None:
+    engine = get_user_engine()
+    if engine is None:
+        return
+    ip = str(ip or "").strip()
+    if not ip:
+        return
     if _ip_is_allowlisted(ip):
         return
-    # Log the 404 event
-    log_event("SECURITY_URL_404", details=f"path={path}")
+    log_event_for_ip("SECURITY_URL_404", ip, details=f"path={path}")
     pv_log(
         "security",
         "warn",
