@@ -18,9 +18,10 @@
         margin: 0;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
         background:
-          radial-gradient(900px 700px at 18% 12%, rgba(56,189,248,0.15), transparent 55%),
-          radial-gradient(900px 700px at 78% 18%, rgba(167,139,250,0.12), transparent 60%),
-          radial-gradient(900px 700px at 40% 88%, rgba(34,197,94,0.10), transparent 60%),
+          radial-gradient(900px 700px at 18% 12%, rgba(56,189,248,0.22), transparent 55%),
+          radial-gradient(900px 700px at 78% 18%, rgba(167,139,250,0.20), transparent 60%),
+          radial-gradient(900px 700px at 40% 88%, rgba(34,197,94,0.16), transparent 60%),
+          radial-gradient(700px 550px at 52% 42%, rgba(255,255,255,0.06), transparent 62%),
           linear-gradient(180deg, var(--pv-bg0), var(--pv-bg1));
         color: var(--pv-text);
       }
@@ -28,15 +29,33 @@
         position: sticky;
         top: 0;
         z-index: 10;
-        background: rgba(0,0,0,0.28);
+        background:
+          linear-gradient(120deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05) 40%, rgba(255,255,255,0.10) 72%, rgba(255,255,255,0.03)),
+          rgba(255,255,255,0.035);
         backdrop-filter: blur(14px);
         border-bottom: 1px solid rgba(255,255,255,0.10);
-        box-shadow: var(--pv-shadow);
+        box-shadow:
+          0 30px 65px rgba(0,0,0,0.62),
+          0 12px 26px rgba(0,0,0,0.30),
+          inset 0 1px 0 rgba(255,255,255,0.14);
+        -webkit-backdrop-filter: blur(14px);
         padding: 0.65rem 0.9rem;
         display: flex;
         align-items: baseline;
         justify-content: space-between;
         gap: 0.75rem;
+      }
+      @keyframes pvGlassShimmer {
+        0% { background-position: -240px 0, 0 0; }
+        100% { background-position: 520px 0, 0 0; }
+      }
+      .pv-top {
+        background-size: 520px 100%, auto;
+        background-position: -240px 0, 0 0;
+        animation: pvGlassShimmer 10s linear infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .pv-top { animation: none !important; }
       }
       .pv-title {
         font-weight: 700;
@@ -62,14 +81,16 @@
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
       }
       .pv-btn {
-        background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+        background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
         border: 1px solid rgba(255,255,255,0.16);
         color: var(--pv-text);
         border-radius: 12px;
         padding: 0.35rem 0.6rem;
         cursor: pointer;
         font-size: 12px;
-        box-shadow: var(--pv-shadow-soft);
+        box-shadow:
+          0 14px 28px rgba(0,0,0,0.40),
+          inset 0 1px 0 rgba(255,255,255,0.10);
       }
       .pv-btn:hover {
         background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.07));
@@ -113,12 +134,16 @@
         inset: 0;
         pointer-events: none;
         background:
+          radial-gradient(22px 18px at 18px 18px, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0.0) 72%),
+          radial-gradient(22px 18px at calc(100% - 18px) 18px, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0.0) 72%),
+          radial-gradient(22px 18px at 18px calc(100% - 18px), rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0.0) 72%),
+          radial-gradient(22px 18px at calc(100% - 18px) calc(100% - 18px), rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0.0) 72%),
           radial-gradient(12px 12px at 14px 14px, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
           radial-gradient(12px 12px at calc(100% - 14px) 14px, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
           radial-gradient(12px 12px at 14px calc(100% - 14px), rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%),
           radial-gradient(12px 12px at calc(100% - 14px) calc(100% - 14px), rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.16) 36%, rgba(0,0,0,0.35) 62%, rgba(0,0,0,0.0) 70%);
         mix-blend-mode: screen;
-        opacity: 0.7;
+        opacity: 0.78;
       }
       .pv-screwed::after {
         content: "";
