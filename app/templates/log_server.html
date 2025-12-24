@@ -145,6 +145,20 @@
       }
       a { color: #93c5fd; text-decoration: none; }
       a:hover { text-decoration: underline; }
+      .pv-feed-src {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 11px;
+        line-height: 1.2;
+        color: rgba(229,231,235,0.70);
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+      }
+      .pv-feed-msg {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: pre-wrap;
+      }
       .pv-chip {
         display: inline-flex;
         align-items: center;
@@ -201,6 +215,28 @@
           </span>
         </div>
       </div>
+    </div>
+
+    <div class="pv-card pv-screwed" style="margin-top: 1rem; overflow: hidden; display: flex; flex-direction: column; height: 310px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <div>
+          <div class="pv-card-title" style="margin: 0;">Unified Live Feed</div>
+          <div class="pv-card-subtitle" style="margin-top: 0.25rem;">system · modules · rtsp · rtmp · security</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <label style="display: inline-flex; align-items: center; gap: 0.35rem; color: #9ca3af;">
+            <input id="pv-feed-auto" type="checkbox" />
+            <span>Auto</span>
+          </label>
+          <div style="display: inline-flex; align-items: center; gap: 0.4rem; color: #9ca3af;">
+            <label for="pv-feed-interval">Refresh</label>
+            <input id="pv-feed-interval" type="range" min="0" max="7" step="1" value="1" style="width: 160px;" />
+            <span id="pv-feed-interval-label" style="min-width: 3.25rem; text-align: right;">5s</span>
+          </div>
+          <button id="pv-feed-clear" class="pv-button-secondary" type="button">Clear</button>
+        </div>
+      </div>
+      <div id="pv-feed-output" style="margin: 0; padding: 0.75rem; overflow: auto; flex: 1;"></div>
     </div>
 
     <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 0.9rem; margin-top: 1rem; align-items: start;">
@@ -377,6 +413,15 @@
       var autoEl = document.getElementById('pv-log-auto');
       var intervalEl = document.getElementById('pv-log-interval');
       var intervalLabelEl = document.getElementById('pv-log-interval-label');
+
+      var feedOut = document.getElementById('pv-feed-output');
+      var feedAutoEl = document.getElementById('pv-feed-auto');
+      var feedIntervalEl = document.getElementById('pv-feed-interval');
+      var feedIntervalLabelEl = document.getElementById('pv-feed-interval-label');
+      var feedClearBtn = document.getElementById('pv-feed-clear');
+
+      var feedPos = { system: 0, modules: 0, rtsp: 0, rtmp: 0, security: 0 };
+      var feedMaxBlocks = 2000;
 
       var lastTailLine = '';
 
@@ -634,6 +679,107 @@
       if (auditBtn) auditBtn.addEventListener('click', function () { fetchAudit(false); });
       if (auditErrBtn) auditErrBtn.addEventListener('click', function () { fetchAudit(true); });
 
+      function currentFeedIntervalMs() {
+        if (!feedIntervalEl) return 5000;
+        var idx = parseInt(feedIntervalEl.value || '1', 10);
+        if (isNaN(idx)) idx = 1;
+        idx = Math.max(0, Math.min(idx, 7));
+        var values = [2, 5, 10, 15, 30, 60, 120, 240];
+        return values[idx] * 1000;
+      }
+
+      function updateFeedIntervalLabel() {
+        if (!feedIntervalLabelEl || !feedIntervalEl) return;
+        var idx = parseInt(feedIntervalEl.value || '1', 10);
+        if (isNaN(idx)) idx = 1;
+        idx = Math.max(0, Math.min(idx, 7));
+        var values = [2, 5, 10, 15, 30, 60, 120, 240];
+        feedIntervalLabelEl.textContent = String(values[idx]) + 's';
+      }
+
+      function feedAddBlock(source, rawLine) {
+        if (!feedOut) return;
+        var src = String(source || '').trim().toUpperCase() || 'SYSTEM';
+        var text = String(rawLine || '').trim();
+        if (!text) return;
+
+        var msgText = text;
+        try {
+          var obj = JSON.parse(text);
+          var ts = '';
+          try { ts = fmtTs(obj.ts); } catch (e) { ts = ''; }
+          var level = String(obj.level || '').toUpperCase();
+          var component = String(obj.component || '').trim();
+          var message = String(obj.message || '').trim();
+          if (!message) message = text;
+          var head = '';
+          if (ts) head += ts + ' ';
+          if (level) head += level + ' ';
+          if (component) head += '[' + component + '] ';
+          msgText = head + message;
+        } catch (e2) {
+          msgText = text;
+        }
+
+        var srcDiv = document.createElement('div');
+        srcDiv.className = 'pv-feed-src';
+        srcDiv.textContent = src;
+        var msgDiv = document.createElement('div');
+        msgDiv.className = 'pv-feed-msg';
+        msgDiv.textContent = msgText;
+        feedOut.appendChild(srcDiv);
+        feedOut.appendChild(msgDiv);
+
+        try {
+          while (feedOut.childNodes && feedOut.childNodes.length > feedMaxBlocks * 2) {
+            feedOut.removeChild(feedOut.firstChild);
+          }
+        } catch (e3) {}
+        feedOut.scrollTop = feedOut.scrollHeight;
+      }
+
+      function pollFeedCat(cat) {
+        var c = String(cat || 'system');
+        var start = 0;
+        try { start = parseInt(feedPos[c] || 0, 10); } catch (e) { start = 0; }
+        if (start < 0) start = 0;
+        return fetch('/api/tail_poll?cat=' + encodeURIComponent(c) + '&start=' + encodeURIComponent(String(start)))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || data.ok !== true) return;
+            if (typeof data.pos === 'number') {
+              feedPos[c] = data.pos;
+            }
+            if (!feedAutoEl || !feedAutoEl.checked) return;
+            var lines = data.lines || [];
+            for (var i = 0; i < lines.length; i++) {
+              feedAddBlock(c, lines[i]);
+            }
+          })
+          .catch(function () {});
+      }
+
+      function pollFeedAll() {
+        try {
+          pollFeedCat('system');
+          pollFeedCat('modules');
+          pollFeedCat('rtsp');
+          pollFeedCat('rtmp');
+          pollFeedCat('security');
+        } catch (e) {}
+      }
+
+      var feedTimer = null;
+      function startFeedAutoRefresh() {
+        if (feedTimer) {
+          try { clearInterval(feedTimer); } catch (e) {}
+          feedTimer = null;
+        }
+        feedTimer = setInterval(function () {
+          pollFeedAll();
+        }, currentFeedIntervalMs());
+      }
+
       function currentAuditIntervalMs() {
         if (!auditIntervalEl) return 10000;
         var idx = parseInt(auditIntervalEl.value || '2', 10);
@@ -727,7 +873,7 @@
       }
 
       if (autoEl) {
-        autoEl.checked = false;
+        autoEl.checked = true;
         autoEl.addEventListener('change', function () {
           if (autoEl.checked) {
             fetchJournal();
@@ -735,6 +881,40 @@
           } else {
             stopAutoRefresh();
           }
+        });
+      }
+
+      if (feedAutoEl) {
+        feedAutoEl.checked = true;
+        feedAutoEl.addEventListener('change', function () {
+          if (feedAutoEl.checked) {
+            pollFeedAll();
+            startFeedAutoRefresh();
+          } else if (feedTimer) {
+            try { clearInterval(feedTimer); } catch (e) {}
+            feedTimer = null;
+          }
+        });
+      }
+
+      if (feedIntervalEl) {
+        updateFeedIntervalLabel();
+        feedIntervalEl.addEventListener('input', function () {
+          updateFeedIntervalLabel();
+        });
+        feedIntervalEl.addEventListener('change', function () {
+          updateFeedIntervalLabel();
+          if (feedAutoEl && feedAutoEl.checked) {
+            startFeedAutoRefresh();
+          }
+        });
+      }
+
+      if (feedClearBtn) {
+        feedClearBtn.addEventListener('click', function () {
+          try {
+            if (feedOut) feedOut.innerHTML = '';
+          } catch (e) {}
         });
       }
 
@@ -753,11 +933,13 @@
 
       fetchJournal();
       fetchAudit(false);
+      pollFeedAll();
 
       initTimezoneSelect();
 
       startAutoRefresh();
       startAuditAutoRefresh();
+      startFeedAutoRefresh();
     })();
   </script>
 
