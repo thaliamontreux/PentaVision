@@ -16,6 +16,15 @@ from .config import load_config
 from .db import get_user_engine
 from .models import AuditEvent, CountryAccessPolicy, IpAllowlist, IpBlocklist, Role, User, UserRole
 
+try:
+    from .admin import COUNTRY_CHOICES
+except Exception:  # noqa: BLE001
+    COUNTRY_CHOICES = (  # type: ignore[assignment]
+        ("US", "United States"),
+        ("CA", "Canada"),
+        ("MX", "Mexico"),
+    )
+
 
 _ph = PasswordHasher()
 
@@ -149,6 +158,20 @@ def _blocked_reason_from_desc(desc: str) -> tuple[str, str, str]:
     return "manual", "Permanently Blocked", "manual"
 
 
+def _codes_from_raw(raw: str) -> list[str]:
+    parts = [c.strip().upper() for c in str(raw or "").split(",") if c.strip()]
+    out: list[str] = []
+    seen: set[str] = set()
+    for c in parts:
+        if len(c) != 2:
+            continue
+        if c in seen:
+            continue
+        seen.add(c)
+        out.append(c)
+    return out
+
+
 def create_blocklist_admin_service() -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(load_config())
@@ -164,6 +187,8 @@ def create_blocklist_admin_service() -> Flask:
         mode = (policy.mode if policy and policy.mode else "disabled") if policy else "disabled"
         allowed = (policy.allowed_countries if policy and policy.allowed_countries else "") if policy else ""
         blocked = (policy.blocked_countries if policy and policy.blocked_countries else "") if policy else ""
+        allowed_set = set(_codes_from_raw(allowed))
+        blocked_set = set(_codes_from_raw(blocked))
 
         def _chips(raw: str) -> str:
             parts = [c.strip().upper() for c in (raw or "").split(",") if c.strip()]
@@ -279,7 +304,7 @@ def create_blocklist_admin_service() -> Flask:
       color: var(--text);
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     }}
-    .wrap {{ max-width: 1200px; margin: 0 auto; padding: 18px; }}
+    .wrap {{ max-width: none; margin: 0; padding: 5px; }}
     .header {{ display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }}
     h1 {{ margin: 0; font-size: 1.4rem; letter-spacing: 0.2px; }}
     .sub {{ margin-top: 6px; color: var(--muted); font-size: 0.92rem; }}
@@ -296,7 +321,7 @@ def create_blocklist_admin_service() -> Flask:
     .btn:hover {{ border-color: rgba(96,165,250,0.6); }}
     .btn.danger {{ border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.12); }}
     .btn.danger:hover {{ border-color: rgba(239,68,68,0.9); }}
-    .grid {{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }}
+    .grid {{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }}
     @media (max-width: 980px) {{ .grid {{ grid-template-columns: 1fr; }} }}
     .alert {{ margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); }}
     .alert.err {{ border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.12); }}
@@ -325,10 +350,36 @@ def create_blocklist_admin_service() -> Flask:
         </div>
       </div>
       <div style=\"padding: 12px 14px;\">
-        <div class=\"muted\" style=\"margin-bottom: 8px;\">Allowed countries:</div>
-        <div>{_chips(allowed)}</div>
-        <div class=\"muted\" style=\"margin: 12px 0 8px;\">Blocked countries:</div>
-        <div>{_chips(blocked)}</div>
+        <form method=\"post\" action=\"/country/update\" style=\"display:grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start;\">
+          <div>
+            <div class=\"muted\" style=\"margin-bottom: 6px;\">Policy mode</div>
+            <select name=\"mode\" style=\"width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text);\">
+              <option value=\"disabled\" {('selected' if mode == 'disabled' or not mode else '')}>Disabled</option>
+              <option value=\"allow_list\" {('selected' if mode == 'allow_list' else '')}>Allow only listed countries</option>
+              <option value=\"block_list\" {('selected' if mode == 'block_list' else '')}>Block listed countries</option>
+              <option value=\"allow_all_except_blocked\" {('selected' if mode == 'allow_all_except_blocked' else '')}>Allow all except blocked</option>
+            </select>
+            <div class=\"muted\" style=\"margin-top: 8px; font-size: 0.9rem;\">This controls whether a country may connect/login. It does <strong>not</strong> exempt them from other rules.</div>
+            <div style=\"margin-top: 10px;\">
+              <button class=\"btn\" type=\"submit\">Save country policy</button>
+            </div>
+          </div>
+
+          <div>
+            <div class=\"muted\" style=\"margin-bottom: 6px;\">Allowed countries</div>
+            <select name=\"allowed_countries\" multiple size=\"12\" style=\"width: 100%; min-height: 260px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text);\">
+              {''.join([f'<option value="{code}" {("selected" if code in allowed_set else "")}>{code} - {name}</option>' for code, name in COUNTRY_CHOICES])}
+            </select>
+          </div>
+
+          <div>
+            <div class=\"muted\" style=\"margin-bottom: 6px;\">Blocked countries</div>
+            <select name=\"blocked_countries\" multiple size=\"12\" style=\"width: 100%; min-height: 260px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text);\">
+              {''.join([f'<option value="{code}" {("selected" if code in blocked_set else "")}>{code} - {name}</option>' for code, name in COUNTRY_CHOICES])}
+            </select>
+          </div>
+        </form>
+        <div class=\"muted\" style=\"margin-top: 8px; font-size: 0.9rem;\">Saving requires System Administrator credentials.</div>
       </div>
     </div>
 
@@ -690,6 +741,55 @@ def create_blocklist_admin_service() -> Flask:
 
         msg = "Removed." if deleted else "Entry not found."
         html = _render_page(allow_rows, blocked, policy, message=msg)
+        return Response(html, mimetype="text/html; charset=utf-8")
+
+    @app.post("/country/update")
+    def update_country_policy() -> Response:
+        realm = "PentaVision Admin Update Country Policy"
+        maybe = _require_admin_basic_auth(realm)
+        if maybe is not None:
+            return maybe
+
+        engine = get_user_engine()
+        if engine is None:
+            abort(503)
+
+        mode = (request.form.get("mode") or "").strip()
+        allowed_codes = request.form.getlist("allowed_countries")
+        blocked_codes = request.form.getlist("blocked_countries")
+
+        mode_norm = mode.strip().lower() or "disabled"
+        valid_modes = {"disabled", "allow_list", "block_list", "allow_all_except_blocked"}
+        if mode_norm not in valid_modes:
+            mode_norm = "disabled"
+
+        known = {str(code).upper() for code, _ in COUNTRY_CHOICES}
+        allowed_norm = sorted({str(c).strip().upper() for c in allowed_codes if str(c).strip().upper() in known})
+        blocked_norm = sorted({str(c).strip().upper() for c in blocked_codes if str(c).strip().upper() in known})
+
+        allowed_str = ",".join(allowed_norm)
+        blocked_str = ",".join(blocked_norm)
+
+        with Session(engine) as db:
+            CountryAccessPolicy.__table__.create(bind=engine, checkfirst=True)
+            policy = db.query(CountryAccessPolicy).order_by(CountryAccessPolicy.id.asc()).first()
+            if policy is None:
+                policy = CountryAccessPolicy()
+                db.add(policy)
+            policy.mode = mode_norm
+            policy.allowed_countries = allowed_str or None
+            policy.blocked_countries = blocked_str or None
+            db.add(policy)
+            db.commit()
+
+            allow_rows = db.query(IpAllowlist).order_by(IpAllowlist.cidr.asc()).all()
+            blocked_rows = []
+            for r in db.query(IpBlocklist).order_by(IpBlocklist.cidr.asc()).all():
+                _rule_key, status, rule_label = _blocked_reason_from_desc(str(r.description or ""))
+                blocked_rows.append({"kind": "block", "id": int(r.id), "cidr": str(r.cidr), "until": None, "status": status, "rule": rule_label, "description": str(r.description or "")})
+
+        msg = "Country access policy updated."
+        html = _render_page(allow_rows, blocked_rows, policy, message=msg)
         return Response(html, mimetype="text/html; charset=utf-8")
 
     return app
