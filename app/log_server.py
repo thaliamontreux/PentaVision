@@ -127,9 +127,16 @@ def create_log_server() -> Flask:
         if not (access_enabled or error_enabled):
             return
 
+        log_all_access = str(os.environ.get("PENTAVISION_APACHE_LOG_ALL", "0") or "0").strip() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
         access_re = re.compile(r"^(?P<ip>\S+)\s+\S+\s+\S+\s+\[[^\]]+\]\s+\"(?P<method>[A-Z]+)\s+(?P<path>[^\s\"]+)\s+[^\"]+\"\s+(?P<status>\d{3})\s+")
 
-        def follow(path: str, handler) -> None:
+        def follow(path: str, handler, *, start_at_end: bool = True) -> None:
             pos = 0
             last_inode = None
             while True:
@@ -141,16 +148,23 @@ def create_log_server() -> Flask:
                     last_inode = inode
                     with open(path, "r", encoding="utf-8", errors="replace") as f:
                         try:
+                            if start_at_end and pos == 0:
+                                f.seek(0, os.SEEK_END)
+                                pos = f.tell()
                             f.seek(pos)
                         except Exception:
                             f.seek(0)
                             pos = 0
+                        n = 0
                         while True:
                             line = f.readline()
                             if not line:
                                 break
                             pos = f.tell()
                             handler(line.rstrip("\n"))
+                            n += 1
+                            if n >= 2000:
+                                break
                 except Exception:
                     pass
                 time.sleep(0.5)
@@ -158,10 +172,6 @@ def create_log_server() -> Flask:
         def handle_access(line: str) -> None:
             if not line:
                 return
-            try:
-                pv_log("system", "info", "apache_access", component="apache", line=line[:1500])
-            except Exception:
-                pass
             try:
                 m = access_re.match(line)
                 if not m:
@@ -171,6 +181,20 @@ def create_log_server() -> Flask:
                 status = int(m.group("status") or 0)
                 if not ip or not path:
                     return
+                if log_all_access:
+                    try:
+                        pv_log(
+                            "system",
+                            "info",
+                            "apache_access",
+                            component="apache",
+                            ip=str(ip),
+                            status=int(status),
+                            path=str(path)[:512],
+                        )
+                    except Exception:
+                        pass
+
                 if status >= 400:
                     clean_path = path.split("?", 1)[0].strip().lower()
                     if clean_path in {"/favicon.ico", "/index.html", "/index.php", "/robots.txt"}:
