@@ -667,49 +667,194 @@ def create_blocklist_admin_service() -> Flask:
   <title>PentaVision Access Control</title>
   <style>
     :root {{
-      --bg: #061821;
-      --panel: rgba(255,255,255,0.06);
-      --panel2: rgba(255,255,255,0.04);
-      --text: #e5e7eb;
-      --muted: rgba(229,231,235,0.72);
-      --border: rgba(255,255,255,0.12);
+      --bg0: #030711;
+      --bg1: #061d2b;
+      --bg2: #04131d;
+      --panel: rgba(255, 255, 255, 0.085);
+      --panel2: rgba(255, 255, 255, 0.055);
+      --panel3: rgba(255, 255, 255, 0.035);
+      --text: rgba(245, 250, 255, 0.96);
+      --muted: rgba(230, 240, 255, 0.72);
+      --border: rgba(255, 255, 255, 0.14);
+      --border2: rgba(255, 255, 255, 0.20);
       --accent: #60a5fa;
-      --danger: #ef4444;
+      --accent2: #22d3ee;
+      --accent3: #a78bfa;
+      --danger: #fb7185;
       --ok: #22c55e;
+      --shadow: rgba(0, 0, 0, 0.55);
+      --shadow2: rgba(0, 0, 0, 0.35);
     }}
     body {{
       margin: 0;
       background:
-        radial-gradient(1200px 600px at 15% 0%, rgba(34,211,238,0.18), transparent 60%),
-        radial-gradient(900px 520px at 85% 10%, rgba(96,165,250,0.16), transparent 55%),
-        var(--bg);
+        radial-gradient(1200px 700px at 15% 0%, rgba(34, 211, 238, 0.30), transparent 62%),
+        radial-gradient(1000px 700px at 85% 10%, rgba(96, 165, 250, 0.26), transparent 60%),
+        radial-gradient(900px 700px at 60% 100%, rgba(167, 139, 250, 0.16), transparent 55%),
+        linear-gradient(180deg, var(--bg1), var(--bg0));
       color: var(--text);
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     }}
-    .wrap {{ max-width: none; margin: 0; padding: 5px; }}
-    .header {{ display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }}
-    h1 {{ margin: 0; font-size: 1.4rem; letter-spacing: 0.2px; }}
-    .sub {{ margin-top: 6px; color: var(--muted); font-size: 0.92rem; }}
-    .panel {{ margin-top: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04)); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }}
-    .panel-top {{ display:flex; justify-content:space-between; align-items:center; padding: 12px 14px; background: rgba(255,255,255,0.04); border-bottom: 1px solid var(--border); gap: 10px; flex-wrap: wrap; }}
-    .kpis {{ display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 0.9rem; }}
-    .kpis strong {{ color: var(--text); font-weight: 700; }}
-    table {{ width: 100%; border-collapse: collapse; }}
+    * {{ box-sizing: border-box; }}
+    .wrap {{ max-width: none; margin: 0; padding: 10px; position: relative; }}
+    .wrap::before {{
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 44px 44px;
+      opacity: 0.18;
+      pointer-events: none;
+      mix-blend-mode: overlay;
+    }}
+    .wrap::after {{
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(900px 600px at 50% 20%, rgba(255,255,255,0.10), transparent 60%);
+      opacity: 0.35;
+      pointer-events: none;
+    }}
+
+    .header {{
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 14px 14px 10px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05));
+      box-shadow:
+        0 28px 90px var(--shadow),
+        0 10px 28px var(--shadow2),
+        inset 0 1px 0 rgba(255,255,255,0.22);
+      backdrop-filter: blur(14px) saturate(140%);
+    }}
+    h1 {{ margin: 0; font-size: 1.55rem; letter-spacing: 0.3px; }}
+    .sub {{ margin-top: 8px; color: var(--muted); font-size: 0.92rem; }}
+    .sub .mono {{ color: rgba(245,250,255,0.92); }}
+
+    .panel {{
+      margin-top: 12px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.15);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.055));
+      box-shadow:
+        0 26px 80px rgba(0,0,0,0.52),
+        inset 0 1px 0 rgba(255,255,255,0.22);
+      backdrop-filter: blur(16px) saturate(150%);
+      position: relative;
+    }}
+    .panel::before {{
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(1200px 220px at 10% 0%, rgba(34,211,238,0.16), transparent 65%),
+        radial-gradient(900px 220px at 90% 0%, rgba(96,165,250,0.14), transparent 65%);
+      opacity: 0.8;
+      pointer-events: none;
+    }}
+    .panel-top {{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding: 12px 14px;
+      gap: 10px;
+      flex-wrap: wrap;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      position: relative;
+      z-index: 1;
+    }}
+    .kpis {{ display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 0.9rem; }}
+    .kpis strong {{ color: var(--text); font-weight: 800; }}
+
+    table {{ width: 100%; border-collapse: collapse; position: relative; z-index: 1; }}
     th, td {{ padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.92rem; }}
-    th {{ text-align:left; color: rgba(229,231,235,0.85); font-weight: 700; background: rgba(255,255,255,0.03); }}
-    tr:hover td {{ background: rgba(96,165,250,0.06); }}
+    th {{
+      text-align:left;
+      color: rgba(245,250,255,0.86);
+      font-weight: 800;
+      background: rgba(255,255,255,0.045);
+      backdrop-filter: blur(10px);
+    }}
+    tr:hover td {{ background: rgba(34,211,238,0.06); }}
     .mono {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace; }}
-    .btn {{ display:inline-flex; align-items:center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); text-decoration:none; font-weight: 700; cursor: pointer; }}
-    .btn:hover {{ border-color: rgba(96,165,250,0.6); }}
-    .btn.danger {{ border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.12); }}
-    .btn.danger:hover {{ border-color: rgba(239,68,68,0.9); }}
-    .grid {{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }}
-    @media (max-width: 980px) {{ .grid {{ grid-template-columns: 1fr; }} }}
-    .alert {{ margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); }}
-    .alert.err {{ border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.12); }}
-    .alert.ok {{ border-color: rgba(34,197,94,0.55); background: rgba(34,197,94,0.12); }}
+
+    input, select {{ outline: none; }}
+
+    .btn {{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 9px 11px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.05));
+      color: var(--text);
+      text-decoration:none;
+      font-weight: 850;
+      cursor: pointer;
+      box-shadow:
+        0 10px 24px rgba(0,0,0,0.35),
+        inset 0 1px 0 rgba(255,255,255,0.22);
+      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }}
+    .btn:hover {{
+      border-color: rgba(34,211,238,0.55);
+      box-shadow:
+        0 16px 34px rgba(0,0,0,0.45),
+        0 0 0 1px rgba(34,211,238,0.18),
+        inset 0 1px 0 rgba(255,255,255,0.24);
+      transform: translateY(-1px);
+    }}
+    .btn:active {{ transform: translateY(0px); }}
+    .btn.danger {{
+      border-color: rgba(251,113,133,0.55);
+      background:
+        linear-gradient(180deg, rgba(251,113,133,0.20), rgba(255,255,255,0.05));
+    }}
+    .btn.danger:hover {{ border-color: rgba(251,113,133,0.9); box-shadow: 0 16px 34px rgba(0,0,0,0.45), 0 0 0 1px rgba(251,113,133,0.18), inset 0 1px 0 rgba(255,255,255,0.24); }}
+
+    .grid {{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }}
+    @media (max-width: 980px) {{ .grid {{ grid-template-columns: 1fr; }} .wrap {{ padding: 8px; }} }}
+
+    .alert {{
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.05));
+      box-shadow: 0 18px 50px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+      backdrop-filter: blur(14px);
+    }}
+    .alert.err {{ border-color: rgba(251,113,133,0.55); background: linear-gradient(180deg, rgba(251,113,133,0.22), rgba(255,255,255,0.05)); }}
+    .alert.ok {{ border-color: rgba(34,197,94,0.55); background: linear-gradient(180deg, rgba(34,197,94,0.20), rgba(255,255,255,0.05)); }}
+
     .muted {{ color: var(--muted); }}
-    .chip {{ display:inline-flex; align-items:center; padding: 4px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05); margin-right: 6px; font-size: 0.85rem; }}
+    .chip {{
+      display:inline-flex;
+      align-items:center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+      margin-right: 6px;
+      font-size: 0.85rem;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.2);
+    }}
   </style>
 </head>
 <body>
