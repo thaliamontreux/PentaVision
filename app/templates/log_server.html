@@ -131,8 +131,8 @@
           </label>
           <div style="display: inline-flex; align-items: center; gap: 0.4rem; color: #9ca3af;">
             <label for="pv-audit-interval">Refresh</label>
-            <input id="pv-audit-interval" type="range" min="0" max="4" step="1" value="2" style="width: 120px;" />
-            <span id="pv-audit-interval-label" style="min-width: 2.5rem; text-align: right;">10s</span>
+            <input id="pv-audit-interval" type="range" min="0" max="4" step="1" value="3" style="width: 120px;" />
+            <span id="pv-audit-interval-label" style="min-width: 2.5rem; text-align: right;">30s</span>
           </div>
         </div>
         <div id="pv-audit-output" style="padding: 0.75rem; overflow: auto; font-size: 12px; line-height: 1.35; flex: 1;"></div>
@@ -320,9 +320,27 @@
       function fetchAudit(onlyErrors) {
         if (!auditOut) return;
         auditOnlyErrors = !!onlyErrors;
-        fetch('/api/audit/storage?limit=300')
-          .then(function (r) { return r.json(); })
+        var ctrl = null;
+        var timeoutId = null;
+        try {
+          ctrl = new AbortController();
+          timeoutId = setTimeout(function () {
+            try { ctrl.abort(); } catch (e) {}
+          }, 6000);
+        } catch (e) {
+          ctrl = null;
+        }
+        fetch('/api/audit/storage?limit=300', ctrl ? { signal: ctrl.signal } : undefined)
+          .then(function (r) {
+            if (!r.ok) {
+              return r.text().then(function (t) {
+                throw new Error('HTTP ' + r.status + ' ' + (t || '').slice(0, 300));
+              });
+            }
+            return r.json();
+          })
           .then(function (data) {
+            try { if (timeoutId) clearTimeout(timeoutId); } catch (e) {}
             var events = (data && data.events) ? data.events : [];
             var health = (data && data.health) ? data.health : [];
             var writes = (data && data.writes) ? data.writes : [];
@@ -414,8 +432,10 @@
             auditOut.innerHTML = html;
           })
           .catch(function (e) {
-            auditOut.textContent = 'Failed to load audit: ' + e;
-            setLastError('audit: ' + (e && e.message ? e.message : String(e || 'failed')));
+            try { if (timeoutId) clearTimeout(timeoutId); } catch (e2) {}
+            var msg = (e && e.message) ? e.message : String(e || 'failed');
+            auditOut.textContent = 'Failed to load audit: ' + msg;
+            setLastError('audit: ' + msg);
           });
       }
 
