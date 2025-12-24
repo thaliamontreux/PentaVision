@@ -5,20 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PentaVision Log · {{ category }}</title>
     <style>
-      :root { color-scheme: dark; }
+      :root {
+        color-scheme: dark;
+        --pv-bg0: #070a14;
+        --pv-bg1: #0b1020;
+        --pv-text: #e5e7eb;
+        --pv-muted: rgba(229,231,235,0.62);
+        --pv-shadow: 0 18px 45px rgba(0,0,0,0.55);
+        --pv-shadow-soft: 0 10px 30px rgba(0,0,0,0.35);
+      }
       body {
         margin: 0;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
-        background: #0b1020;
-        color: #e5e7eb;
+        background:
+          radial-gradient(900px 700px at 18% 12%, rgba(56,189,248,0.15), transparent 55%),
+          radial-gradient(900px 700px at 78% 18%, rgba(167,139,250,0.12), transparent 60%),
+          radial-gradient(900px 700px at 40% 88%, rgba(34,197,94,0.10), transparent 60%),
+          linear-gradient(180deg, var(--pv-bg0), var(--pv-bg1));
+        color: var(--pv-text);
       }
       .pv-top {
         position: sticky;
         top: 0;
         z-index: 10;
-        background: rgba(11,16,32,0.92);
-        backdrop-filter: blur(8px);
-        border-bottom: 1px solid rgba(255,255,255,0.08);
+        background: rgba(0,0,0,0.28);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid rgba(255,255,255,0.10);
+        box-shadow: var(--pv-shadow);
         padding: 0.65rem 0.9rem;
         display: flex;
         align-items: baseline;
@@ -31,7 +44,7 @@
       }
       .pv-sub {
         font-size: 12px;
-        color: #9ca3af;
+        color: var(--pv-muted);
         margin-top: 0.15rem;
       }
       .pv-controls {
@@ -42,21 +55,26 @@
       .pv-input {
         background: rgba(255,255,255,0.06);
         border: 1px solid rgba(255,255,255,0.14);
-        color: #e5e7eb;
-        border-radius: 10px;
+        color: var(--pv-text);
+        border-radius: 12px;
         padding: 0.35rem 0.5rem;
         font-size: 12px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
       }
       .pv-btn {
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.14);
-        color: #e5e7eb;
-        border-radius: 10px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+        border: 1px solid rgba(255,255,255,0.16);
+        color: var(--pv-text);
+        border-radius: 12px;
         padding: 0.35rem 0.6rem;
         cursor: pointer;
         font-size: 12px;
+        box-shadow: var(--pv-shadow-soft);
       }
-      .pv-btn:hover { background: rgba(255,255,255,0.12); }
+      .pv-btn:hover {
+        background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.07));
+        border-color: rgba(56,189,248,0.40);
+      }
       .pv-log {
         padding: 0.75rem;
         height: calc(100vh - 66px);
@@ -74,6 +92,16 @@
       .pv-line.pv-recent-0 { color: #22c55e; }
       .pv-line.pv-recent-1 { color: #facc15; }
       .pv-line.pv-recent-2 { color: #ff69b4; }
+      .pv-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.55rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.05);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      }
     </style>
   </head>
   <body>
@@ -83,15 +111,20 @@
         <div class="pv-sub">Live tail from /dev/shm/pentavision/logs/{{ category }}/logfile</div>
       </div>
       <div class="pv-controls">
-        <select id="pv-tz" class="pv-input" style="min-width: 220px;"></select>
-        <div style="display: inline-flex; align-items: center; gap: 0.4rem; color: #9ca3af;">
-          <label for="pv-refresh" style="font-size: 12px;">Refresh</label>
+        <span class="pv-chip">
+          <span style="color: rgba(229,231,235,0.62); font-size: 12px;">TZ</span>
+          <select id="pv-tz" class="pv-input" style="min-width: 220px;"></select>
+        </span>
+        <span class="pv-chip">
+          <label for="pv-refresh" style="font-size: 12px; color: rgba(229,231,235,0.62);">Refresh</label>
           <input id="pv-refresh" type="range" min="0" max="7" step="1" value="3" style="width: 140px;" />
-          <span id="pv-refresh-label" style="min-width: 3.25rem; text-align: right; font-size: 12px;">15s</span>
-        </div>
-        <button class="pv-btn" id="pv-copy" type="button">Copy All</button>
-        <button class="pv-btn" id="pv-clear" type="button">Clear</button>
-        <button class="pv-btn" id="pv-pause" type="button">Pause</button>
+          <span id="pv-refresh-label" style="min-width: 3.25rem; text-align: right; font-size: 12px; color: rgba(229,231,235,0.72);">15s</span>
+        </span>
+        <span class="pv-chip">
+          <button class="pv-btn" id="pv-copy" type="button">Copy All</button>
+          <button class="pv-btn" id="pv-clear" type="button">Clear</button>
+          <button class="pv-btn" id="pv-pause" type="button">Pause</button>
+        </span>
       </div>
     </div>
     <div id="pv-log" class="pv-log"></div>
