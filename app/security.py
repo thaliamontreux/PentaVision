@@ -265,11 +265,17 @@ def init_security(app) -> None:
                 request.accept_mimetypes["application/json"]
                 >= request.accept_mimetypes["text/html"]
             )
-            if request.path.startswith("/auth/") or request.path.startswith(
-                "/api/"
-            ) or accept_json:
+            if (
+                request.path.startswith("/auth/")
+                or request.path.startswith("/api/")
+                or accept_json
+            ):
                 return (
-                    jsonify({"error": "access from this IP or country is blocked"}),
+                    jsonify(
+                        {
+                            "error": "access from this IP or country is blocked"
+                        }
+                    ),
                     403,
                 )
             return "Access from this IP or country is blocked.", 403
@@ -320,18 +326,24 @@ def seed_system_admin_role_for_email(email: str) -> None:
         if user is None:
             return
 
-        role = db.scalar(select(Role).where(Role.name == "System Administrator"))
+        role = db.scalar(
+            select(Role).where(Role.name == "System Administrator")
+        )
         if role is None:
             role = Role(
                 name="System Administrator",
                 scope="global",
-                description="Full administrative access to the platform",
+                description=(
+                    "Full administrative access to the platform"
+                ),
             )
             db.add(role)
             db.flush()
 
         existing = (
-            db.query(UserRole)
+            db.query(
+                UserRole,
+            )
             .filter(
                 UserRole.user_id == user.id,
                 UserRole.role_id == role.id,
@@ -339,7 +351,13 @@ def seed_system_admin_role_for_email(email: str) -> None:
             .first()
         )
         if existing is None:
-            db.add(UserRole(user_id=user.id, role_id=role.id, property_id=None))
+            db.add(
+                UserRole(
+                    user_id=user.id,
+                    role_id=role.id,
+                    property_id=None,
+                )
+            )
 
         # Also ensure a Technician role exists so it can be assigned later via UI.
         tech_role = db.scalar(select(Role).where(Role.name == "Technician"))
