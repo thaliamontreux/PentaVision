@@ -11,6 +11,9 @@ from .auth import bp as auth_bp
 from .camera_admin import bp as camera_admin_bp
 from .config import load_config
 from .db import get_face_engine, get_record_engine, get_user_engine
+from .diagnostics import (
+    bp as diagnostics_bp,
+)
 from .installer import bp as installer_bp
 from .models import create_face_schema, create_record_schema, create_user_schema
 from .security import init_security
@@ -75,6 +78,7 @@ def create_app() -> Flask:
     app.register_blueprint(admin_bp)
     app.register_blueprint(installer_bp, url_prefix="/install")
     app.register_blueprint(auth_bp)
+    app.register_blueprint(diagnostics_bp)
     app.register_blueprint(camera_admin_bp)
 
     @app.errorhandler(Exception)

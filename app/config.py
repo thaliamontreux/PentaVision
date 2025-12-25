@@ -36,6 +36,10 @@ def _get_bool_env(name: str, default: bool) -> bool:
 
 
 def load_config() -> Dict[str, Any]:
+    _i = _get_int_env
+    _b = _get_bool_env
+    _f = _get_float_env
+    _GST_REC = "USE_GSTREAMER_RECORDING"
     return {
         "SECRET_KEY": os.getenv("APP_SECRET_KEY", "change-me"),
         "USER_DB_URL": os.getenv("USER_DB_URL", ""),
@@ -45,7 +49,7 @@ def load_config() -> Dict[str, Any]:
         "INSTALL_ACCESS_CODE": os.getenv("INSTALL_ACCESS_CODE", ""),
         "RECORDING_ENABLED": os.getenv("RECORDING_ENABLED", "0"),
         "RTMP_ENABLED": os.getenv("RTMP_ENABLED", "0"),
-        "RTMP_LOW_LATENCY": _get_bool_env("RTMP_LOW_LATENCY", False),
+        "RTMP_LOW_LATENCY": _b("RTMP_LOW_LATENCY", False),
         "DLNA_ENABLED": os.getenv("DLNA_ENABLED", "0"),
         "DLNA_FRIENDLY_NAME": os.getenv(
             "DLNA_FRIENDLY_NAME",
@@ -57,30 +61,51 @@ def load_config() -> Dict[str, Any]:
         "RECORDING_BASE_DIR": os.getenv("RECORDING_BASE_DIR", ""),
         "STORAGE_TARGETS": os.getenv("STORAGE_TARGETS", ""),
         "LOCAL_STORAGE_PATH": os.getenv("LOCAL_STORAGE_PATH", ""),
-        "RECORD_SEGMENT_SECONDS": _get_int_env("RECORD_SEGMENT_SECONDS", 60),
-        "RECORD_FFMPEG_THREADS": _get_int_env("RECORD_FFMPEG_THREADS", 2),
-        "USE_SHM_INGEST": _get_bool_env("USE_SHM_INGEST", True),
-        "SHM_INGEST_CAMERA_LIMIT_MB": _get_int_env("SHM_INGEST_CAMERA_LIMIT_MB", 256),
-        "SHM_INGEST_GLOBAL_LIMIT_MB": _get_int_env("SHM_INGEST_GLOBAL_LIMIT_MB", 2048),
-        "SHM_INGEST_MIN_FREE_MB": _get_int_env("SHM_INGEST_MIN_FREE_MB", 256),
-        "SHM_INGEST_PROBE_DURATION": _get_bool_env("SHM_INGEST_PROBE_DURATION", False),
-        "SHM_PROCESSING_REQUIRED": _get_bool_env("SHM_PROCESSING_REQUIRED", True),
-        "PREVIEW_LOW_FPS": _get_float_env("PREVIEW_LOW_FPS", 2.0),
-        "PREVIEW_HIGH_FPS": _get_float_env("PREVIEW_HIGH_FPS", 10.0),
-        "PREVIEW_MAX_WIDTH": _get_int_env("PREVIEW_MAX_WIDTH", 0),
-        "PREVIEW_MAX_HEIGHT": _get_int_env("PREVIEW_MAX_HEIGHT", 0),
-        "PREVIEW_CAPTURE_FPS": _get_float_env("PREVIEW_CAPTURE_FPS", 10.0),
-        "PREVIEW_CACHE_DIR": os.getenv("PREVIEW_CACHE_DIR", "/dev/shm/pentavision/previews"),
-        "PREVIEW_HISTORY_SECONDS": _get_int_env("PREVIEW_HISTORY_SECONDS", 60),
-        "URL_HEALTHCHECK_ENABLED": _get_bool_env("URL_HEALTHCHECK_ENABLED", True),
+        "RECORD_SEGMENT_SECONDS": _i("RECORD_SEGMENT_SECONDS", 60),
+        "RECORD_FFMPEG_THREADS": _i("RECORD_FFMPEG_THREADS", 2),
+        "USE_SHM_INGEST": _b("USE_SHM_INGEST", True),
+        "SHM_INGEST_CAMERA_LIMIT_MB": _i(
+            "SHM_INGEST_CAMERA_LIMIT_MB",
+            256,
+        ),
+        "SHM_INGEST_GLOBAL_LIMIT_MB": _i(
+            "SHM_INGEST_GLOBAL_LIMIT_MB",
+            2048,
+        ),
+        "SHM_INGEST_MIN_FREE_MB": _i(
+            "SHM_INGEST_MIN_FREE_MB",
+            256,
+        ),
+        "SHM_INGEST_PROBE_DURATION": _b(
+            "SHM_INGEST_PROBE_DURATION",
+            False,
+        ),
+        "SHM_PROCESSING_REQUIRED": _b("SHM_PROCESSING_REQUIRED", True),
+        "PREVIEW_LOW_FPS": _f("PREVIEW_LOW_FPS", 2.0),
+        "PREVIEW_HIGH_FPS": _f("PREVIEW_HIGH_FPS", 10.0),
+        "PREVIEW_MAX_WIDTH": _i("PREVIEW_MAX_WIDTH", 0),
+        "PREVIEW_MAX_HEIGHT": _i("PREVIEW_MAX_HEIGHT", 0),
+        "PREVIEW_CAPTURE_FPS": _f("PREVIEW_CAPTURE_FPS", 10.0),
+        "PREVIEW_CACHE_DIR": os.getenv(
+            "PREVIEW_CACHE_DIR",
+            "/dev/shm/pentavision/previews",
+        ),
+        "PREVIEW_HISTORY_SECONDS": _i("PREVIEW_HISTORY_SECONDS", 60),
+        "URL_HEALTHCHECK_ENABLED": _b("URL_HEALTHCHECK_ENABLED", True),
         "LOG_SERVER_HOST": os.getenv("LOG_SERVER_HOST", "127.0.0.1"),
-        "LOG_SERVER_PORT": _get_int_env("LOG_SERVER_PORT", 8123),
-        "STREAMS_ENABLED": _get_bool_env("STREAMS_ENABLED", True),
-        "INGEST_ENABLED": _get_bool_env("INGEST_ENABLED", False),
-        "USE_GSTREAMER_CAPTURE": _get_bool_env("USE_GSTREAMER_CAPTURE", False),
-        "USE_GSTREAMER_RECORDING": _get_bool_env("USE_GSTREAMER_RECORDING", False),
-        "GST_RTSP_LATENCY_MS": _get_int_env("GST_RTSP_LATENCY_MS", 200),
-        "STREAM_FFMPEG_DIAGNOSTICS": os.getenv("STREAM_FFMPEG_DIAGNOSTICS", "0"),
+        "LOG_SERVER_PORT": _i("LOG_SERVER_PORT", 8123),
+        "STREAMS_ENABLED": _b("STREAMS_ENABLED", True),
+        "INGEST_ENABLED": _b("INGEST_ENABLED", False),
+        "USE_GSTREAMER_CAPTURE": _b("USE_GSTREAMER_CAPTURE", False),
+        "USE_GSTREAMER_RECORDING": _b(
+            _GST_REC,
+            False,
+        ),
+        "GST_RTSP_LATENCY_MS": _i("GST_RTSP_LATENCY_MS", 200),
+        "STREAM_FFMPEG_DIAGNOSTICS": os.getenv(
+            "STREAM_FFMPEG_DIAGNOSTICS",
+            "0",
+        ),
         "WEBAUTHN_RP_ID": os.getenv("WEBAUTHN_RP_ID", ""),
         "WEBAUTHN_RP_NAME": os.getenv("WEBAUTHN_RP_NAME", "PentaVision"),
         "S3_ENDPOINT": os.getenv("S3_ENDPOINT", ""),
@@ -98,5 +123,22 @@ def load_config() -> Dict[str, Any]:
         "WEBDAV_BASE_URL": os.getenv("WEBDAV_BASE_URL", ""),
         "WEBDAV_USERNAME": os.getenv("WEBDAV_USERNAME", ""),
         "WEBDAV_PASSWORD": os.getenv("WEBDAV_PASSWORD", ""),
-        "FACE_MATCH_THRESHOLD": os.getenv("FACE_MATCH_THRESHOLD", ""),
+        "FACE_MATCH_THRESHOLD": os.getenv(
+            "FACE_MATCH_THRESHOLD",
+            "",
+        ),
+
+        # Diagnostics crawler support (disabled by default).
+        # Enable only when you need diagnostics and keep it IP-restricted.
+        "DIAGNOSTICS_ENABLED": _b("DIAGNOSTICS_ENABLED", False),
+        "DIAGNOSTICS_TOKEN": os.getenv("DIAGNOSTICS_TOKEN", ""),
+        "DIAGNOSTICS_USER_EMAIL": os.getenv("DIAGNOSTICS_USER_EMAIL", ""),
+        "DIAGNOSTICS_LOCAL_ONLY": _b(
+            "DIAGNOSTICS_LOCAL_ONLY",
+            True,
+        ),
+        "DIAGNOSTICS_ALLOWED_CIDRS": os.getenv(
+            "DIAGNOSTICS_ALLOWED_CIDRS",
+            "",
+        ),
     }
