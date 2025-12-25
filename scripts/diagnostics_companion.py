@@ -570,6 +570,11 @@ def show_pages_window(root: Tk, r: DiagnosticsRunResult) -> None:
             ("error", 400),
         ],
     )
+
+    def copy_all() -> None:
+        _copy_to_clipboard(win, _tree_to_tsv(tree))
+
+    ttk.Button(top, text="Copy all", command=copy_all).pack(side="left")
     tree.pack(fill="both", expand=True)
 
     for p in r.pages:
