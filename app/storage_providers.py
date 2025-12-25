@@ -1437,8 +1437,67 @@ class _LegacyProviderAdapter(StorageModuleBase):
         )
 
     def health_check(self) -> Dict[str, Any]:  # pragma: no cover
-        self.validate()
-        return {"status": "ok"}
+        import time
+
+        started = time.monotonic()
+        try:
+            self.validate()
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            return {
+                "status": "error",
+                "message": f"Validation failed: {str(exc)[:200]}",
+                "latency_ms": elapsed_ms,
+            }
+
+        try:
+            if isinstance(self._provider, DatabaseStorageProvider):
+                from .db import get_record_engine
+                from flask import current_app
+
+                engine = get_record_engine(current_app)
+                if engine is None:
+                    elapsed_ms = int((time.monotonic() - started) * 1000)
+                    return {
+                        "status": "error",
+                        "message": "RecordDB engine not available",
+                        "latency_ms": elapsed_ms,
+                    }
+                with engine.connect() as conn:
+                    conn.execute("SELECT 1")
+            elif isinstance(self._provider, ExternalSQLDatabaseStorageProvider):
+                with self._provider.engine.connect() as conn:
+                    conn.execute("SELECT 1")
+            elif isinstance(self._provider, S3StorageProvider):
+                self._provider.client.list_objects_v2(
+                    Bucket=self._provider.bucket,
+                    MaxKeys=1,
+                )
+            elif isinstance(self._provider, LocalFilesystemStorageProvider):
+                if not self._provider.base_path.exists():
+                    elapsed_ms = int((time.monotonic() - started) * 1000)
+                    return {
+                        "status": "error",
+                        "message": (
+                            f"Path does not exist: "
+                            f"{self._provider.base_path}"
+                        ),
+                        "latency_ms": elapsed_ms,
+                    }
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            return {
+                "status": "error",
+                "message": f"Health check failed: {str(exc)[:200]}",
+                "latency_ms": elapsed_ms,
+            }
+
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        return {
+            "status": "ok",
+            "message": f"Working / {elapsed_ms}ms",
+            "latency_ms": elapsed_ms,
+        }
 
     def shutdown(self) -> None:  # pragma: no cover
         return
