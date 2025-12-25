@@ -1875,7 +1875,15 @@ def camera_face_recognize(device_id: int):
 
 @bp.route("/storage", methods=["GET", "POST"])
 def storage_settings():
-    return redirect(url_for("admin.storage_settings"))
+    args = {}
+    try:
+        for key in ("edit_module", "wizard"):
+            val = request.args.get(key)
+            if val is not None and str(val).strip() != "":
+                args[key] = val
+    except Exception:  # noqa: BLE001
+        args = {}
+    return redirect(url_for("admin.storage_settings", **args))
 
     cfg = current_app.config
     errors: list[str] = []
