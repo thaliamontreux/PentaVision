@@ -48,17 +48,23 @@ def create_app() -> Flask:
         pass
 
     with app.app_context():
+        engine = None
         try:
             engine = get_user_engine()
             if engine is not None:
                 create_user_schema(engine)
+        except Exception:  # noqa: BLE001
+            pass
+
+        if engine is not None:
+            try:
                 bootstrap_email = str(
                     app.config.get("BOOTSTRAP_SYSTEM_ADMIN_EMAIL") or ""
                 ).strip().lower()
                 if bootstrap_email:
                     seed_system_admin_role_for_email(bootstrap_email)
-        except Exception:  # noqa: BLE001
-            pass
+            except Exception:  # noqa: BLE001
+                pass
         try:
             engine = get_face_engine()
             if engine is not None:
