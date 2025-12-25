@@ -40,7 +40,6 @@ from .models_iptv import CameraIptvChannel
 from .security import get_current_user, user_has_property_access, user_has_role
 from .stream_service import get_stream_manager
 from .camera_utils import build_camera_url
-from .storage_providers import _load_storage_settings
 
 
 bp = Blueprint("camera_admin", __name__, url_prefix="/admin/cameras")
@@ -1827,15 +1826,7 @@ def create_device():
     is_admin = user_has_role(user, "System Administrator") if user else False
     properties = _load_properties_for_user(user)
 
-    db_settings = _load_storage_settings() or {}
-    raw_targets = (
-        db_settings.get("storage_targets")
-        or str(current_app.config.get("STORAGE_TARGETS", "") or "")
-        or "local_fs"
-    )
-    storage_targets_default = ",".join(
-        [item.strip() for item in str(raw_targets).split(",") if item.strip()]
-    )
+    storage_targets_default = ""
 
     if engine is None:
         errors.append("Record database is not configured.")
@@ -2015,15 +2006,7 @@ def edit_device(device_id: int):
     is_admin = user_has_role(user, "System Administrator") if user else False
     properties = _load_properties_for_user(user)
 
-    db_settings = _load_storage_settings() or {}
-    raw_targets = (
-        db_settings.get("storage_targets")
-        or str(current_app.config.get("STORAGE_TARGETS", "") or "")
-        or "local_fs"
-    )
-    storage_targets_default = ",".join(
-        [item.strip() for item in str(raw_targets).split(",") if item.strip()]
-    )
+    storage_targets_default = ""
 
     if engine is None:
         errors.append("Record database is not configured.")
