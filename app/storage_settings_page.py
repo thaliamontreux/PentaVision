@@ -68,19 +68,8 @@ def storage_settings_page():
         ),
         "recording_base_dir": db_settings.get("recording_base_dir")
         or str(cfg.get("RECORDING_BASE_DIR") or ""),
-        "s3_bucket": db_settings.get("s3_bucket")
-        or str(cfg.get("S3_BUCKET") or ""),
-        "s3_endpoint": db_settings.get("s3_endpoint")
-        or str(cfg.get("S3_ENDPOINT") or ""),
-        "s3_region": db_settings.get("s3_region")
-        or str(cfg.get("S3_REGION") or ""),
-        "s3_access_key": "",
-        "s3_secret_key": "",
         "gcs_bucket": db_settings.get("gcs_bucket")
         or str(cfg.get("GCS_BUCKET") or ""),
-        "azure_blob_connection_string": "",
-        "azure_blob_container": db_settings.get("azure_blob_container")
-        or str(cfg.get("AZURE_BLOB_CONTAINER") or ""),
         "dropbox_access_token": "",
         "webdav_base_url": db_settings.get("webdav_base_url")
         or str(cfg.get("WEBDAV_BASE_URL") or ""),
@@ -166,21 +155,7 @@ def storage_settings_page():
                         settings.recording_base_dir = (
                             form["recording_base_dir"] or None
                         )
-                        settings.s3_bucket = form["s3_bucket"] or None
-                        settings.s3_endpoint = form["s3_endpoint"] or None
-                        settings.s3_region = form["s3_region"] or None
-                        if form["s3_access_key"]:
-                            settings.s3_access_key = form["s3_access_key"]
-                        if form["s3_secret_key"]:
-                            settings.s3_secret_key = form["s3_secret_key"]
                         settings.gcs_bucket = form["gcs_bucket"] or None
-                        if form["azure_blob_connection_string"]:
-                            settings.azure_blob_connection_string = form[
-                                "azure_blob_connection_string"
-                            ]
-                        settings.azure_blob_container = (
-                            form["azure_blob_container"] or None
-                        )
                         if form["dropbox_access_token"]:
                             settings.dropbox_access_token = (
                                 form["dropbox_access_token"]
@@ -216,30 +191,15 @@ def storage_settings_page():
                     form["recording_base_dir"] = db_settings.get(
                         "recording_base_dir"
                     ) or str(cfg.get("RECORDING_BASE_DIR") or "")
-                    form["s3_bucket"] = db_settings.get("s3_bucket") or str(
-                        cfg.get("S3_BUCKET") or ""
-                    )
-                    form["s3_endpoint"] = db_settings.get(
-                        "s3_endpoint"
-                    ) or str(cfg.get("S3_ENDPOINT") or "")
-                    form["s3_region"] = db_settings.get("s3_region") or str(
-                        cfg.get("S3_REGION") or ""
-                    )
                     form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
                         cfg.get("GCS_BUCKET") or ""
                     )
-                    form["azure_blob_container"] = db_settings.get(
-                        "azure_blob_container"
-                    ) or str(cfg.get("AZURE_BLOB_CONTAINER") or "")
                     form["webdav_base_url"] = db_settings.get(
                         "webdav_base_url"
                     ) or str(cfg.get("WEBDAV_BASE_URL") or "")
                     form["webdav_username"] = db_settings.get(
                         "webdav_username"
                     ) or str(cfg.get("WEBDAV_USERNAME") or "")
-                    form["s3_access_key"] = ""
-                    form["s3_secret_key"] = ""
-                    form["azure_blob_connection_string"] = ""
                     form["dropbox_access_token"] = ""
                     form["webdav_password"] = ""
 
@@ -709,9 +669,7 @@ def storage_settings_page():
         upload_rows=upload_rows,
         logs_rows=logs_rows,
         recent_error_rows=recent_error_rows,
-        s3=None,
         gcs=None,
-        azure=None,
         dropbox=None,
         webdav=None,
         form=form,

@@ -1911,21 +1911,8 @@ def storage_settings():
         ),
         "recording_base_dir": db_settings.get("recording_base_dir")
         or str(cfg.get("RECORDING_BASE_DIR") or ""),
-        "s3_bucket": db_settings.get("s3_bucket")
-        or str(cfg.get("S3_BUCKET") or ""),
-        "s3_endpoint": db_settings.get("s3_endpoint")
-        or str(cfg.get("S3_ENDPOINT") or ""),
-        "s3_region": db_settings.get("s3_region")
-        or str(cfg.get("S3_REGION") or ""),
-        # Secrets are never echoed back in the form; admins can enter new
-        # values to override the current effective configuration.
-        "s3_access_key": "",
-        "s3_secret_key": "",
         "gcs_bucket": db_settings.get("gcs_bucket")
         or str(cfg.get("GCS_BUCKET") or ""),
-        "azure_blob_connection_string": "",
-        "azure_blob_container": db_settings.get("azure_blob_container")
-        or str(cfg.get("AZURE_BLOB_CONTAINER") or ""),
         "dropbox_access_token": "",
         "webdav_base_url": db_settings.get("webdav_base_url")
         or str(cfg.get("WEBDAV_BASE_URL") or ""),
@@ -2027,24 +2014,7 @@ def storage_settings():
                         settings.recording_base_dir = (
                             form["recording_base_dir"] or None
                         )
-                        settings.s3_bucket = form["s3_bucket"] or None
-                        settings.s3_endpoint = form["s3_endpoint"] or None
-                        settings.s3_region = form["s3_region"] or None
-                        # Secret fields: only update when a non-empty value is
-                        # provided, so leaving the field blank keeps the
-                        # existing secret or environment-backed value.
-                        if form["s3_access_key"]:
-                            settings.s3_access_key = form["s3_access_key"]
-                        if form["s3_secret_key"]:
-                            settings.s3_secret_key = form["s3_secret_key"]
                         settings.gcs_bucket = form["gcs_bucket"] or None
-                        if form["azure_blob_connection_string"]:
-                            settings.azure_blob_connection_string = form[
-                                "azure_blob_connection_string"
-                            ]
-                        settings.azure_blob_container = (
-                            form["azure_blob_container"] or None
-                        )
                         if form["dropbox_access_token"]:
                             settings.dropbox_access_token = form[
                                 "dropbox_access_token"
@@ -2081,21 +2051,9 @@ def storage_settings():
                     form["recording_base_dir"] = db_settings.get(
                         "recording_base_dir"
                     ) or str(cfg.get("RECORDING_BASE_DIR") or "")
-                    form["s3_bucket"] = db_settings.get("s3_bucket") or str(
-                        cfg.get("S3_BUCKET") or ""
-                    )
-                    form["s3_endpoint"] = db_settings.get("s3_endpoint") or str(
-                        cfg.get("S3_ENDPOINT") or ""
-                    )
-                    form["s3_region"] = db_settings.get("s3_region") or str(
-                        cfg.get("S3_REGION") or ""
-                    )
                     form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
                         cfg.get("GCS_BUCKET") or ""
                     )
-                    form["azure_blob_container"] = db_settings.get(
-                        "azure_blob_container"
-                    ) or str(cfg.get("AZURE_BLOB_CONTAINER") or "")
                     form["webdav_base_url"] = db_settings.get(
                         "webdav_base_url"
                     ) or str(cfg.get("WEBDAV_BASE_URL") or "")
@@ -2104,9 +2062,6 @@ def storage_settings():
                     ) or str(cfg.get("WEBDAV_USERNAME") or "")
                     # Secret fields remain blank after save so that we never
                     # echo sensitive values back to the browser.
-                    form["s3_access_key"] = ""
-                    form["s3_secret_key"] = ""
-                    form["azure_blob_connection_string"] = ""
                     form["dropbox_access_token"] = ""
                     form["webdav_password"] = ""
 
@@ -2238,43 +2193,11 @@ def storage_settings():
 
                             # Fallback for providers where the UI field names may
                             # not exactly match the schema (e.g. older templates).
-                            if provider_type == "azure_blob":
-                                try:
-                                    for key_name, form_keys in {
-                                        "container": [
-                                            "module_cfg_azure_container",
-                                            "module_cfg_azure_blob_container",
-                                        ],
-                                        "account_name": [
-                                            "module_cfg_azure_account_name",
-                                            "module_cfg_azure_blob_account_name",
-                                        ],
-                                        "account_key": [
-                                            "module_cfg_azure_account_key",
-                                            "module_cfg_azure_blob_account_key",
-                                        ],
-                                        "connection_string": [
-                                            "module_cfg_azure_connection_string",
-                                            "module_cfg_azure_blob_connection_string",
-                                        ],
-                                    }.items():
-                                        if key_name in config and str(config.get(key_name) or "").strip():
-                                            continue
-                                        for fk in form_keys:
-                                            raw_val = request.form.get(fk)
-                                            if raw_val is None:
-                                                continue
-                                            raw_val = str(raw_val).strip()
-                                            if raw_val == "":
-                                                continue
-                                            config[key_name] = raw_val
-                                            break
-                                except Exception:  # noqa: BLE001
-                                    pass
+                            # (S3 and Azure Blob removed)
 
                             if not fields:
                                 try:
-                                    if provider_type == "s3":
+                                    if False:  # S3 removed
                                         raw_bucket = request.form.get("module_cfg_s3_bucket")
                                         raw_endpoint = request.form.get("module_cfg_s3_endpoint")
                                         raw_region = request.form.get("module_cfg_s3_region")
@@ -3788,40 +3711,9 @@ def storage_settings():
 
     # Effective config for summary blocks: DB overrides env, otherwise env is
     # used. Secrets are masked.
-    s3_bucket = db_settings.get("s3_bucket") or str(cfg.get("S3_BUCKET") or "")
-    s3_endpoint = db_settings.get("s3_endpoint") or str(
-        cfg.get("S3_ENDPOINT") or ""
-    )
-    s3_region = db_settings.get("s3_region") or str(cfg.get("S3_REGION") or "")
-    s3_access_key_effective = db_settings.get("s3_access_key") or str(
-        cfg.get("S3_ACCESS_KEY") or ""
-    )
-    s3_secret_key_effective = db_settings.get("s3_secret_key") or str(
-        cfg.get("S3_SECRET_KEY") or ""
-    )
-
-    s3_info = {
-        "bucket": s3_bucket,
-        "endpoint": s3_endpoint,
-        "region": s3_region,
-        "access_key_masked": _mask(s3_access_key_effective),
-        "secret_key_masked": _mask(s3_secret_key_effective),
-    }
-
     gcs_bucket = db_settings.get("gcs_bucket") or str(cfg.get("GCS_BUCKET") or "")
     gcs_info = {
         "bucket": gcs_bucket,
-    }
-
-    azure_conn_effective = db_settings.get("azure_blob_connection_string") or str(
-        cfg.get("AZURE_BLOB_CONNECTION_STRING") or ""
-    )
-    azure_container = db_settings.get("azure_blob_container") or str(
-        cfg.get("AZURE_BLOB_CONTAINER") or ""
-    )
-    azure_info = {
-        "container": azure_container,
-        "connection_string_masked": _mask(azure_conn_effective),
     }
 
     dropbox_token_effective = db_settings.get("dropbox_access_token") or str(
@@ -4139,9 +4031,7 @@ def storage_settings():
         upload_rows=upload_rows,
         logs_rows=logs_rows,
         recent_error_rows=recent_error_rows,
-        s3=s3_info,
         gcs=gcs_info,
-        azure=azure_info,
         dropbox=dropbox_info,
         webdav=webdav_info,
         form=form,
