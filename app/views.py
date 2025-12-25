@@ -3679,20 +3679,10 @@ def storage_settings():
         elif name == "db":
             p_type = "Database"
             details = "Stores recording bytes directly in the RecordDB (RecordingData table)."
-        elif name == "s3":
-            p_type = "S3-compatible"
-            bucket = getattr(p, "bucket", "")
-            endpoint = getattr(p, "endpoint", "") or "(default AWS endpoint)"
-            region = getattr(p, "region", "") or "(none)"
-            details = f"Bucket: {bucket}, Endpoint: {endpoint}, Region: {region}"
         elif name == "gcs":
             p_type = "Google Cloud Storage"
             bucket = getattr(p, "bucket", "")
             details = f"Bucket: {bucket}"
-        elif name == "azure_blob":
-            p_type = "Azure Blob Storage"
-            container = getattr(p, "container", "")
-            details = f"Container: {container}"
         elif name == "dropbox":
             p_type = "Dropbox"
             details = "Uploads recordings into the configured Dropbox account under /recordings."
