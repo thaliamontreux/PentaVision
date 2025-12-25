@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timedelta, timezone
 
 from flask import (
@@ -18,6 +19,7 @@ from .db import get_record_engine
 from .models import (
     CameraRecording,
     StorageModule,
+    StorageModuleHealthCheck,
     StorageModuleEvent,
     StorageModuleWriteStat,
     StorageSettings,
@@ -296,8 +298,13 @@ def storage_settings_page():
     modules: list[dict] = []
     module_definitions = []
     if record_engine is not None:
+        health_by_module_id: dict[int, StorageModuleHealthCheck] = {}
         with Session(record_engine) as session_db:
             StorageModule.__table__.create(
+                bind=record_engine,
+                checkfirst=True,
+            )
+            StorageModuleHealthCheck.__table__.create(
                 bind=record_engine,
                 checkfirst=True,
             )
@@ -309,6 +316,22 @@ def storage_settings_page():
                 )
                 .all()
             )
+
+            recent_health = (
+                session_db.query(StorageModuleHealthCheck)
+                .order_by(StorageModuleHealthCheck.created_at.desc())
+                .limit(200)
+                .all()
+            )
+            for h in recent_health:
+                try:
+                    mid = int(getattr(h, "module_id", 0) or 0)
+                except Exception:
+                    continue
+                if mid <= 0:
+                    continue
+                if mid not in health_by_module_id:
+                    health_by_module_id[mid] = h
         for m in rows:
             try:
                 if (
@@ -319,6 +342,25 @@ def storage_settings_page():
                     continue
             except Exception:
                 pass
+            h = health_by_module_id.get(int(m.id))
+            ok_flag = False
+            try:
+                ok_flag = bool(
+                    h is not None
+                    and int(getattr(h, "ok", 0)) == 1
+                )
+            except Exception:
+                ok_flag = False
+            status = "unknown"
+            if ok_flag:
+                status = "ok"
+            elif h is not None:
+                status = "warn"
+            status_message = ""
+            try:
+                status_message = str(getattr(h, "message", "") or "")
+            except Exception:
+                status_message = ""
             modules.append(
                 {
                     "id": m.id,
@@ -327,6 +369,8 @@ def storage_settings_page():
                     "provider_type": m.provider_type,
                     "is_enabled": bool(getattr(m, "is_enabled", 0)),
                     "priority": int(getattr(m, "priority", 100) or 100),
+                    "status": status,
+                    "status_message": status_message,
                 }
             )
 
@@ -368,6 +412,110 @@ def storage_settings_page():
             selected_module_name = ""
 
         with Session(record_engine) as session_db:
+            StorageModuleHealthCheck.__table__.create(
+                bind=record_engine,
+                checkfirst=True,
+            )
+
+            latest_health = (
+                session_db.query(StorageModuleHealthCheck)
+                .filter(
+                    StorageModuleHealthCheck.module_id
+                    == selected_module_id
+                )
+                .order_by(StorageModuleHealthCheck.created_at.desc())
+                .first()
+            )
+
+            is_stale = False
+            if latest_health is not None:
+                try:
+                    age_s = (
+                        datetime.now(timezone.utc)
+                        - latest_health.created_at
+                    ).total_seconds()
+                    is_stale = age_s >= 300
+                except Exception:
+                    is_stale = False
+
+            if latest_health is None or is_stale:
+                started = time.monotonic()
+                status = None
+                try:
+                    router = get_storage_router(current_app)
+                    status = router.health_check(str(selected_module_id))
+                except Exception:
+                    status = None
+                duration_ms = int(
+                    (time.monotonic() - started) * 1000
+                )
+
+                if status is not None:
+                    try:
+                        status_text = str(status.get("status") or "ok")
+                        ok = 1 if status_text == "ok" else 0
+                        msg = str(status.get("message") or "")
+                    except Exception:
+                        ok = 0
+                        msg = ""
+                    try:
+                        session_db.add(
+                            StorageModuleHealthCheck(
+                                module_id=int(selected_module_id or 0),
+                                module_name=str(
+                                    selected_module_name or ""
+                                )[:160],
+                                provider_type=str(
+                                    getattr(
+                                        edit_module,
+                                        "provider_type",
+                                        "",
+                                    )
+                                    or ""
+                                )[:64]
+                                or None,
+                                ok=int(ok),
+                                message=msg[:512] if msg else None,
+                                duration_ms=int(duration_ms),
+                            )
+                        )
+                        session_db.commit()
+                    except Exception:
+                        pass
+
+                    latest_health = (
+                        session_db.query(StorageModuleHealthCheck)
+                        .filter(
+                            StorageModuleHealthCheck.module_id
+                            == selected_module_id
+                        )
+                        .order_by(StorageModuleHealthCheck.created_at.desc())
+                        .first()
+                    )
+
+            try:
+                if latest_health is not None:
+                    setattr(
+                        edit_module,
+                        "status",
+                        (
+                            "ok"
+                            if int(getattr(latest_health, "ok", 0)) == 1
+                            else "warn"
+                        ),
+                    )
+                    msg = str(getattr(latest_health, "message", "") or "")
+                    setattr(edit_module, "status_message", msg)
+                else:
+                    setattr(edit_module, "status", "unknown")
+                    setattr(
+                        edit_module,
+                        "status_message",
+                        "No recent status.",
+                    )
+            except Exception:
+                pass
+
             last_row = (
                 session_db.query(CameraRecording)
                 .filter(
