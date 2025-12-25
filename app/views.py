@@ -62,7 +62,6 @@ from .models import (
     StorageModuleEvent,
     StorageModuleHealthCheck,
     StorageModuleWriteStat,
-    StorageSettings,
     UploadQueueItem,
     User,
     UserNotificationSettings,
