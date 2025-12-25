@@ -17,6 +17,7 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     systemctl restart pentavision-rtmpsvc
     systemctl restart pentavision-blocklist
     systemctl restart pentavision-access-control
+    systemctl restart pentavision-web
     echo "Thank you for your cooperation have a nice day..." 
 else
     echo "No updates."
