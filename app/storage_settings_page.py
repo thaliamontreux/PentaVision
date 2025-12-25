@@ -22,7 +22,6 @@ from .models import (
     StorageModuleHealthCheck,
     StorageModuleEvent,
     StorageModuleWriteStat,
-    StorageSettings,
     UploadQueueItem,
 )
 from .security import (
@@ -30,7 +29,6 @@ from .security import (
     user_has_role,
     validate_global_csrf_token,
 )
-from .storage_providers import _load_storage_settings
 from .storage_csal import StorageError, get_storage_router
 
 
@@ -51,32 +49,6 @@ def storage_settings_page():
     module_test_ready = False
     wizard_draft: dict[str, object] | None = None
     wizard_step = 1
-
-    db_settings = _load_storage_settings() or {}
-
-    raw_targets = db_settings.get("storage_targets") or str(
-        cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
-    )
-
-    form = {
-        "storage_targets": raw_targets,
-        "local_storage_path": db_settings.get("local_storage_path")
-        or str(
-            cfg.get("LOCAL_STORAGE_PATH")
-            or cfg.get("RECORDING_BASE_DIR")
-            or ""
-        ),
-        "recording_base_dir": db_settings.get("recording_base_dir")
-        or str(cfg.get("RECORDING_BASE_DIR") or ""),
-        "gcs_bucket": db_settings.get("gcs_bucket")
-        or str(cfg.get("GCS_BUCKET") or ""),
-        "dropbox_access_token": "",
-        "webdav_base_url": db_settings.get("webdav_base_url")
-        or str(cfg.get("WEBDAV_BASE_URL") or ""),
-        "webdav_username": db_settings.get("webdav_username")
-        or str(cfg.get("WEBDAV_USERNAME") or ""),
-        "webdav_password": "",
-    }
 
     record_engine = get_record_engine()
 
@@ -121,89 +93,7 @@ def storage_settings_page():
         if not validate_global_csrf_token(request.form.get("csrf_token")):
             errors.append("Invalid or missing CSRF token.")
         else:
-            if not action or action == "save_legacy":
-                for key in form.keys():
-                    form[key] = (request.form.get(key) or "").strip()
-
-                if not form["storage_targets"]:
-                    form["storage_targets"] = "local_fs"
-
-                if record_engine is None:
-                    errors.append("Record database is not configured.")
-
-                if not errors and record_engine is not None:
-                    with Session(record_engine) as session_db:
-                        StorageSettings.__table__.create(
-                            bind=record_engine,
-                            checkfirst=True,
-                        )
-                        settings = (
-                            session_db.query(StorageSettings)
-                            .order_by(StorageSettings.id)
-                            .first()
-                        )
-                        if settings is None:
-                            settings = StorageSettings()
-                            session_db.add(settings)
-
-                        settings.storage_targets = (
-                            form["storage_targets"] or None
-                        )
-                        settings.local_storage_path = (
-                            form["local_storage_path"] or None
-                        )
-                        settings.recording_base_dir = (
-                            form["recording_base_dir"] or None
-                        )
-                        settings.gcs_bucket = form["gcs_bucket"] or None
-                        if form["dropbox_access_token"]:
-                            settings.dropbox_access_token = (
-                                form["dropbox_access_token"]
-                            )
-                        settings.webdav_base_url = (
-                            form["webdav_base_url"] or None
-                        )
-                        settings.webdav_username = (
-                            form["webdav_username"] or None
-                        )
-                        if form["webdav_password"]:
-                            settings.webdav_password = form["webdav_password"]
-                        settings.updated_at = datetime.now(
-                            timezone.utc,
-                        )
-
-                        session_db.add(settings)
-                        session_db.commit()
-
-                    saved = True
-                    db_settings = _load_storage_settings() or {}
-                    raw_targets = db_settings.get("storage_targets") or str(
-                        cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
-                    )
-                    form["storage_targets"] = raw_targets
-                    form["local_storage_path"] = db_settings.get(
-                        "local_storage_path"
-                    ) or str(
-                        cfg.get("LOCAL_STORAGE_PATH")
-                        or cfg.get("RECORDING_BASE_DIR")
-                        or ""
-                    )
-                    form["recording_base_dir"] = db_settings.get(
-                        "recording_base_dir"
-                    ) or str(cfg.get("RECORDING_BASE_DIR") or "")
-                    form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
-                        cfg.get("GCS_BUCKET") or ""
-                    )
-                    form["webdav_base_url"] = db_settings.get(
-                        "webdav_base_url"
-                    ) or str(cfg.get("WEBDAV_BASE_URL") or "")
-                    form["webdav_username"] = db_settings.get(
-                        "webdav_username"
-                    ) or str(cfg.get("WEBDAV_USERNAME") or "")
-                    form["dropbox_access_token"] = ""
-                    form["webdav_password"] = ""
-
-            elif action == "test_module":
+            if action == "test_module":
                 module_id_raw = request.form.get("module_id") or ""
                 try:
                     module_id = int(module_id_raw)
