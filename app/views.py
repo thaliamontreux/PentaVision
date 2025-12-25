@@ -62,6 +62,7 @@ from .models import (
     StorageModuleEvent,
     StorageModuleHealthCheck,
     StorageModuleWriteStat,
+    StorageSettings,
     UploadQueueItem,
     User,
     UserNotificationSettings,
@@ -86,6 +87,7 @@ from .storage_providers import (
     ExternalSQLDatabaseStorageProvider,
     LocalFilesystemStorageProvider,
     build_storage_providers,
+    _load_storage_settings,
 )
 from .storage_csal import get_storage_router, StorageError
 from .net_utils import get_ipv4_interfaces
@@ -1891,6 +1893,34 @@ def storage_settings():
     wizard_draft: dict[str, object] | None = None
     wizard_step = 1
 
+    # Load any existing DB-backed storage settings so we can merge them with
+    # environment defaults for the form and summaries.
+    db_settings = _load_storage_settings() or {}
+
+    raw_targets = db_settings.get("storage_targets") or str(
+        cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
+    )
+
+    form = {
+        "storage_targets": raw_targets,
+        "local_storage_path": db_settings.get("local_storage_path")
+        or str(
+            cfg.get("LOCAL_STORAGE_PATH")
+            or cfg.get("RECORDING_BASE_DIR")
+            or ""
+        ),
+        "recording_base_dir": db_settings.get("recording_base_dir")
+        or str(cfg.get("RECORDING_BASE_DIR") or ""),
+        "gcs_bucket": db_settings.get("gcs_bucket")
+        or str(cfg.get("GCS_BUCKET") or ""),
+        "dropbox_access_token": "",
+        "webdav_base_url": db_settings.get("webdav_base_url")
+        or str(cfg.get("WEBDAV_BASE_URL") or ""),
+        "webdav_username": db_settings.get("webdav_username")
+        or str(cfg.get("WEBDAV_USERNAME") or ""),
+        "webdav_password": "",
+    }
+
     record_engine = get_record_engine()
 
     edit_module = None
@@ -1948,8 +1978,95 @@ def storage_settings():
         if not validate_global_csrf_token(request.form.get("csrf_token")):
             errors.append("Invalid or missing CSRF token.")
         else:
-            # Module management actions for StorageModule rows.
-            if action in {
+            # Legacy global StorageSettings update when no explicit action is
+            # provided (for backwards compatibility) or when the action is
+            # save_legacy.
+            if not action or action == "save_legacy":
+                # Update form values from submitted data so we can re-render on
+                # error.
+                for key in form.keys():
+                    form[key] = (request.form.get(key) or "").strip()
+
+                if not form["storage_targets"]:
+                    form["storage_targets"] = "local_fs"
+
+                if record_engine is None:
+                    errors.append("Record database is not configured.")
+
+                if not errors and record_engine is not None:
+                    with Session(record_engine) as session_db:
+                        StorageSettings.__table__.create(
+                            bind=record_engine, checkfirst=True
+                        )
+                        settings = (
+                            session_db.query(StorageSettings)
+                            .order_by(StorageSettings.id)
+                            .first()
+                        )
+                        if settings is None:
+                            settings = StorageSettings()
+                            session_db.add(settings)
+
+                        settings.storage_targets = form["storage_targets"] or None
+                        settings.local_storage_path = (
+                            form["local_storage_path"] or None
+                        )
+                        settings.recording_base_dir = (
+                            form["recording_base_dir"] or None
+                        )
+                        settings.gcs_bucket = form["gcs_bucket"] or None
+                        if form["dropbox_access_token"]:
+                            settings.dropbox_access_token = form[
+                                "dropbox_access_token"
+                            ]
+                        settings.webdav_base_url = (
+                            form["webdav_base_url"] or None
+                        )
+                        settings.webdav_username = (
+                            form["webdav_username"] or None
+                        )
+                        if form["webdav_password"]:
+                            settings.webdav_password = form["webdav_password"]
+                        settings.updated_at = datetime.now(timezone.utc)
+
+                        session_db.add(settings)
+                        session_db.commit()
+
+                    saved = True
+                    # Reload DB settings so the provider summary reflects the
+                    # new configuration.
+                    db_settings = _load_storage_settings() or {}
+
+                    raw_targets = db_settings.get("storage_targets") or str(
+                        cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
+                    )
+                    form["storage_targets"] = raw_targets
+                    form["local_storage_path"] = db_settings.get(
+                        "local_storage_path"
+                    ) or str(
+                        cfg.get("LOCAL_STORAGE_PATH")
+                        or cfg.get("RECORDING_BASE_DIR")
+                        or ""
+                    )
+                    form["recording_base_dir"] = db_settings.get(
+                        "recording_base_dir"
+                    ) or str(cfg.get("RECORDING_BASE_DIR") or "")
+                    form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
+                        cfg.get("GCS_BUCKET") or ""
+                    )
+                    form["webdav_base_url"] = db_settings.get(
+                        "webdav_base_url"
+                    ) or str(cfg.get("WEBDAV_BASE_URL") or "")
+                    form["webdav_username"] = db_settings.get(
+                        "webdav_username"
+                    ) or str(cfg.get("WEBDAV_USERNAME") or "")
+                    # Secret fields remain blank after save so that we never
+                    # echo sensitive values back to the browser.
+                    form["dropbox_access_token"] = ""
+                    form["webdav_password"] = ""
+
+            # New path: module management actions for StorageModule rows.
+            elif action in {
                 "module_create",
                 "module_update",
                 "module_delete",
