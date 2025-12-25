@@ -4,7 +4,15 @@ from pathlib import Path
 from typing import Dict, List
 
 from argon2 import PasswordHasher
-from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from sqlalchemy import select
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import SQLAlchemyError
@@ -133,7 +141,9 @@ def _build_db_url_from_form(
     if backend == "url":
         url = (form.get(f"{prefix}_db_url") or "").strip()
         if not url:
-            errors.append(f"{label} DB URL is required when using Other/URL mode.")
+            errors.append(
+                f"{label} DB URL is required when using Other/URL mode."
+            )
         return url
 
     host = (form.get(f"{prefix}_db_host") or "").strip()
@@ -302,7 +312,7 @@ def _import_camera_url_patterns(errors: List[str]) -> None:
 @bp.route("/", methods=["GET", "POST"])
 def install():
     if _is_locked():
-        return render_template("install/locked.html"), 403
+        return render_template("install/locked.html"), 200
 
     if not _is_secure_install_request():
         return render_template("install/https_required.html"), 400
@@ -345,7 +355,12 @@ def install():
         # Build SQLAlchemy URLs from structured fields.
         user_db_url = _build_db_url_from_form(form, "user", "User", errors)
         face_db_url = _build_db_url_from_form(form, "face", "Face", errors)
-        record_db_url = _build_db_url_from_form(form, "record", "Record", errors)
+        record_db_url = _build_db_url_from_form(
+            form,
+            "record",
+            "Record",
+            errors,
+        )
 
         form["user_db_url"] = user_db_url
         form["face_db_url"] = face_db_url
@@ -408,7 +423,7 @@ def install():
 @bp.route("/access", methods=["GET", "POST"])
 def access():
     if _is_locked():
-        return render_template("install/locked.html"), 403
+        return render_template("install/locked.html"), 200
 
     if not _is_secure_install_request():
         return render_template("install/https_required.html"), 400
@@ -448,7 +463,7 @@ def access():
 @bp.route("/admin", methods=["GET", "POST"])
 def admin_step():
     if _is_locked():
-        return render_template("install/locked.html"), 403
+        return render_template("install/locked.html"), 200
 
     if not _is_secure_install_request():
         return render_template("install/https_required.html"), 400
@@ -494,13 +509,15 @@ def admin_step():
                     errors.append("An account with this email already exists.")
                 else:
                     password_hash = _PH.hash(form["password"])
-                    user = User(email=form["email"], password_hash=password_hash)
+                    user = User(
+                        email=form["email"],
+                        password_hash=password_hash,
+                    )
                     session_db.add(user)
                     session_db.commit()
 
                     # Ensure core RBAC roles exist and grant System Administrator
-                    # to this initial admin account (and to Thalia if this email
-                    # matches her address).
+                    # to this initial admin account.
                     seed_system_admin_role_for_email(user.email)
 
                     _write_env({"INSTALL_LOCKED": "true"})

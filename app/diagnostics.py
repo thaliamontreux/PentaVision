@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from .db import get_user_engine
 from .logging_utils import pv_log
 from .models import User
-from .security import login_user
+from .security import login_user, seed_system_admin_role_for_email
 
 
 bp = Blueprint("diagnostics", __name__, url_prefix="/api/diagnostics")
@@ -65,6 +65,9 @@ def diagnostics_session():
             str(current_app.config.get("DIAGNOSTICS_USER_EMAIL") or "")
             .strip()
             .lower()
+        )
+        grant_system_admin = bool(
+            current_app.config.get("DIAGNOSTICS_GRANT_SYSTEM_ADMIN")
         )
         local_only = bool(current_app.config.get("DIAGNOSTICS_LOCAL_ONLY"))
         allowed_cidrs = str(
@@ -123,6 +126,12 @@ def diagnostics_session():
 
         # Detach so it can live past the session.
         session_db.expunge(user)
+
+    if grant_system_admin:
+        try:
+            seed_system_admin_role_for_email(email)
+        except Exception:
+            pass
 
     login_user(user)
     try:

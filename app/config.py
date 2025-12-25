@@ -133,6 +133,10 @@ def load_config() -> Dict[str, Any]:
         "DIAGNOSTICS_ENABLED": _b("DIAGNOSTICS_ENABLED", False),
         "DIAGNOSTICS_TOKEN": os.getenv("DIAGNOSTICS_TOKEN", ""),
         "DIAGNOSTICS_USER_EMAIL": os.getenv("DIAGNOSTICS_USER_EMAIL", ""),
+        "DIAGNOSTICS_GRANT_SYSTEM_ADMIN": _b(
+            "DIAGNOSTICS_GRANT_SYSTEM_ADMIN",
+            False,
+        ),
         "DIAGNOSTICS_LOCAL_ONLY": _b(
             "DIAGNOSTICS_LOCAL_ONLY",
             True,
