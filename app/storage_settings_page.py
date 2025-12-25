@@ -1,17 +1,25 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
-import os
 from datetime import datetime, timezone
 
-from flask import current_app, redirect, render_template, request, session, url_for
+from flask import (
+    current_app,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from sqlalchemy.orm import Session
 
 from .db import get_record_engine
 from .models import StorageModule, StorageSettings
-from .security import get_current_user, user_has_role, validate_global_csrf_token
+from .security import (
+    get_current_user,
+    user_has_role,
+    validate_global_csrf_token,
+)
 from .storage_providers import _load_storage_settings
 from .storage_csal import StorageError, get_storage_router
 
@@ -43,16 +51,23 @@ def storage_settings_page():
     form = {
         "storage_targets": raw_targets,
         "local_storage_path": db_settings.get("local_storage_path")
-        or str(cfg.get("LOCAL_STORAGE_PATH") or cfg.get("RECORDING_BASE_DIR") or ""),
+        or str(
+            cfg.get("LOCAL_STORAGE_PATH")
+            or cfg.get("RECORDING_BASE_DIR")
+            or ""
+        ),
         "recording_base_dir": db_settings.get("recording_base_dir")
         or str(cfg.get("RECORDING_BASE_DIR") or ""),
-        "s3_bucket": db_settings.get("s3_bucket") or str(cfg.get("S3_BUCKET") or ""),
+        "s3_bucket": db_settings.get("s3_bucket")
+        or str(cfg.get("S3_BUCKET") or ""),
         "s3_endpoint": db_settings.get("s3_endpoint")
         or str(cfg.get("S3_ENDPOINT") or ""),
-        "s3_region": db_settings.get("s3_region") or str(cfg.get("S3_REGION") or ""),
+        "s3_region": db_settings.get("s3_region")
+        or str(cfg.get("S3_REGION") or ""),
         "s3_access_key": "",
         "s3_secret_key": "",
-        "gcs_bucket": db_settings.get("gcs_bucket") or str(cfg.get("GCS_BUCKET") or ""),
+        "gcs_bucket": db_settings.get("gcs_bucket")
+        or str(cfg.get("GCS_BUCKET") or ""),
         "azure_blob_connection_string": "",
         "azure_blob_container": db_settings.get("azure_blob_container")
         or str(cfg.get("AZURE_BLOB_CONTAINER") or ""),
@@ -76,7 +91,10 @@ def storage_settings_page():
             edit_id = None
         if edit_id is not None:
             with Session(record_engine) as session_db:
-                StorageModule.__table__.create(bind=record_engine, checkfirst=True)
+                StorageModule.__table__.create(
+                    bind=record_engine,
+                    checkfirst=True,
+                )
                 row = session_db.get(StorageModule, edit_id)
             if row is not None:
                 edit_module = row
@@ -86,24 +104,21 @@ def storage_settings_page():
                     except Exception:
                         edit_module_config = {}
 
-                try:
-                    if edit_module_config is None:
-                        edit_module_config = {}
-                    provider_type = (row.provider_type or "").strip().lower()
-                    if provider_type == "local_drive":
-                        if (
-                            isinstance(edit_module_config, dict)
-                            and "base_dir" not in edit_module_config
-                            and "local_drive_path" in edit_module_config
-                        ):
-                            edit_module_config["base_dir"] = edit_module_config.get(
-                                "local_drive_path"
-                            )
-                except Exception:
-                    pass
+                if edit_module_config is None:
+                    edit_module_config = {}
+                provider_type = row.provider_type or ""
+                if provider_type.strip().lower() == "local_drive":
+                    if (
+                        isinstance(edit_module_config, dict)
+                        and "base_dir" not in edit_module_config
+                        and "local_drive_path" in edit_module_config
+                    ):
+                        edit_module_config["base_dir"] = (
+                            edit_module_config.get("local_drive_path")
+                        )
 
     if request.method == "POST":
-        action = (request.form.get("action") or "").strip()
+        action = request.form.get("action") or ""
         if not validate_global_csrf_token(request.form.get("csrf_token")):
             errors.append("Invalid or missing CSRF token.")
         else:
@@ -119,7 +134,10 @@ def storage_settings_page():
 
                 if not errors and record_engine is not None:
                     with Session(record_engine) as session_db:
-                        StorageSettings.__table__.create(bind=record_engine, checkfirst=True)
+                        StorageSettings.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
                         settings = (
                             session_db.query(StorageSettings)
                             .order_by(StorageSettings.id)
@@ -129,9 +147,15 @@ def storage_settings_page():
                             settings = StorageSettings()
                             session_db.add(settings)
 
-                        settings.storage_targets = form["storage_targets"] or None
-                        settings.local_storage_path = form["local_storage_path"] or None
-                        settings.recording_base_dir = form["recording_base_dir"] or None
+                        settings.storage_targets = (
+                            form["storage_targets"] or None
+                        )
+                        settings.local_storage_path = (
+                            form["local_storage_path"] or None
+                        )
+                        settings.recording_base_dir = (
+                            form["recording_base_dir"] or None
+                        )
                         settings.s3_bucket = form["s3_bucket"] or None
                         settings.s3_endpoint = form["s3_endpoint"] or None
                         settings.s3_region = form["s3_region"] or None
@@ -144,14 +168,24 @@ def storage_settings_page():
                             settings.azure_blob_connection_string = form[
                                 "azure_blob_connection_string"
                             ]
-                        settings.azure_blob_container = form["azure_blob_container"] or None
+                        settings.azure_blob_container = (
+                            form["azure_blob_container"] or None
+                        )
                         if form["dropbox_access_token"]:
-                            settings.dropbox_access_token = form["dropbox_access_token"]
-                        settings.webdav_base_url = form["webdav_base_url"] or None
-                        settings.webdav_username = form["webdav_username"] or None
+                            settings.dropbox_access_token = (
+                                form["dropbox_access_token"]
+                            )
+                        settings.webdav_base_url = (
+                            form["webdav_base_url"] or None
+                        )
+                        settings.webdav_username = (
+                            form["webdav_username"] or None
+                        )
                         if form["webdav_password"]:
                             settings.webdav_password = form["webdav_password"]
-                        settings.updated_at = datetime.now(timezone.utc)
+                        settings.updated_at = datetime.now(
+                            timezone.utc,
+                        )
 
                         session_db.add(settings)
                         session_db.commit()
@@ -162,35 +196,37 @@ def storage_settings_page():
                         cfg.get("STORAGE_TARGETS", "local_fs") or "local_fs"
                     )
                     form["storage_targets"] = raw_targets
-                    form["local_storage_path"] = db_settings.get("local_storage_path") or str(
+                    form["local_storage_path"] = db_settings.get(
+                        "local_storage_path"
+                    ) or str(
                         cfg.get("LOCAL_STORAGE_PATH")
                         or cfg.get("RECORDING_BASE_DIR")
                         or ""
                     )
-                    form["recording_base_dir"] = db_settings.get("recording_base_dir") or str(
-                        cfg.get("RECORDING_BASE_DIR") or ""
-                    )
+                    form["recording_base_dir"] = db_settings.get(
+                        "recording_base_dir"
+                    ) or str(cfg.get("RECORDING_BASE_DIR") or "")
                     form["s3_bucket"] = db_settings.get("s3_bucket") or str(
                         cfg.get("S3_BUCKET") or ""
                     )
-                    form["s3_endpoint"] = db_settings.get("s3_endpoint") or str(
-                        cfg.get("S3_ENDPOINT") or ""
-                    )
+                    form["s3_endpoint"] = db_settings.get(
+                        "s3_endpoint"
+                    ) or str(cfg.get("S3_ENDPOINT") or "")
                     form["s3_region"] = db_settings.get("s3_region") or str(
                         cfg.get("S3_REGION") or ""
                     )
                     form["gcs_bucket"] = db_settings.get("gcs_bucket") or str(
                         cfg.get("GCS_BUCKET") or ""
                     )
-                    form["azure_blob_container"] = db_settings.get("azure_blob_container") or str(
-                        cfg.get("AZURE_BLOB_CONTAINER") or ""
-                    )
-                    form["webdav_base_url"] = db_settings.get("webdav_base_url") or str(
-                        cfg.get("WEBDAV_BASE_URL") or ""
-                    )
-                    form["webdav_username"] = db_settings.get("webdav_username") or str(
-                        cfg.get("WEBDAV_USERNAME") or ""
-                    )
+                    form["azure_blob_container"] = db_settings.get(
+                        "azure_blob_container"
+                    ) or str(cfg.get("AZURE_BLOB_CONTAINER") or "")
+                    form["webdav_base_url"] = db_settings.get(
+                        "webdav_base_url"
+                    ) or str(cfg.get("WEBDAV_BASE_URL") or "")
+                    form["webdav_username"] = db_settings.get(
+                        "webdav_username"
+                    ) or str(cfg.get("WEBDAV_USERNAME") or "")
                     form["s3_access_key"] = ""
                     form["s3_secret_key"] = ""
                     form["azure_blob_connection_string"] = ""
@@ -210,7 +246,10 @@ def storage_settings_page():
                     errors.append("Record database is not configured.")
                 else:
                     with Session(record_engine) as session_db:
-                        StorageModule.__table__.create(bind=record_engine, checkfirst=True)
+                        StorageModule.__table__.create(
+                            bind=record_engine,
+                            checkfirst=True,
+                        )
                         module = session_db.get(StorageModule, module_id)
                     if module is None:
                         module_test_result = {
@@ -237,7 +276,9 @@ def storage_settings_page():
                             }
                         else:
                             status_text = str(status.get("status") or "ok")
-                            message = status.get("message") or f"Health check status: {status_text}"
+                            message = status.get("message") or (
+                                f"Health check status: {status_text}"
+                            )
                             module_test_result = {
                                 "ok": status_text == "ok",
                                 "module_name": module.name,
@@ -246,19 +287,27 @@ def storage_settings_page():
 
     modules: list[dict] = []
     module_definitions = []
-    edit_module_id = None
-    edit_module_name = None
     if record_engine is not None:
         with Session(record_engine) as session_db:
-            StorageModule.__table__.create(bind=record_engine, checkfirst=True)
+            StorageModule.__table__.create(
+                bind=record_engine,
+                checkfirst=True,
+            )
             rows = (
                 session_db.query(StorageModule)
-                .order_by(getattr(StorageModule, "priority", StorageModule.id), StorageModule.id)
+                .order_by(
+                    getattr(StorageModule, "priority", StorageModule.id),
+                    StorageModule.id,
+                )
                 .all()
             )
         for m in rows:
             try:
-                if (str(getattr(m, "provider_type", "") or "").strip().lower()) == "gdrive":
+                if (
+                    str(getattr(m, "provider_type", "") or "")
+                    .strip()
+                    .lower()
+                ) == "gdrive":
                     continue
             except Exception:
                 pass
@@ -272,16 +321,6 @@ def storage_settings_page():
                     "priority": int(getattr(m, "priority", 100) or 100),
                 }
             )
-        if edit_module is not None:
-            try:
-                edit_module_id = int(edit_module.id)
-            except Exception:
-                edit_module_id = None
-            try:
-                edit_module_name = str(edit_module.name)
-            except Exception:
-                edit_module_name = None
-
     global_csrf_token = None
     try:
         global_csrf_token = session.get("global_csrf")
@@ -305,7 +344,7 @@ def storage_settings_page():
         open_wizard=False,
         wizard_draft=wizard_draft,
         wizard_step=wizard_step,
-        selected_module=None,
+        selected_module=edit_module,
         selected_metrics=None,
         streams_rows=[],
         upload_rows=[],
