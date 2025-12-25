@@ -23,9 +23,8 @@ import paramiko
 from scp import SCPClient
 
 from .db import get_record_engine
-from .models import RecordingData, StorageModule, StorageSettings
+from .models import RecordingData, StorageModule
 from .storage_csal import (
-    StorageAuthError,
     StorageError,
     StorageModuleBase,
     StoragePermanentError,
@@ -1505,141 +1504,36 @@ def _load_storage_modules() -> list[StorageModule]:
     return list(rows)
 
 
-def _load_storage_settings() -> dict | None:
-    """Load global storage settings from the recordings database, if present.
-
-    Returns a plain dict so callers do not depend on an active SQLAlchemy
-    session. If the table or row does not exist, returns None.
-    """
-
-    engine = get_record_engine()
-    if engine is None:
-        return None
-    # Ensure the table exists before querying.
-    StorageSettings.__table__.create(bind=engine, checkfirst=True)
-    with Session(engine) as session:
-        row = (
-            session.query(StorageSettings)
-            .order_by(StorageSettings.id)
-            .first()
-        )
-        if row is None:
-            return None
-        return {
-            "storage_targets": row.storage_targets or "",
-            "local_storage_path": row.local_storage_path or "",
-            "recording_base_dir": row.recording_base_dir or "",
-            "s3_bucket": row.s3_bucket or "",
-            "s3_endpoint": row.s3_endpoint or "",
-            "s3_region": row.s3_region or "",
-            "s3_access_key": row.s3_access_key or "",
-            "s3_secret_key": row.s3_secret_key or "",
-            "gcs_bucket": row.gcs_bucket or "",
-            "azure_blob_connection_string": row.azure_blob_connection_string or "",
-            "azure_blob_container": row.azure_blob_container or "",
-            "dropbox_access_token": row.dropbox_access_token or "",
-            "webdav_base_url": row.webdav_base_url or "",
-            "webdav_username": row.webdav_username or "",
-            "webdav_password": row.webdav_password or "",
-        }
-
-
 def build_storage_providers(app: Flask) -> List[StorageProvider]:
     """Build active storage providers for the recording system.
 
-    Priority is given to the new StorageModule-based configuration which
-    supports multiple named instances per provider type. When no modules are
-    defined, the legacy StorageSettings/"storage_targets" configuration is
-    used as a fallback for backwards compatibility.
+    Uses the StorageModule-based configuration which supports multiple named
+    instances per provider type.
     """
 
     modules = _load_storage_modules()
     providers: List[StorageProvider] = []
 
-    if modules:
-        any_enabled = False
-        for module in modules:
-            if not getattr(module, "is_enabled", 0):
-                continue
-            any_enabled = True
-            provider = _build_provider_for_module(app, module)
-            if provider is None:
-                continue
+    for module in modules:
+        if not getattr(module, "is_enabled", 0):
+            continue
+        provider = _build_provider_for_module(app, module)
+        if provider is None:
+            continue
 
-            # Use the StorageModule's name as the provider key seen by
-            # RecordingManager and policies so multiple instances of the same
-            # provider type can coexist.
-            provider.name = module.name
-            try:
-                provider.module_id = int(module.id)
-            except Exception:  # noqa: BLE001
-                provider.module_id = None
-            try:
-                provider.priority = int(getattr(module, "priority", 100) or 100)
-            except Exception:  # noqa: BLE001
-                provider.priority = 100
-            providers.append(provider)
-
-        if any_enabled:
-            return providers
-
-    # Fallback: legacy StorageSettings-based single-instance configuration.
-    db_settings = _load_storage_settings() or {}
-
-    raw_targets = db_settings.get("storage_targets") or str(
-        app.config.get("STORAGE_TARGETS", "local_fs") or "local_fs"
-    )
-    targets = [item.strip() for item in raw_targets.split(",") if item.strip()]
-
-    if "local_fs" in targets:
-        base_dir = (
-            db_settings.get("local_storage_path")
-            or db_settings.get("recording_base_dir")
-            or app.config.get("LOCAL_STORAGE_PATH")
-            or app.config.get("RECORDING_BASE_DIR")
-            or os.path.join(app.instance_path, "recordings")
-        )
-        providers.append(LocalFilesystemStorageProvider(str(base_dir)))
-    if "db" in targets:
-        providers.append(DatabaseStorageProvider())
-    if "gcs" in targets:
-        bucket = str(
-            db_settings.get("gcs_bucket") or app.config.get("GCS_BUCKET") or ""
-        ).strip()
-        if bucket:
-            providers.append(GCSStorageProvider(bucket))
-    if "dropbox" in targets:
-        token = str(
-            db_settings.get("dropbox_access_token")
-            or app.config.get("DROPBOX_ACCESS_TOKEN")
-            or ""
-        ).strip()
-        if token:
-            providers.append(DropboxStorageProvider(token))
-    if "webdav" in targets:
-        base_url = str(
-            db_settings.get("webdav_base_url")
-            or app.config.get("WEBDAV_BASE_URL")
-            or ""
-        ).strip()
-        username = (
-            str(
-                db_settings.get("webdav_username")
-                or app.config.get("WEBDAV_USERNAME")
-                or ""
-            ).strip()
-            or None
-        )
-        password = (
-            str(
-                db_settings.get("webdav_password")
-                or app.config.get("WEBDAV_PASSWORD")
-                or ""
-            ).strip()
-            or None
-        )
-        if base_url:
-            providers.append(WebDAVStorageProvider(base_url, username, password))
+        # Use the StorageModule's name as the provider key seen by
+        # RecordingManager and policies so multiple instances of the same
+        # provider type can coexist.
+        provider.name = module.name
+        try:
+            provider.module_id = int(module.id)
+        except Exception:  # noqa: BLE001
+            provider.module_id = None
+        try:
+            provider.priority = int(getattr(module, "priority", 100) or 100)
+        except Exception:  # noqa: BLE001
+            provider.priority = 100
+        providers.append(provider)
 
     return providers
 

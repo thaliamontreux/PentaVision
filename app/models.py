@@ -430,53 +430,6 @@ class StorageProviderModule(RecordBase):
     )
 
 
-class StorageSettings(RecordBase):
-    __tablename__ = "storage_settings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    storage_targets: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
-    local_storage_path: Mapped[Optional[str]] = mapped_column(
-        String(512), nullable=True
-    )
-    recording_base_dir: Mapped[Optional[str]] = mapped_column(
-        String(512), nullable=True
-    )
-    s3_bucket: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    s3_endpoint: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    s3_region: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    s3_access_key: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
-    s3_secret_key: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
-    gcs_bucket: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    azure_blob_connection_string: Mapped[Optional[str]] = mapped_column(
-        String(1024), nullable=True
-    )
-    azure_blob_container: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
-    dropbox_access_token: Mapped[Optional[str]] = mapped_column(
-        String(512), nullable=True
-    )
-    webdav_base_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
-    webdav_username: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
-    webdav_password: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
-
 class StorageModule(RecordBase):
     __tablename__ = "storage_modules"
 
