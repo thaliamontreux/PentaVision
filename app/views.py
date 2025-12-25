@@ -87,7 +87,6 @@ from .storage_providers import (
     ExternalSQLDatabaseStorageProvider,
     LocalFilesystemStorageProvider,
     build_storage_providers,
-    _load_storage_settings,
 )
 from .storage_csal import get_storage_router, StorageError
 from .net_utils import get_ipv4_interfaces
