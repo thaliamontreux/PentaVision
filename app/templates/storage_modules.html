@@ -34,7 +34,7 @@
             {% for m in modules %}
               <a
                 class="pv-storage-provider {% if selected_module and selected_module.id == m.id %}is-selected{% endif %}"
-                href="{{ url_for('main.storage_settings', edit_module=m.id) }}"
+                href="{{ url_for('admin.storage_settings', edit_module=m.id) }}"
                 data-filter-text="{{ (m.label or m.name or '')|lower }} {{ (m.provider_type or '')|lower }}"
               >
                 <div class="pv-storage-provider-icon" aria-hidden="true" data-provider="{{ m.provider_type }}">

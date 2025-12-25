@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import (
     current_app,
@@ -11,10 +11,18 @@ from flask import (
     session,
     url_for,
 )
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .db import get_record_engine
-from .models import StorageModule, StorageSettings
+from .models import (
+    CameraRecording,
+    StorageModule,
+    StorageModuleEvent,
+    StorageModuleWriteStat,
+    StorageSettings,
+    UploadQueueItem,
+)
 from .security import (
     get_current_user,
     user_has_role,
@@ -321,6 +329,209 @@ def storage_settings_page():
                     "priority": int(getattr(m, "priority", 100) or 100),
                 }
             )
+
+    selected_metrics = None
+    streams_rows: list[object] = []
+    upload_rows: list[object] = []
+    logs_rows: list[object] = []
+    recent_error_rows: list[object] = []
+    if record_engine is not None and edit_module is not None:
+        CameraRecording.__table__.create(
+            bind=record_engine,
+            checkfirst=True,
+        )
+        UploadQueueItem.__table__.create(
+            bind=record_engine,
+            checkfirst=True,
+        )
+        StorageModuleEvent.__table__.create(
+            bind=record_engine,
+            checkfirst=True,
+        )
+        StorageModuleWriteStat.__table__.create(
+            bind=record_engine,
+            checkfirst=True,
+        )
+
+        selected_module_id = None
+        try:
+            selected_module_id = int(
+                getattr(edit_module, "id", 0) or 0
+            )
+        except Exception:
+            selected_module_id = None
+
+        selected_module_name = ""
+        try:
+            selected_module_name = str(getattr(edit_module, "name", "") or "")
+        except Exception:
+            selected_module_name = ""
+
+        with Session(record_engine) as session_db:
+            last_row = (
+                session_db.query(CameraRecording)
+                .filter(
+                    CameraRecording.storage_provider
+                    == selected_module_name
+                )
+                .order_by(CameraRecording.created_at.desc())
+                .first()
+            )
+            last_write_text = "n/a"
+            last_write_stat = (
+                session_db.query(StorageModuleWriteStat)
+                .filter(
+                    StorageModuleWriteStat.module_name == selected_module_name
+                )
+                .order_by(StorageModuleWriteStat.created_at.desc())
+                .first()
+            )
+            if last_write_stat is not None and getattr(
+                last_write_stat,
+                "created_at",
+                None,
+            ):
+                last_write_text = str(last_write_stat.created_at)
+            elif last_row is not None and getattr(
+                last_row,
+                "created_at",
+                None,
+            ):
+                last_write_text = str(last_row.created_at)
+
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+            active_streams = (
+                session_db.query(
+                    func.count(
+                        func.distinct(CameraRecording.device_id)
+                    )
+                )
+                .filter(
+                    CameraRecording.storage_provider == selected_module_name,
+                    CameraRecording.created_at >= cutoff,
+                )
+                .scalar()
+                or 0
+            )
+
+            cutoff_15m = datetime.now(timezone.utc) - timedelta(minutes=15)
+            last_ok_row = (
+                session_db.query(StorageModuleWriteStat)
+                .filter(
+                    StorageModuleWriteStat.module_name
+                    == selected_module_name,
+                    StorageModuleWriteStat.ok == 1,
+                )
+                .order_by(StorageModuleWriteStat.created_at.desc())
+                .first()
+            )
+            last_err_row = (
+                session_db.query(StorageModuleWriteStat)
+                .filter(
+                    StorageModuleWriteStat.module_name
+                    == selected_module_name,
+                    StorageModuleWriteStat.ok == 0,
+                )
+                .order_by(StorageModuleWriteStat.created_at.desc())
+                .first()
+            )
+            recent_ok = (
+                session_db.query(
+                    func.count(StorageModuleWriteStat.id),
+                    func.coalesce(
+                        func.sum(StorageModuleWriteStat.bytes_written),
+                        0,
+                    ),
+                )
+                .filter(
+                    StorageModuleWriteStat.module_name
+                    == selected_module_name,
+                    StorageModuleWriteStat.ok == 1,
+                    StorageModuleWriteStat.created_at >= cutoff_15m,
+                )
+                .first()
+            )
+            writes_15m = int(recent_ok[0] or 0) if recent_ok else 0
+            bytes_15m = int(recent_ok[1] or 0) if recent_ok else 0
+
+            recent_error_rows = (
+                session_db.query(StorageModuleEvent)
+                .filter(
+                    (
+                        StorageModuleEvent.module_id
+                        == int(selected_module_id or 0)
+                    )
+                    | (
+                        StorageModuleEvent.module_name
+                        == selected_module_name
+                    )
+                )
+                .filter(StorageModuleEvent.level == "error")
+                .order_by(StorageModuleEvent.created_at.desc())
+                .limit(5)
+                .all()
+            )
+
+            selected_metrics = {
+                "last_write_text": last_write_text,
+                "active_streams": int(active_streams),
+                "last_ok_text": (
+                    str(last_ok_row.created_at)
+                    if (
+                        last_ok_row is not None
+                        and getattr(last_ok_row, "created_at", None)
+                    )
+                    else "n/a"
+                ),
+                "last_error_text": (
+                    str(last_err_row.created_at)
+                    if last_err_row is not None
+                    and getattr(last_err_row, "created_at", None)
+                    else "n/a"
+                ),
+                "last_error_message": (
+                    str(last_err_row.error)[:200]
+                    if last_err_row is not None
+                    and getattr(last_err_row, "error", None)
+                    else ""
+                ),
+                "writes_15m": writes_15m,
+                "bytes_15m": bytes_15m,
+            }
+
+            streams_rows = (
+                session_db.query(CameraRecording)
+                .filter(
+                    CameraRecording.storage_provider
+                    == selected_module_name
+                )
+                .order_by(CameraRecording.created_at.desc())
+                .limit(25)
+                .all()
+            )
+            upload_rows = (
+                session_db.query(UploadQueueItem)
+                .filter(UploadQueueItem.provider_name == selected_module_name)
+                .order_by(UploadQueueItem.created_at.desc())
+                .limit(25)
+                .all()
+            )
+            logs_rows = (
+                session_db.query(StorageModuleEvent)
+                .filter(
+                    (
+                        StorageModuleEvent.module_id
+                        == int(selected_module_id or 0)
+                    )
+                    | (
+                        StorageModuleEvent.module_name
+                        == selected_module_name
+                    )
+                )
+                .order_by(StorageModuleEvent.created_at.desc())
+                .limit(25)
+                .all()
+            )
     global_csrf_token = None
     try:
         global_csrf_token = session.get("global_csrf")
@@ -345,11 +556,11 @@ def storage_settings_page():
         wizard_draft=wizard_draft,
         wizard_step=wizard_step,
         selected_module=edit_module,
-        selected_metrics=None,
-        streams_rows=[],
-        upload_rows=[],
-        logs_rows=[],
-        recent_error_rows=[],
+        selected_metrics=selected_metrics,
+        streams_rows=streams_rows,
+        upload_rows=upload_rows,
+        logs_rows=logs_rows,
+        recent_error_rows=recent_error_rows,
         s3=None,
         gcs=None,
         azure=None,
