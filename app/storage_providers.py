@@ -13,19 +13,10 @@ from typing import Any, BinaryIO, Dict, List, Optional
 from urllib.parse import quote_plus
 import time
 
-import boto3
-from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 from flask import Flask
 from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, delete as sa_delete, func, insert, select, update as sa_update
 from sqlalchemy.orm import Session
 from google.cloud import storage as gcs_storage
-
-try:
-    from azure.storage.blob import BlobServiceClient, ContentSettings
-except ImportError:
-    BlobServiceClient = None  # type: ignore
-    ContentSettings = None  # type: ignore
-
 import dropbox
 import requests
 import paramiko
@@ -271,58 +262,6 @@ class ExternalSQLDatabaseStorageProvider(StorageProvider):
             conn.execute(stmt)
 
 
-class S3StorageProvider(StorageProvider):
-    def __init__(
-        self,
-        endpoint: Optional[str],
-        region: Optional[str],
-        bucket: str,
-        access_key: str,
-        secret_key: str,
-    ) -> None:
-        self.name = "s3"
-        self.bucket = bucket
-        self.endpoint = endpoint or None
-        self.region = region or None
-        self._client = boto3.client(
-            "s3",
-            endpoint_url=self.endpoint,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            region_name=self.region,
-        )
-
-    def upload(self, data: bytes, key_hint: str) -> str:
-        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        prefix = _recordings_prefix_for_hint(key_hint)
-        key = f"{prefix}/{now}_{safe_hint}.mp4"
-        self._client.put_object(
-            Bucket=self.bucket,
-            Key=key,
-            Body=data,
-            ContentType="video/mp4",
-        )
-        return key
-
-    def get_url(self, storage_key: str) -> Optional[str]:
-        try:
-            url = self._client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": self.bucket, "Key": storage_key},
-                ExpiresIn=3600,
-            )
-        except Exception:  # noqa: BLE001
-            return None
-        return url
-
-    def delete(self, storage_key: str) -> None:
-        try:
-            self._client.delete_object(Bucket=self.bucket, Key=storage_key)
-        except Exception:  # noqa: BLE001
-            return
-
-
 class LocalFilesystemStorageProvider(StorageProvider):
     def __init__(self, base_dir: str) -> None:
         self.name = "local_fs"
@@ -478,68 +417,6 @@ class GCSStorageProvider(StorageProvider):
         try:
             blob = self._bucket.blob(storage_key)
             blob.delete()
-        except Exception:  # noqa: BLE001
-            return
-
-
-class AzureBlobStorageProvider(StorageProvider):
-    def __init__(self, connection_string: str, container: str) -> None:
-        if BlobServiceClient is None or ContentSettings is None:
-            raise ImportError(
-                "azure-storage-blob package is not installed. "
-                "Install it with: pip install azure-storage-blob"
-            )
-        self.name = "azure_blob"
-        self.container = container
-        self._service_client = BlobServiceClient.from_connection_string(
-            connection_string
-        )
-        self._container_client = self._service_client.get_container_client(container)
-        base_url = None
-        try:
-            parts = {
-                part.split("=", 1)[0]: part.split("=", 1)[1]
-                for part in connection_string.split(";")
-                if "=" in part
-            }
-            endpoint = parts.get("BlobEndpoint", "").strip()
-            if endpoint:
-                base_url = endpoint.rstrip("/")
-            if not base_url:
-                account_name = parts.get("AccountName", "").strip()
-                if account_name:
-                    protocol = parts.get("DefaultEndpointsProtocol", "https").strip() or "https"
-                    suffix = parts.get("EndpointSuffix", "core.windows.net").strip() or "core.windows.net"
-                    base_url = f"{protocol}://{account_name}.blob.{suffix}"
-        except Exception:  # noqa: BLE001
-            base_url = None
-        self._base_url = base_url
-
-    def upload(self, data: bytes, key_hint: str) -> str:
-        safe_hint = key_hint.replace("/", "_").replace("\\", "_")
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
-        prefix = _recordings_prefix_for_hint(key_hint)
-        blob_name = f"{prefix}/{now}_{safe_hint}.mp4"
-        upload_kwargs = {
-            "name": blob_name,
-            "data": data,
-            "overwrite": True,
-        }
-        if ContentSettings is not None:
-            upload_kwargs["content_settings"] = ContentSettings(
-                content_type="video/mp4"
-            )
-        self._container_client.upload_blob(**upload_kwargs)
-        return blob_name
-
-    def get_url(self, storage_key: str) -> Optional[str]:
-        if not self._base_url:
-            return None
-        return f"{self._base_url}/{self.container}/{storage_key}"
-
-    def delete(self, storage_key: str) -> None:
-        try:
-            self._container_client.delete_blob(storage_key)
         except Exception:  # noqa: BLE001
             return
 
@@ -1334,52 +1211,9 @@ class _LegacyProviderAdapter(StorageModuleBase):
         return
 
     def validate(self) -> None:  # pragma: no cover
-        # Provider-specific cheap validation hooks.
-        try:
-            if isinstance(self._provider, S3StorageProvider):
-                # Force an actual signed request to verify endpoint, bucket,
-                # and credentials. This is cheaper than a write/delete and
-                # produces clearer auth errors.
-                try:
-                    self._provider._client.head_bucket(Bucket=self._provider.bucket)
-                    self._provider._client.list_objects_v2(
-                        Bucket=self._provider.bucket,
-                        MaxKeys=1,
-                    )
-                except NoCredentialsError as exc:
-                    raise StorageAuthError("Missing S3 credentials") from exc
-                except EndpointConnectionError as exc:
-                    raise StorageTransientError(
-                        f"Failed to connect to S3 endpoint: {exc}"
-                    ) from exc
-                except ClientError as exc:
-                    code = None
-                    try:
-                        code = (
-                            exc.response.get("Error", {}).get("Code")
-                            if hasattr(exc, "response")
-                            else None
-                        )
-                    except Exception:  # noqa: BLE001
-                        code = None
-
-                    msg = str(exc)
-                    if code in {
-                        "InvalidAccessKeyId",
-                        "SignatureDoesNotMatch",
-                        "AccessDenied",
-                        "AllAccessDisabled",
-                        "InvalidToken",
-                        "ExpiredToken",
-                    }:
-                        raise StorageAuthError(msg) from exc
-                    raise StorageTransientError(msg) from exc
-        except StorageError:
-            raise
-        except Exception:
-            # If our validation probe fails unexpectedly, fall back to the
-            # write/delete smoke test.
-            pass
+        # Provider-specific cheap validation hooks removed for S3/Azure.
+        # Fall through to basic smoke test below.
+        pass
 
         # Basic smoke test: attempt to write and then delete a tiny object
         # when the underlying provider supports deletion.
@@ -1483,11 +1317,6 @@ class _LegacyProviderAdapter(StorageModuleBase):
             elif isinstance(self._provider, ExternalSQLDatabaseStorageProvider):
                 with self._provider.engine.connect() as conn:
                     conn.execute("SELECT 1")
-            elif isinstance(self._provider, S3StorageProvider):
-                self._provider.client.list_objects_v2(
-                    Bucket=self._provider.bucket,
-                    MaxKeys=1,
-                )
             elif isinstance(self._provider, LocalFilesystemStorageProvider):
                 if not self._provider.base_path.exists():
                     elapsed_ms = int((time.monotonic() - started) * 1000)
@@ -1572,39 +1401,10 @@ def _build_provider_for_module(
                 password=password,
                 mssql_driver=mssql_driver,
             )
-    elif ptype == "s3":
-        bucket = str(cfg.get("bucket") or "").strip()
-        access_key = str(cfg.get("access_key") or "").strip()
-        secret_key = str(cfg.get("secret_key") or "").strip()
-        if bucket and access_key and secret_key:
-            endpoint = str(cfg.get("endpoint") or "").strip() or None
-            region = str(cfg.get("region") or "").strip() or None
-            provider = S3StorageProvider(
-                endpoint,
-                region,
-                bucket,
-                access_key,
-                secret_key,
-            )
     elif ptype == "gcs":
         bucket = str(cfg.get("bucket") or "").strip()
         if bucket:
             provider = GCSStorageProvider(bucket)
-    elif ptype == "azure_blob":
-        conn = str(cfg.get("connection_string") or "").strip()
-        container = str(cfg.get("container") or "").strip()
-        if not conn:
-            account_name = str(cfg.get("account_name") or "").strip()
-            account_key = str(cfg.get("account_key") or "").strip()
-            if account_name and account_key:
-                conn = (
-                    "DefaultEndpointsProtocol=https;"
-                    f"AccountName={account_name};"
-                    f"AccountKey={account_key};"
-                    "EndpointSuffix=core.windows.net"
-                )
-        if conn and container:
-            provider = AzureBlobStorageProvider(conn, container)
     elif ptype == "dropbox":
         token = str(cfg.get("access_token") or "").strip()
         if token:
@@ -1802,59 +1602,12 @@ def build_storage_providers(app: Flask) -> List[StorageProvider]:
         providers.append(LocalFilesystemStorageProvider(str(base_dir)))
     if "db" in targets:
         providers.append(DatabaseStorageProvider())
-    if "s3" in targets:
-        bucket = str(
-            db_settings.get("s3_bucket") or app.config.get("S3_BUCKET") or ""
-        ).strip()
-        access_key = str(
-            db_settings.get("s3_access_key")
-            or app.config.get("S3_ACCESS_KEY")
-            or ""
-        ).strip()
-        secret_key = str(
-            db_settings.get("s3_secret_key")
-            or app.config.get("S3_SECRET_KEY")
-            or ""
-        ).strip()
-        if bucket and access_key and secret_key:
-            endpoint = (
-                str(
-                    db_settings.get("s3_endpoint")
-                    or app.config.get("S3_ENDPOINT")
-                    or ""
-                ).strip()
-                or None
-            )
-            region = (
-                str(
-                    db_settings.get("s3_region")
-                    or app.config.get("S3_REGION")
-                    or ""
-                ).strip()
-                or None
-            )
-            providers.append(
-                S3StorageProvider(endpoint, region, bucket, access_key, secret_key)
-            )
     if "gcs" in targets:
         bucket = str(
             db_settings.get("gcs_bucket") or app.config.get("GCS_BUCKET") or ""
         ).strip()
         if bucket:
             providers.append(GCSStorageProvider(bucket))
-    if "azure_blob" in targets:
-        conn = str(
-            db_settings.get("azure_blob_connection_string")
-            or app.config.get("AZURE_BLOB_CONNECTION_STRING")
-            or ""
-        ).strip()
-        container = str(
-            db_settings.get("azure_blob_container")
-            or app.config.get("AZURE_BLOB_CONTAINER")
-            or ""
-        ).strip()
-        if conn and container:
-            providers.append(AzureBlobStorageProvider(conn, container))
     if "dropbox" in targets:
         token = str(
             db_settings.get("dropbox_access_token")
