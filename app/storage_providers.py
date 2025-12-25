@@ -19,7 +19,13 @@ from flask import Flask
 from sqlalchemy import Column, DateTime, Integer, LargeBinary, MetaData, Table, create_engine, delete as sa_delete, func, insert, select, update as sa_update
 from sqlalchemy.orm import Session
 from google.cloud import storage as gcs_storage
-from azure.storage.blob import BlobServiceClient, ContentSettings
+
+try:
+    from azure.storage.blob import BlobServiceClient, ContentSettings
+except ImportError:
+    BlobServiceClient = None  # type: ignore
+    ContentSettings = None  # type: ignore
+
 import dropbox
 import requests
 import paramiko
@@ -478,6 +484,11 @@ class GCSStorageProvider(StorageProvider):
 
 class AzureBlobStorageProvider(StorageProvider):
     def __init__(self, connection_string: str, container: str) -> None:
+        if BlobServiceClient is None or ContentSettings is None:
+            raise ImportError(
+                "azure-storage-blob package is not installed. "
+                "Install it with: pip install azure-storage-blob"
+            )
         self.name = "azure_blob"
         self.container = container
         self._service_client = BlobServiceClient.from_connection_string(
