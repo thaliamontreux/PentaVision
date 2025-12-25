@@ -1028,6 +1028,29 @@
       if (filterInput) {
         filterInput.addEventListener('input', applyModuleFilter);
       }
+
+      var providerLinks = document.querySelectorAll('.pv-storage-provider');
+      if (providerLinks && providerLinks.length) {
+        providerLinks.forEach(function (a) {
+          a.addEventListener('click', function (ev) {
+            if (!a || !a.getAttribute) return;
+            if (
+              ev.defaultPrevented
+              || ev.button !== 0
+              || ev.metaKey
+              || ev.ctrlKey
+              || ev.shiftKey
+              || ev.altKey
+            ) {
+              return;
+            }
+            var href = a.getAttribute('href');
+            if (!href) return;
+            ev.preventDefault();
+            window.location.href = href;
+          });
+        });
+      }
     })();
   </script>
 {% endblock %}
