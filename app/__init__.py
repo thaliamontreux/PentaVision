@@ -15,8 +15,12 @@ from .diagnostics import (
     bp as diagnostics_bp,
 )
 from .installer import bp as installer_bp
-from .models import create_face_schema, create_record_schema, create_user_schema
-from .security import init_security
+from .models import (
+    create_face_schema,
+    create_record_schema,
+    create_user_schema,
+)
+from .security import init_security, seed_system_admin_role_for_email
 from .storage_startup import start_storage_startup_checks
 from .url_healthcheck import start_startup_url_healthcheck
 from .views import bp as main_bp
@@ -48,6 +52,11 @@ def create_app() -> Flask:
             engine = get_user_engine()
             if engine is not None:
                 create_user_schema(engine)
+                bootstrap_email = str(
+                    app.config.get("BOOTSTRAP_SYSTEM_ADMIN_EMAIL") or ""
+                ).strip().lower()
+                if bootstrap_email:
+                    seed_system_admin_role_for_email(bootstrap_email)
         except Exception:  # noqa: BLE001
             pass
         try:

@@ -145,4 +145,9 @@ def load_config() -> Dict[str, Any]:
             "DIAGNOSTICS_ALLOWED_CIDRS",
             "",
         ),
+
+        "BOOTSTRAP_SYSTEM_ADMIN_EMAIL": os.getenv(
+            "BOOTSTRAP_SYSTEM_ADMIN_EMAIL",
+            "",
+        ),
     }

@@ -6,7 +6,7 @@ from typing import Callable, Iterable, Optional, Set
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import abort, g, jsonify, redirect, request, session, url_for
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db import get_user_engine
@@ -42,9 +42,9 @@ def get_current_user() -> Optional[User]:
             with Session(engine) as db:
                 user_obj = db.get(User, uid)
                 if user_obj is not None:
-                    # Detach the instance from the session so later attribute access
-                    # (e.g. in templates) does not try to refresh against a closed
-                    # session, which would raise DetachedInstanceError.
+                    # Detach the instance from the session so later attribute
+                    # access (e.g. in templates) does not try to refresh against
+                    # a closed session, which would raise DetachedInstanceError.
                     db.expunge(user_obj)
 
     g.current_user = user_obj
@@ -234,7 +234,9 @@ def init_security(app) -> None:
 
     def _current_timezone_name() -> str:
         user = get_current_user()
-        return _normalize_timezone_name(getattr(user, "timezone", None) if user else None)
+        return _normalize_timezone_name(
+            getattr(user, "timezone", None) if user else None
+        )
 
     def local_dt(value, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
         if value is None:
@@ -283,7 +285,10 @@ def init_security(app) -> None:
         return {
             "current_user": user,
             "global_csrf_token": ensure_global_csrf_token(),
-            "is_system_admin": user_has_role(global_user, "System Administrator"),
+            "is_system_admin": user_has_role(
+                global_user,
+                "System Administrator",
+            ),
             "is_technician": user_has_role(global_user, "Technician"),
             "current_timezone": _current_timezone_name(),
         }
@@ -299,12 +304,18 @@ def seed_system_admin_role_for_email(email: str) -> None:
     multiple places.
     """
 
+    email_norm = str(email or "").strip().lower()
+    if not email_norm:
+        return
+
     engine = get_user_engine()
     if engine is None:
         return
 
     with Session(engine) as db:
-        user = db.scalar(select(User).where(User.email == email))
+        user = db.scalar(
+            select(User).where(func.lower(User.email) == email_norm)
+        )
         if user is None:
             return
 
@@ -320,7 +331,10 @@ def seed_system_admin_role_for_email(email: str) -> None:
 
         existing = (
             db.query(UserRole)
-            .filter(UserRole.user_id == user.id, UserRole.role_id == role.id)
+            .filter(
+                UserRole.user_id == user.id,
+                UserRole.role_id == role.id,
+            )
             .first()
         )
         if existing is None:
@@ -333,8 +347,8 @@ def seed_system_admin_role_for_email(email: str) -> None:
                 name="Technician",
                 scope="global",
                 description=(
-                    "Technical role with access to camera configuration and diagnostics "
-                    "subject to administrator locks"
+                    "Technical role with access to camera configuration and "
+                    "diagnostics subject to administrator locks"
                 ),
             )
             db.add(tech_role)
