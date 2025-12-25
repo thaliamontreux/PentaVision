@@ -20,11 +20,11 @@
           </div>
         {% endif %}
 
-        <p style="margin-bottom: 1rem;">
+        <div class="pv-admin-actions">
           <a href="{{ url_for('admin.user_create') }}" class="pv-button pv-button-primary">
             New user
           </a>
-        </p>
+        </div>
 
         {% if not users %}
           <p>No users found in the system.</p>
@@ -53,13 +53,13 @@
                 {% endif %}
               </td>
               <td>
-                {% for r in managed_roles %}
-                  <div style="margin-bottom: 0.25rem;">
+                <div class="pv-admin-action-stack">
+                  {% for r in managed_roles %}
                     {% if r in roles %}
                       <form
                         method="post"
                         action="{{ url_for('admin.update_user_roles', user_id=user.id) }}"
-                        style="display: inline;"
+                        class="pv-admin-action-group"
                       >
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <input type="hidden" name="role" value="{{ r }}" />
@@ -72,7 +72,7 @@
                       <form
                         method="post"
                         action="{{ url_for('admin.update_user_roles', user_id=user.id) }}"
-                        style="display: inline;"
+                        class="pv-admin-action-group"
                       >
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <input type="hidden" name="role" value="{{ r }}" />
@@ -82,34 +82,34 @@
                         </button>
                       </form>
                     {% endif %}
-                  </div>
-                {% endfor %}
+                  {% endfor %}
+                </div>
               </td>
               <td>
-                <a
-                  href="{{ url_for('admin.user_edit', user_id=user.id) }}"
-                  class="pv-button pv-button-small"
-                >
-                  Edit
-                </a>
-                <a
-                  href="{{ url_for('admin.user_password', user_id=user.id) }}"
-                  class="pv-button pv-button-small"
-                  style="margin-left: 0.25rem;"
-                >
-                  Password
-                </a>
-                <form
-                  method="post"
-                  action="{{ url_for('admin.user_delete', user_id=user.id) }}"
-                  style="display: inline; margin-left: 0.25rem;"
-                  onsubmit="return confirm('Delete this user? This cannot be undone.');"
-                >
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                  <button type="submit" class="pv-button pv-button-small">
-                    Delete
-                  </button>
-                </form>
+                <div class="pv-admin-action-group">
+                  <a
+                    href="{{ url_for('admin.user_edit', user_id=user.id) }}"
+                    class="pv-button pv-button-small"
+                  >
+                    Edit
+                  </a>
+                  <a
+                    href="{{ url_for('admin.user_password', user_id=user.id) }}"
+                    class="pv-button pv-button-small"
+                  >
+                    Password
+                  </a>
+                  <form
+                    method="post"
+                    action="{{ url_for('admin.user_delete', user_id=user.id) }}"
+                    onsubmit="return confirm('Delete this user? This cannot be undone.');"
+                  >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="pv-button pv-button-small">
+                      Delete
+                    </button>
+                  </form>
+                </div>
               </td>
             </tr>
           {% endfor %}

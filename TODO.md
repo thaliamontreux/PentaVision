@@ -33,6 +33,12 @@
 - [x] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.
 - [ ] Match Storage Modules UI to `docs\ui-references\storage-modules-manager-reference.png`.
 
+## Admin UX polish
+
+- [ ] Admin UX polish global pass (#66): tighten admin spacing and reduce inline styles in admin templates.
+  - [x] Tighten admin table density and improve admin narrow-screen behavior (admin main scroll).
+  - [x] Add admin action-row utility classes and use them on Users/Properties admin list pages.
+
 ## Storage Modules Manager fixes
 
 - [x] Make existing-module Test on `/storage?edit_module=...` run via AJAX (no page reload) and show toast results.
@@ -112,7 +118,7 @@
 - [x] Add storage settings UI to select and configure storage providers (storage overview page with provider details and configuration hints).
 - [x] Implement client-side validation for forms (usernames, passwords, DB settings, etc.).
 - [x] Address accessibility (keyboard navigation, ARIA labels, contrast) with aria-live regions, landmarks, and grouped camera tiles.
- - [x] Profile phone UI: use full calling-code dataset, show prefix-only (+code), prefill via longest-prefix match, and sanitize before saving.
+- [x] Profile phone UI: use full calling-code dataset, show prefix-only (+code), prefill via longest-prefix match, and sanitize before saving.
 
 ## Storage provider integration
 
@@ -267,7 +273,7 @@
 
 ![Storage Modules Manager UI reference](docs/ui-references/storage-modules-manager-reference.png)
 
-```
+```text
 A high-fidelity dark-themed web dashboard UI mockup for a "Storage Modules Manager" page.
 Color scheme: deep navy blue background, electric blue gradients, subtle glow accents, rounded cards, modern security camera dashboard aesthetic.
 

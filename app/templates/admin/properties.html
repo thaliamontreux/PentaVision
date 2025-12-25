@@ -20,11 +20,11 @@
           </div>
         {% endif %}
 
-        <p style="margin-bottom: 1rem;">
+        <div class="pv-admin-actions">
           <a href="{{ url_for('admin.property_create') }}" class="pv-button pv-button-primary">
             New property
           </a>
-        </p>
+        </div>
 
         {% if not properties %}
           <p>No properties have been created yet.</p>
@@ -49,23 +49,24 @@
               </td>
               <td>{{ prop.timezone or '' }}</td>
               <td>
-                <a
-                  href="{{ url_for('admin.property_edit', property_id=prop.id) }}"
-                  class="pv-button pv-button-small"
-                >
-                  Edit
-                </a>
-                <form
-                  method="post"
-                  action="{{ url_for('admin.property_delete', property_id=prop.id) }}"
-                  style="display: inline; margin-left: 0.25rem;"
-                  onsubmit="return confirm('Delete this property? This will remove all user links.');"
-                >
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                  <button type="submit" class="pv-button pv-button-small">
-                    Delete
-                  </button>
-                </form>
+                <div class="pv-admin-action-group">
+                  <a
+                    href="{{ url_for('admin.property_edit', property_id=prop.id) }}"
+                    class="pv-button pv-button-small"
+                  >
+                    Edit
+                  </a>
+                  <form
+                    method="post"
+                    action="{{ url_for('admin.property_delete', property_id=prop.id) }}"
+                    onsubmit="return confirm('Delete this property? This will remove all user links.');"
+                  >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="pv-button pv-button-small">
+                      Delete
+                    </button>
+                  </form>
+                </div>
               </td>
             </tr>
           {% endfor %}
