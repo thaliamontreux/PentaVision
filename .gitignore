@@ -10,3 +10,8 @@ venv/
 ENV/
 
 .DS_Store
+
+diagnostics_report.html
+diagnostics_report.json
+diagnostics_*.html
+diagnostics_*.json
