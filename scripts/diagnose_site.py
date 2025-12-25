@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any, Iterable
@@ -20,6 +21,27 @@ class PageResult:
     error: str | None
     redirected_to: str | None
     content_type: str | None
+
+
+@dataclass
+class DiagnosticsRunResult:
+    base_url: str
+    started_at: float
+    finished_at: float
+    pages: list[PageResult]
+    script_results: list[dict[str, Any]]
+
+    @property
+    def ok_count(self) -> int:
+        return sum(
+            1
+            for p in self.pages
+            if p.status is not None and 200 <= p.status < 400
+        )
+
+    @property
+    def failure_count(self) -> int:
+        return len(self.pages) - self.ok_count
 
 
 class _LinkParser(HTMLParser):
@@ -80,6 +102,10 @@ def _discover_links(html_text: str) -> list[str]:
     except Exception:
         return []
     return parser.links
+
+
+def _default_progress_cb(msg: str) -> None:
+    return
 
 
 def _html_report(
@@ -428,12 +454,20 @@ def crawl_site(
     sess: requests.Session,
     base_url: str,
     *,
+    extra_urls: list[str] | None = None,
     max_pages: int,
     timeout: float,
     delay_ms: int,
+    progress_cb: Callable[[str], None] | None = None,
 ) -> list[PageResult]:
+    cb = progress_cb or _default_progress_cb
     start = urljoin(base_url.rstrip("/") + "/", "/")
     queue: list[str] = [_norm_url(start)]
+    if extra_urls:
+        for u in extra_urls:
+            u2 = _norm_url(u)
+            if _same_origin(base_url, u2) and u2 not in queue:
+                queue.append(u2)
     seen: set[str] = set()
     results: list[PageResult] = []
 
@@ -451,14 +485,26 @@ def crawl_site(
         if _looks_like_asset(p.path):
             continue
 
+        cb(
+            f"fetch {len(results)+1}/{max_pages}: {url}",
+        )
+
         t0 = time.time()
         try:
-            r = sess.get(url, timeout=timeout, allow_redirects=True)
-            elapsed_ms = int((time.time() - t0) * 1000)
+            r = sess.get(
+                url,
+                timeout=timeout,
+                allow_redirects=False,
+            )
+            elapsed_ms = int(
+                (time.time() - t0) * 1000,
+            )
             ct = r.headers.get("Content-Type")
             redirected_to = None
-            if r.history:
-                redirected_to = r.url
+            if 300 <= int(r.status_code) < 400:
+                loc = r.headers.get("Location")
+                if loc:
+                    redirected_to = urljoin(url, loc)
             results.append(
                 PageResult(
                     url=url,
@@ -470,7 +516,7 @@ def crawl_site(
                 )
             )
 
-            if _is_probably_html(ct):
+            if 200 <= int(r.status_code) < 300 and _is_probably_html(ct):
                 links = _discover_links(r.text or "")
                 for href in links:
                     href = (href or "").strip()
@@ -489,22 +535,18 @@ def crawl_site(
                     ):
                         queue.append(nxt)
         except Exception as e:  # noqa: BLE001
-            elapsed_ms = int(
-                (time.time() - t0) * 1000,
+            dt = time.time() - t0
+            elapsed_ms = int(dt * 1000)
+            err_msg = f"{type(e).__name__}: {e}"
+            page = PageResult(
+                url=url,
+                status=None,
+                elapsed_ms=elapsed_ms,
+                error=err_msg,
+                redirected_to=None,
+                content_type=None,
             )
-            err_msg = (
-                f"{type(e).__name__}: {e}"
-            )
-            results.append(
-                PageResult(
-                    url=url,
-                    status=None,
-                    elapsed_ms=elapsed_ms,
-                    error=err_msg,
-                    redirected_to=None,
-                    content_type=None,
-                )
-            )
+            results.append(page)
 
         if delay_ms > 0:
             time.sleep(delay_ms / 1000.0)
@@ -529,81 +571,133 @@ def _require_diag_session(
         allow_redirects=False,
     )
     if r.status_code != 200:
-        raise RuntimeError(f"diagnostics session failed: {r.status_code} {r.text}")
+        raise RuntimeError(
+            "diagnostics session failed: "
+            f"{r.status_code} {r.text}",
+        )
 
 
-def main(argv: Iterable[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="PentaVision site crawler diagnostics")
-    ap.add_argument("--base-url", required=True, help="e.g. http://127.0.0.1:5000")
-    ap.add_argument("--token", required=True, help="DIAGNOSTICS_TOKEN value")
-    ap.add_argument("--max-pages", type=int, default=250)
-    ap.add_argument("--timeout", type=float, default=12.0)
-    ap.add_argument("--delay-ms", type=int, default=0)
-    ap.add_argument("--script", help="Path to JSON diagnostic script (checks list)")
-    ap.add_argument("--out-html", default="diagnostics_report.html")
-    ap.add_argument("--out-json", default="diagnostics_report.json")
-    args = ap.parse_args(list(argv) if argv is not None else None)
-
+def run_diagnostics(
+    *,
+    base_url: str,
+    token: str,
+    extra_urls: list[str] | None = None,
+    max_pages: int = 250,
+    timeout: float = 12.0,
+    delay_ms: int = 0,
+    script_path: str | None = None,
+    user_agent: str = "PentaVisionDiagnostics/1.0",
+    progress_cb: Callable[[str], None] | None = None,
+) -> DiagnosticsRunResult:
+    cb = progress_cb or _default_progress_cb
     sess = requests.Session()
-    sess.headers.update({"User-Agent": "PentaVisionDiagnostics/1.0"})
+    sess.headers.update({"User-Agent": user_agent})
 
     started_at = time.time()
-    _require_diag_session(
-        sess,
-        args.base_url,
-        args.token,
-        args.timeout,
-    )
+    cb("auth: creating diagnostics session")
+    _require_diag_session(sess, base_url, token, timeout)
 
-    checks = _load_script(args.script)
-    script_results = _run_script(
-        sess,
-        args.base_url,
-        checks,
-        args.timeout,
+    checks = _load_script(script_path)
+    cb(
+        f"script: running {len(checks)} checks",
     )
+    script_results = _run_script(sess, base_url, checks, timeout)
 
+    cb("crawl: starting")
     pages = crawl_site(
         sess,
-        args.base_url,
-        max_pages=int(args.max_pages),
-        timeout=float(args.timeout),
-        delay_ms=int(args.delay_ms),
+        base_url,
+        extra_urls=extra_urls,
+        max_pages=int(max_pages),
+        timeout=float(timeout),
+        delay_ms=int(delay_ms),
+        progress_cb=cb,
     )
     finished_at = time.time()
 
-    payload = {
-        "base_url": args.base_url,
-        "started_at": started_at,
-        "finished_at": finished_at,
-        "pages": [
-            p.__dict__
-            for p in pages
-        ],
-        "script_results": script_results,
-    }
-
-    with open(args.out_json, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-
-    html = _html_report(
-        base_url=args.base_url,
+    cb("done")
+    return DiagnosticsRunResult(
+        base_url=base_url,
         started_at=started_at,
         finished_at=finished_at,
         pages=pages,
         script_results=script_results,
     )
-    with open(args.out_html, "w", encoding="utf-8") as f:
+
+
+def write_reports(
+    *,
+    result: DiagnosticsRunResult,
+    out_html: str,
+    out_json: str,
+) -> None:
+    payload = {
+        "base_url": result.base_url,
+        "started_at": result.started_at,
+        "finished_at": result.finished_at,
+        "pages": [p.__dict__ for p in result.pages],
+        "script_results": result.script_results,
+    }
+
+    with open(out_json, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+    html = _html_report(
+        base_url=result.base_url,
+        started_at=result.started_at,
+        finished_at=result.finished_at,
+        pages=result.pages,
+        script_results=result.script_results,
+    )
+    with open(out_html, "w", encoding="utf-8") as f:
         f.write(html)
 
-    ok = sum(1 for p in pages if p.status is not None and 200 <= p.status < 400)
-    bad = len(pages) - ok
-    print(f"Base: {args.base_url}")
-    print(f"Pages tested: {len(pages)}")
-    print(f"OK: {ok}")
-    print(f"Failures: {bad}")
-    print(f"Wrote: {args.out_html}")
-    print(f"Wrote: {args.out_json}")
+
+def main(argv: Iterable[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="PentaVision site crawler diagnostics")
+    ap.add_argument(
+        "--base-url",
+        required=True,
+        help="e.g. http://127.0.0.1:5000",
+    )
+    ap.add_argument(
+        "--token",
+        required=True,
+        help="DIAGNOSTICS_TOKEN value",
+    )
+    ap.add_argument("--max-pages", type=int, default=250)
+    ap.add_argument("--timeout", type=float, default=12.0)
+    ap.add_argument("--delay-ms", type=int, default=0)
+    ap.add_argument(
+        "--script",
+        help="Path to JSON diagnostic script (checks list)",
+    )
+    ap.add_argument("--out-html", default="diagnostics_report.html")
+    ap.add_argument("--out-json", default="diagnostics_report.json")
+    ap.add_argument("--quiet", action="store_true", help="Suppress stdout")
+    args = ap.parse_args(list(argv) if argv is not None else None)
+
+    result = run_diagnostics(
+        base_url=args.base_url,
+        token=args.token,
+        max_pages=int(args.max_pages),
+        timeout=float(args.timeout),
+        delay_ms=int(args.delay_ms),
+        script_path=args.script,
+    )
+    write_reports(
+        result=result,
+        out_html=args.out_html,
+        out_json=args.out_json,
+    )
+
+    if not args.quiet:
+        print(f"Base: {args.base_url}")
+        print(f"Pages tested: {len(result.pages)}")
+        print(f"OK: {result.ok_count}")
+        print(f"Failures: {result.failure_count}")
+        print(f"Wrote: {args.out_html}")
+        print(f"Wrote: {args.out_json}")
     return 0
 
 

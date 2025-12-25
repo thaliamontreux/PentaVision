@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "notes": "Seed URL paths for the diagnostics companion app. Keep this list updated as new routes are added.",
+  "paths": [
+    "/",
+    "/login",
+    "/profile",
+    "/admin/users",
+    "/admin/properties",
+    "/admin/access-control",
+    "/audit",
+    "/recordings"
+  ]
+}
