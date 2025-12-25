@@ -520,12 +520,16 @@ class AzureBlobStorageProvider(StorageProvider):
         now = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
         prefix = _recordings_prefix_for_hint(key_hint)
         blob_name = f"{prefix}/{now}_{safe_hint}.mp4"
-        self._container_client.upload_blob(
-            name=blob_name,
-            data=data,
-            overwrite=True,
-            content_settings=ContentSettings(content_type="video/mp4"),
-        )
+        upload_kwargs = {
+            "name": blob_name,
+            "data": data,
+            "overwrite": True,
+        }
+        if ContentSettings is not None:
+            upload_kwargs["content_settings"] = ContentSettings(
+                content_type="video/mp4"
+            )
+        self._container_client.upload_blob(**upload_kwargs)
         return blob_name
 
     def get_url(self, storage_key: str) -> Optional[str]:
