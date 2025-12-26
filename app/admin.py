@@ -28,7 +28,7 @@ from werkzeug.routing import BuildError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from .db import get_property_engine, get_record_engine, get_user_engine
+from .db import get_property_engine, get_user_engine
 from .logging_utils import log_event, _client_ip
 from .models import (
     BlocklistDistributionSettings,
@@ -1632,7 +1632,6 @@ def users_list():
     else:
         with Session(engine) as db:
             users = db.query(User).order_by(User.email).all()
-            role_rows = db.query(Role).order_by(Role.name).all()
             user_role_rows = db.query(UserRole, Role).join(Role, Role.id == UserRole.role_id).all()
 
         for ur, role in user_role_rows:
@@ -1641,7 +1640,11 @@ def users_list():
 
     csrf_token = _ensure_csrf_token()
     # For now we focus on two key roles; additional roles can be managed later.
-    managed_roles = ["System Administrator", "Technician"]
+    managed_roles = [
+        "System Administrator",
+        "Property Administrator",
+        "Technician",
+    ]
 
     return render_template(
         "admin/users.html",
@@ -1938,6 +1941,7 @@ def user_create():
         password_confirm = request.form.get("password_confirm") or ""
         make_viewer = request.form.get("make_viewer") == "1"
         make_admin = request.form.get("make_admin") == "1"
+        make_prop_admin = request.form.get("make_prop_admin") == "1"
         make_tech = request.form.get("make_tech") == "1"
 
         if not form["email"]:
@@ -1978,12 +1982,14 @@ def user_create():
                     created_user_id = int(user.id)
                     created_user_email = user.email
 
-                    if make_viewer or make_admin or make_tech:
+                    if make_viewer or make_admin or make_prop_admin or make_tech:
                         roles_to_apply: List[str] = []
                         if make_viewer:
                             roles_to_apply.append("Viewer")
                         if make_admin:
                             roles_to_apply.append("System Administrator")
+                        if make_prop_admin:
+                            roles_to_apply.append("Property Administrator")
                         if make_tech:
                             roles_to_apply.append("Technician")
                         for name in roles_to_apply:

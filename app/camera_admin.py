@@ -59,6 +59,7 @@ def _require_admin_or_technician():
         return redirect(url_for("main.login", next=next_url))
     if not (
         user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
         or user_has_role(user, "Technician")
     ):
         abort(403)
@@ -300,7 +301,10 @@ def _load_properties_for_user(user) -> list[Property]:
         return [active] if active is not None else []
 
     with Session(engine) as db:
-        if user_has_role(user, "System Administrator"):
+        if (
+            user_has_role(user, "System Administrator")
+            or user_has_role(user, "Property Administrator")
+        ):
             return db.query(Property).order_by(Property.name).all()
 
         return (
@@ -1885,7 +1889,10 @@ def create_device():
     csrf_token = _ensure_csrf_token()
 
     user = get_current_user()
-    is_admin = user_has_role(user, "System Administrator") if user else False
+    is_admin = (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ) if user else False
     ctx_id = _admin_context_property_id() if is_admin else None
     properties = _load_properties_for_user(user)
 
@@ -2076,7 +2083,10 @@ def edit_device(device_id: int):
     csrf_token = _ensure_csrf_token()
 
     user = get_current_user()
-    is_admin = user_has_role(user, "System Administrator") if user else False
+    is_admin = (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ) if user else False
     ctx_id = _admin_context_property_id() if is_admin else None
     properties = _load_properties_for_user(user)
 
@@ -2458,7 +2468,10 @@ def delete_device(device_id: int):
         return redirect(url_for("camera_admin.list_devices"))
 
     user = get_current_user()
-    is_admin = user_has_role(user, "System Administrator") if user else False
+    is_admin = (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ) if user else False
 
     with Session(engine) as session_db:
         device = session_db.get(CameraDevice, device_id)

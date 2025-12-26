@@ -52,7 +52,10 @@ def _require_global_user():
 def _user_can_manage_property(user, property_id: int) -> bool:
     if user is None:
         return False
-    if user_has_role(user, "System Administrator"):
+    if (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ):
         return True
     engine = get_user_engine()
     if engine is None:
@@ -100,7 +103,10 @@ def index():
             except Exception:  # noqa: BLE001
                 pass
 
-            if user_has_role(user, "System Administrator"):
+            if (
+                user_has_role(user, "System Administrator")
+                or user_has_role(user, "Property Administrator")
+            ):
                 if ctx_id:
                     props = (
                         db.query(Property)

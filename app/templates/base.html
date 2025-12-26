@@ -81,7 +81,7 @@
             {% endif %}
 
             {# Camera administration is allowed for System Administrators and Technicians #}
-            {% if is_system_admin or is_technician %}
+            {% if is_system_admin or is_property_admin or is_technician %}
               <a href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
             {% endif %}
 

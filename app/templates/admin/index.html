@@ -27,7 +27,7 @@
             </a>
           {% endif %}
 
-          {% if is_system_admin or is_technician %}
+          {% if is_system_admin or is_property_admin or is_technician %}
             <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-card">
               <h2 class="pv-card-title">Cameras</h2>
               <p class="pv-card-subtitle">Configure cameras, templates, storage policies, and per-property camera assignments.</p>

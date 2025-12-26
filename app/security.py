@@ -254,6 +254,8 @@ def user_has_property_access(user: Optional[User], property_id: int) -> bool:
         return False
     if user_has_role(user, "System Administrator"):
         return True
+    if user_has_role(user, "Property Administrator"):
+        return True
 
     engine = get_user_engine()
     if engine is None:
@@ -426,7 +428,10 @@ def init_security(app) -> None:
 
         is_property_manager = False
         if global_user is not None:
-            if user_has_role(global_user, "System Administrator"):
+            if (
+                user_has_role(global_user, "System Administrator")
+                or user_has_role(global_user, "Property Administrator")
+            ):
                 is_property_manager = True
             else:
                 engine = get_user_engine()
@@ -447,6 +452,10 @@ def init_security(app) -> None:
             "is_system_admin": user_has_role(
                 global_user,
                 "System Administrator",
+            ),
+            "is_property_admin": user_has_role(
+                global_user,
+                "Property Administrator",
             ),
             "is_technician": user_has_role(global_user, "Technician"),
             "is_property_manager": is_property_manager,
@@ -530,5 +539,18 @@ def seed_system_admin_role_for_email(email: str) -> None:
                 ),
             )
             db.add(tech_role)
+
+        prop_admin_role = db.scalar(
+            select(Role).where(Role.name == "Property Administrator")
+        )
+        if prop_admin_role is None:
+            prop_admin_role = Role(
+                name="Property Administrator",
+                scope="global",
+                description=(
+                    "Administrative role for managing assigned properties"
+                ),
+            )
+            db.add(prop_admin_role)
 
         db.commit()

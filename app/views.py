@@ -813,7 +813,10 @@ def index():
     # users only see cameras for properties they are associated with.
     if user is None:
         devices = []
-    elif not user_has_role(user, "System Administrator"):
+    elif not (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ):
         filtered_devices: list[CameraDevice] = []
         for d in devices:
             prop_id = camera_property_map.get(d.id)

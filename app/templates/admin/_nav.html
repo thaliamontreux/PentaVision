@@ -11,7 +11,7 @@
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Properties</a>
   {% endif %}
 
-  {% if is_system_admin or is_technician %}
+  {% if is_system_admin or is_property_admin or is_technician %}
     {% set href = url_for('camera_admin.list_devices') %}
     <a class="pv-admin-navbtn{% if current_endpoint in ['camera_admin.list_devices', 'camera_admin.create_device', 'camera_admin.edit_device', 'camera_admin.scan'] %} is-active{% endif %}" href="{{ href }}">Cameras</a>
     {% set href = url_for('camera_admin.list_patterns') %}
