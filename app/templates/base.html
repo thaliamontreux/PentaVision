@@ -28,13 +28,21 @@
           0 10px 18px rgba(0,0,0,0.30),
           inset 0 1px 0 rgba(255,255,255,0.75),
           inset 0 -1px 0 rgba(0,0,0,0.10);
-        background: linear-gradient(180deg, rgba(134,239,172,0.98), rgba(74,222,128,0.94));
-        color: #111827;
+        background: linear-gradient(180deg, rgba(59,130,246,0.98), rgba(37,99,235,0.94));
+        color: rgba(255,255,255,0.96);
         border: 1px solid rgba(17,24,39,0.18);
         backdrop-filter: blur(10px);
         transform: translateY(14px) scale(0.985);
         opacity: 0;
         transition: opacity 180ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .pv-toast.is-error {
+        background: linear-gradient(180deg, rgba(248,113,113,0.98), rgba(239,68,68,0.94));
+        color: rgba(17,24,39,0.98);
+      }
+      .pv-toast.is-success {
+        background: linear-gradient(180deg, rgba(134,239,172,0.98), rgba(74,222,128,0.94));
+        color: rgba(17,24,39,0.98);
       }
       .pv-toast.is-showing {
         transform: translateY(0) scale(1);
@@ -317,6 +325,14 @@
           var title = kind === 'success' ? 'SUCCESS' : (kind === 'error' ? 'ERROR' : 'NOTICE');
           var msg = String(message || '');
 
+          toastEl.classList.remove('is-error');
+          toastEl.classList.remove('is-success');
+          if (kind === 'error') {
+            toastEl.classList.add('is-error');
+          } else if (kind === 'success') {
+            toastEl.classList.add('is-success');
+          }
+
           toastEl.innerHTML = '';
           var titleEl = document.createElement('div');
           titleEl.className = 'pv-toast-title';
@@ -339,7 +355,7 @@
             showToast._h = window.setTimeout(function () {
               toastEl.style.display = 'none';
             }, 240);
-          }, 15000);
+          }, 10000);
         }
 
         window.pvToastError = function (message) { showToast(message, 'error'); };
@@ -376,7 +392,7 @@
           showToast(queue[i], 'error');
           window.setTimeout(function () {
             drain(i + 1);
-          }, 15500);
+          }, 10500);
         }
 
         if (document.readyState === 'loading') {

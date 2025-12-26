@@ -44,7 +44,7 @@ def _get_property_and_tenant_engine(property_id: int):
 
     tenant_engine = get_property_engine(prop_uid)
     if tenant_engine is None:
-        abort(500)
+        abort(503)
     return prop, tenant_engine
 
 
@@ -218,25 +218,50 @@ def property_users(property_id: int):
     if not _user_can_manage_property(user, property_id):
         abort(403)
 
-    prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+    errors: list[str] = []
+    try:
+        prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(
+                bind=tenant_engine,
+                checkfirst=True,
+            )
 
-    with Session(tenant_engine) as db:
-        PropertyUser.__table__.create(
-            bind=tenant_engine,
-            checkfirst=True,
-        )
-
-        rows = (
-            db.query(PropertyUser)
-            .filter(PropertyUser.property_id == int(property_id))
-            .order_by(PropertyUser.username)
-            .all()
-        )
+            rows = (
+                db.query(PropertyUser)
+                .filter(PropertyUser.property_id == int(property_id))
+                .order_by(PropertyUser.username)
+                .all()
+            )
+    except Exception as exc:  # noqa: BLE001
+        # Tenant DB might be missing/unreachable/disk-full; show page without crashing.
+        msg = str(exc)
+        if "No space left on device" in msg or "Errcode: 28" in msg:
+            errors.append(
+                "Tenant database error: disk is full on the database server. "
+                "Free space and reload."
+            )
+        else:
+            errors.append(
+                "Tenant database is unavailable or not yet provisioned. "
+                "Check DB config and disk space, then reload."
+            )
+        engine = get_user_engine()
+        prop = None
+        if engine is not None:
+            with Session(engine) as db:
+                prop = db.get(Property, int(property_id))
+                if prop is not None:
+                    db.expunge(prop)
+        if prop is None:
+            abort(404)
+        rows = []
 
     return render_template(
         "pm/property_users.html",
         prop=prop,
         rows=rows,
+        errors=errors,
     )
 
 
