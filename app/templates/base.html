@@ -5,6 +5,13 @@
     <title>{% block title %}PentaVision{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+    {% if active_main_theme and active_main_theme != 'default' %}
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/themes/main/' ~ active_main_theme ~ '.css') }}" />
+    {% endif %}
+    {% set _pv_path = request.path if request else '' %}
+    {% if _pv_path.startswith('/admin') and active_admin_theme and active_admin_theme != 'default' %}
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/themes/admin/' ~ active_admin_theme ~ '.css') }}" />
+    {% endif %}
     <style>
       .pv-toast {
         position: fixed;
@@ -45,7 +52,7 @@
       }
     </style>
   </head>
-  <body>
+  <body class="{% if _pv_path.startswith('/admin') %}pv-is-admin{% endif %}">
     <a href="#pv-main-content" class="pv-skip-link">Skip to main content</a>
     <div id="pv-splash" class="pv-splash-overlay">
       <div class="pv-splash-inner">

@@ -1,0 +1,32 @@
+/* Main theme: high_contrast */
+
+body {
+  background: #000;
+  color: #fff;
+}
+
+.pv-section {
+  background: #000;
+  border: 2px solid #fff;
+  box-shadow: none;
+}
+
+.pv-card {
+  background: #000;
+  border: 2px solid #fff;
+  box-shadow: none;
+}
+
+.pv-card-subtitle {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.pv-header {
+  background: #000;
+  border-bottom: 2px solid #fff;
+}
+
+.pv-nav a:hover {
+  color: #fff;
+  text-decoration: underline;
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Callable, Iterable, Optional, Set
@@ -14,6 +15,7 @@ from .logging_utils import evaluate_ip_access_policies
 from .models import (
     PropertyUser,
     Role,
+    SiteThemeSettings,
     User,
     UserProperty,
     UserRole,
@@ -161,8 +163,9 @@ def get_user_property_link(
 def user_has_property_access(user: Optional[User], property_id: int) -> bool:
     """Return True if the user should have access to the given property.
 
-    For now, System Administrators always have access. Other users must have at
-    least one UserProperty link for the property. Future implementations can
+    For now, System Administrators always have access. Other users must have
+    at least one UserProperty link for the property. Future implementations
+    can
     refine this using residency status, zones, and role overrides.
     """
 
@@ -273,7 +276,9 @@ def init_security(app) -> None:
                 return (
                     jsonify(
                         {
-                            "error": "access from this IP or country is blocked"
+                            "error": (
+                                "access from this IP or country is blocked"
+                            )
                         }
                     ),
                     403,
@@ -287,8 +292,55 @@ def init_security(app) -> None:
 
     @app.context_processor
     def _inject_user() -> dict:  # pragma: no cover - template wiring
+        def _sanitize_theme(value: str | None) -> str:
+            raw = str(value or "").strip()
+            if not raw:
+                return "default"
+            if raw == "default":
+                return "default"
+            if (
+                re.fullmatch(r"[a-z0-9_\-]{1,64}", raw)
+                is None
+            ):
+                return "default"
+            return raw
+
+        def _load_theme_settings() -> tuple[str, str]:
+            engine = get_user_engine()
+            if engine is None:
+                return "default", "default"
+            with Session(engine) as db:
+                try:
+                    SiteThemeSettings.__table__.create(
+                        bind=engine,
+                        checkfirst=True,
+                    )
+                except Exception:  # noqa: BLE001
+                    return "default", "default"
+
+                row = (
+                    db.query(SiteThemeSettings)
+                    .order_by(SiteThemeSettings.id.desc())
+                    .first()
+                )
+                if row is None:
+                    row = SiteThemeSettings(
+                        main_theme="default",
+                        admin_theme="restricted_red",
+                    )
+                    db.add(row)
+                    db.commit()
+                main_theme = _sanitize_theme(
+                    getattr(row, "main_theme", None)
+                )
+                admin_theme = _sanitize_theme(
+                    getattr(row, "admin_theme", None)
+                )
+                return main_theme, admin_theme
+
         user = get_current_user() or get_current_property_user()
         global_user = get_current_user()
+        main_theme, admin_theme = _load_theme_settings()
         return {
             "current_user": user,
             "global_csrf_token": ensure_global_csrf_token(),
@@ -298,6 +350,8 @@ def init_security(app) -> None:
             ),
             "is_technician": user_has_role(global_user, "Technician"),
             "current_timezone": _current_timezone_name(),
+            "active_main_theme": main_theme,
+            "active_admin_theme": admin_theme,
         }
 
     app.jinja_env.filters["local_dt"] = local_dt
@@ -359,8 +413,11 @@ def seed_system_admin_role_for_email(email: str) -> None:
                 )
             )
 
-        # Also ensure a Technician role exists so it can be assigned later via UI.
-        tech_role = db.scalar(select(Role).where(Role.name == "Technician"))
+        # Also ensure a Technician role exists so it can be assigned later via
+        # UI.
+        tech_role = db.scalar(
+            select(Role).where(Role.name == "Technician")
+        )
         if tech_role is None:
             tech_role = Role(
                 name="Technician",

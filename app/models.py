@@ -335,6 +335,20 @@ class BlocklistDistributionSettings(UserBase):
     )
 
 
+class SiteThemeSettings(UserBase):
+    __tablename__ = "site_theme_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    main_theme: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    admin_theme: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class CameraRtmpOutput(RecordBase):
     __tablename__ = "camera_rtmp_outputs"
 

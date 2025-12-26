@@ -50,6 +50,7 @@ from .models import (
     PropertyGroupScheduleAssignment,
     UserRole,
     LoginFailure,
+    SiteThemeSettings,
 )
 from .security import get_current_user, user_has_role
 from .storage_settings_page import storage_settings_page
@@ -177,6 +178,111 @@ def index():
         "admin/index.html",
         csrf_token=csrf_token,
         git_pull_start_url=git_pull_start_url,
+    )
+
+
+@bp.route("/themes", methods=["GET", "POST"])
+def themes():
+    engine = get_user_engine()
+    errors: List[str] = []
+    messages: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    main_theme_options = [
+        "default",
+        "ocean_blue",
+        "midnight",
+        "high_contrast",
+    ]
+    admin_theme_options = [
+        "default",
+        "restricted_red",
+        "stealth",
+        "terminal_green",
+    ]
+
+    selected_main = "default"
+    selected_admin = "restricted_red"
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "admin/themes.html",
+            errors=errors,
+            messages=messages,
+            csrf_token=csrf_token,
+            main_theme_options=main_theme_options,
+            admin_theme_options=admin_theme_options,
+            selected_main=selected_main,
+            selected_admin=selected_admin,
+        )
+
+    with Session(engine) as db:
+        try:
+            SiteThemeSettings.__table__.create(bind=engine, checkfirst=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+        settings = (
+            db.query(SiteThemeSettings)
+            .order_by(SiteThemeSettings.id.desc())
+            .first()
+        )
+        if settings is None:
+            settings = SiteThemeSettings(
+                main_theme="default",
+                admin_theme="restricted_red",
+            )
+            db.add(settings)
+            db.commit()
+
+        selected_main = (settings.main_theme or "").strip() or "default"
+        selected_admin = (settings.admin_theme or "").strip() or "restricted_red"
+
+        if request.method == "POST":
+            if not _validate_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+            else:
+                main_form = (request.form.get("main_theme") or "").strip() or "default"
+                admin_form = (request.form.get("admin_theme") or "").strip() or "default"
+
+                if main_form not in main_theme_options:
+                    errors.append("Invalid main theme selection.")
+                if admin_form not in admin_theme_options:
+                    errors.append("Invalid admin theme selection.")
+
+                if not errors:
+                    settings.main_theme = main_form
+                    settings.admin_theme = admin_form
+                    settings.updated_at = datetime.now(timezone.utc)
+                    db.add(settings)
+                    db.commit()
+
+                    actor = get_current_user()
+                    log_event(
+                        "SITE_THEME_SETTINGS_UPDATE",
+                        user_id=actor.id if actor else None,
+                        details=f"main_theme={main_form}, admin_theme={admin_form}",
+                    )
+                    messages.append("Theme settings saved.")
+                    selected_main = main_form
+                    selected_admin = admin_form
+
+        try:
+            db.refresh(settings)
+            db.expunge(settings)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return render_template(
+        "admin/themes.html",
+        errors=errors,
+        messages=messages,
+        csrf_token=csrf_token,
+        main_theme_options=main_theme_options,
+        admin_theme_options=admin_theme_options,
+        selected_main=selected_main,
+        selected_admin=selected_admin,
     )
 
 

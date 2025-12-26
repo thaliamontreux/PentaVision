@@ -1,0 +1,22 @@
+/* Main theme: ocean_blue */
+
+body {
+  background: radial-gradient(circle at top left, #0ea5e9, #020617 55%);
+}
+
+.pv-section {
+  background: radial-gradient(circle at top left, #1d4ed8, #020617 55%);
+}
+
+.pv-header {
+  background: rgba(2, 6, 23, 0.92);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.pv-brand {
+  color: #38bdf8;
+}
+
+.pv-card:hover {
+  border-color: rgba(56, 189, 248, 0.9);
+}

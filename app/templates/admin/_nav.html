@@ -27,6 +27,8 @@
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Recording settings</a>
     {% set href = url_for('admin.storage_settings') %}
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Storage</a>
+    {% set href = url_for('admin.themes') %}
+    <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Themes</a>
     {% set href = url_for('admin.access_control') %}
     <a class="pv-admin-navbtn{% if current_path.startswith(href) %} is-active{% endif %}" href="{{ href }}">Block / Allow</a>
     {% set href = url_for('admin.blocklist_distribution') %}

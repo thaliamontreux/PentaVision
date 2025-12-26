@@ -1,0 +1,27 @@
+/* Admin theme: terminal_green */
+
+.pv-is-admin .pv-section {
+  background: radial-gradient(circle at top, rgba(34, 197, 94, 0.12), rgba(0, 0, 0, 0.97) 60%);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.pv-is-admin .pv-section h1 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  color: rgba(74, 222, 128, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pv-is-admin .pv-admin-navbtn {
+  border-color: rgba(34, 197, 94, 0.20);
+}
+
+.pv-is-admin .pv-admin-navbtn.is-active {
+  border-color: rgba(34, 197, 94, 0.75);
+  background: rgba(34, 197, 94, 0.18);
+  color: #bbf7d0;
+}
+
+.pv-is-admin .pv-admin-main .pv-card {
+  border-color: rgba(34, 197, 94, 0.20);
+}

@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Themes · Admin · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Themes</h1>
+
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+
+        {% if errors %}
+          <div class="pv-alert pv-alert-error" role="alert">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        {% if messages %}
+          <div class="pv-alert pv-alert-success" role="status">
+            <ul>
+              {% for msg in messages %}
+                <li>{{ msg }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <div class="pv-card">
+          <h2>Site theme settings</h2>
+          <p class="pv-card-subtitle">Set the visual theme for the public site and for the restricted admin area independently.</p>
+
+          <form method="post" class="pv-form" style="max-width: 820px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+            <div class="pv-field-group">
+              <label for="main_theme">Main site theme</label>
+              <select id="main_theme" name="main_theme">
+                {% for opt in main_theme_options %}
+                  <option value="{{ opt }}" {% if opt == selected_main %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+              <p class="pv-help">Applies to the non-admin site pages.</p>
+            </div>
+
+            <div class="pv-field-group">
+              <label for="admin_theme">Admin theme</label>
+              <select id="admin_theme" name="admin_theme">
+                {% for opt in admin_theme_options %}
+                  <option value="{{ opt }}" {% if opt == selected_admin %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+              <p class="pv-help">Applies to all <code>/admin</code> pages. Use this to make the admin area visually distinct at a glance.</p>
+            </div>
+
+            <div class="pv-form-actions">
+              <button type="submit" class="pv-button-primary">Save theme settings</button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </section>
+{% endblock %}

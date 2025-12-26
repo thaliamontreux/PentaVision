@@ -1,0 +1,64 @@
+/* Admin theme: restricted_red */
+
+.pv-is-admin .pv-section {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(248, 113, 113, 0.22), rgba(2, 6, 23, 0.98) 60%),
+    repeating-linear-gradient(135deg, rgba(220, 38, 38, 0.16) 0, rgba(220, 38, 38, 0.16) 16px, rgba(0, 0, 0, 0.16) 16px, rgba(0, 0, 0, 0.16) 32px);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  box-shadow:
+    0 26px 60px rgba(0, 0, 0, 0.82),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.pv-is-admin .pv-section::before {
+  content: "RESTRICTED AREA";
+  position: absolute;
+  top: 0.75rem;
+  right: 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  color: rgba(2, 6, 23, 0.95);
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.98), rgba(234, 179, 8, 0.92));
+  border: 1px solid rgba(2, 6, 23, 0.45);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.pv-is-admin .pv-section h1 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pv-is-admin .pv-admin-sidebar {
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  background:
+    linear-gradient(180deg, rgba(127, 29, 29, 0.26), rgba(2, 6, 23, 0.92)),
+    repeating-linear-gradient(135deg, rgba(220, 38, 38, 0.28) 0, rgba(220, 38, 38, 0.28) 10px, rgba(0, 0, 0, 0.28) 10px, rgba(0, 0, 0, 0.28) 20px);
+}
+
+.pv-is-admin .pv-admin-navbtn {
+  border-color: rgba(250, 204, 21, 0.28);
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.87), rgba(2, 6, 23, 0.87));
+}
+
+.pv-is-admin .pv-admin-navbtn.is-active {
+  border-color: rgba(248, 113, 113, 0.75);
+  color: #111827;
+  background: linear-gradient(to bottom, rgba(248, 113, 113, 0.98), rgba(234, 179, 8, 0.92));
+}
+
+.pv-is-admin .pv-admin-main .pv-card {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(2, 6, 23, 0.96)),
+    repeating-linear-gradient(135deg, rgba(220, 38, 38, 0.16) 0, rgba(220, 38, 38, 0.16) 10px, rgba(0, 0, 0, 0.16) 10px, rgba(0, 0, 0, 0.16) 20px);
+  border: 1px solid rgba(250, 204, 21, 0.22);
+}

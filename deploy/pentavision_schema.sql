@@ -165,6 +165,14 @@ CREATE TABLE IF NOT EXISTS blocklist_distribution_settings (
   updated_at DATETIME(6) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS site_theme_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  main_theme VARCHAR(64) NULL,
+  admin_theme VARCHAR(64) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS ip_allowlist (
   id INT AUTO_INCREMENT PRIMARY KEY,
   cidr VARCHAR(64) NOT NULL,
