@@ -47,6 +47,7 @@
 - [x] Add per-property tenant DB provisioning & schema verification (create DB if missing, ensure tenant tables/columns/indexes).
 - [x] Backfill legacy properties missing `properties.uid` so tenant DB naming works.
 - [x] Harden tenant DB failures so UI does not crash; show actionable bottom-right toast diagnostics.
+- [x] Add legacy property-user migration into tenant DB (copy from global DB, de-dupe by UID, safe to rerun).
 - [ ] Upgrade `/property-login` to support password or 8-digit PIN login with audit logging + lockout.
 - [ ] Implement property-scoped roles/permissions UI for property managers.
 

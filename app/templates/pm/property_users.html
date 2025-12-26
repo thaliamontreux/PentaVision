@@ -11,6 +11,17 @@
           <p class="pv-card-subtitle">Create and manage property-local users (password and optional 8-digit PIN).</p>
         </div>
         <div class="pv-admin-actions">
+          <form
+            method="post"
+            action="{{ url_for('pm.property_users_migrate_legacy', property_id=prop.id) }}"
+            style="display: inline;"
+            onsubmit="return confirm('Migrate legacy users from the old/global database into this property tenant DB? This is safe to run multiple times.');"
+          >
+            <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+            <button type="submit" class="pv-button">
+              Migrate legacy users
+            </button>
+          </form>
           <a class="pv-button-secondary" href="{{ url_for('pm.index') }}">Back to properties</a>
         </div>
       </div>

@@ -431,6 +431,136 @@ def property_users_create(property_id: int):
     return redirect(url_for("pm.property_users", property_id=property_id))
 
 
+@bp.post("/properties/<int:property_id>/users/migrate-legacy")
+def property_users_migrate_legacy(property_id: int):
+    user = get_current_user()
+    if not _user_can_manage_property(user, property_id):
+        abort(403)
+
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    prop_uid = ""
+    try:
+        prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+        prop_uid = str(getattr(prop, "uid", "") or "").strip()
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(prop_uid, exc)
+        return redirect(url_for("pm.property_users", property_id=property_id))
+
+    user_engine = get_user_engine()
+    if user_engine is None:
+        abort(500)
+
+    legacy_rows: list[dict] = []
+    try:
+        with Session(user_engine) as db:
+            # Legacy deployments stored property users in the global user DB.
+            PropertyUser.__table__.create(bind=user_engine, checkfirst=True)
+
+            rows = (
+                db.query(PropertyUser)
+                .filter(PropertyUser.property_id == int(property_id))
+                .order_by(PropertyUser.id)
+                .all()
+            )
+            if not rows:
+                flash("No legacy property users found to migrate.", "notice")
+                return redirect(url_for("pm.property_users", property_id=property_id))
+
+            changed = False
+            for r in rows:
+                uid_val = str(getattr(r, "uid", "") or "").strip().lower()
+                if re.fullmatch(r"[a-f0-9]{32}", uid_val) is None:
+                    uid_val = uuid.uuid4().hex
+                    r.uid = uid_val
+                    db.add(r)
+                    changed = True
+                legacy_rows.append(
+                    {
+                        "uid": uid_val,
+                        "username": getattr(r, "username", None),
+                        "password_hash": getattr(r, "password_hash", None),
+                        "pin_hash": getattr(r, "pin_hash", None),
+                        "full_name": getattr(r, "full_name", None),
+                        "is_active": int(getattr(r, "is_active", 0) or 0),
+                        "failed_pin_attempts": int(
+                            getattr(r, "failed_pin_attempts", 0) or 0
+                        ),
+                        "pin_locked_until": getattr(r, "pin_locked_until", None),
+                        "last_login_at": getattr(r, "last_login_at", None),
+                        "last_pin_use_at": getattr(r, "last_pin_use_at", None),
+                        "created_at": getattr(r, "created_at", None),
+                    }
+                )
+            if changed:
+                db.commit()
+    except Exception as exc:  # noqa: BLE001
+        flash(f"Legacy migration read failed: {exc}", "error")
+        return redirect(url_for("pm.property_users", property_id=property_id))
+
+    migrated = 0
+    skipped = 0
+    try:
+        # Ensure schema exists/updated before inserting.
+        create_property_schema(tenant_engine)
+
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
+
+            for row in legacy_rows:
+                uid_val = str(row.get("uid") or "").strip().lower()
+                if not uid_val:
+                    continue
+                existing = (
+                    db.query(PropertyUser.id)
+                    .filter(
+                        PropertyUser.property_id == int(property_id),
+                        PropertyUser.uid == uid_val,
+                    )
+                    .first()
+                )
+                if existing is not None:
+                    skipped += 1
+                    continue
+
+                new_row = PropertyUser(
+                    property_id=int(property_id),
+                    uid=uid_val,
+                    username=row.get("username"),
+                    password_hash=row.get("password_hash"),
+                    pin_hash=row.get("pin_hash"),
+                    full_name=row.get("full_name"),
+                    is_active=1 if int(row.get("is_active") or 0) else 0,
+                    failed_pin_attempts=int(row.get("failed_pin_attempts") or 0),
+                    pin_locked_until=row.get("pin_locked_until"),
+                    last_login_at=row.get("last_login_at"),
+                    last_pin_use_at=row.get("last_pin_use_at"),
+                    created_at=row.get("created_at"),
+                )
+                db.add(new_row)
+                migrated += 1
+
+            db.commit()
+
+        flash(
+            f"Migrated {migrated} legacy users into tenant DB (skipped {skipped}).",
+            "success",
+        )
+        actor = get_current_user()
+        log_event(
+            "PROPERTY_USER_MIGRATE_LEGACY",
+            user_id=actor.id if actor else None,
+            details=(
+                f"property_id={property_id}, migrated={migrated}, skipped={skipped}"
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(prop_uid, exc)
+
+    return redirect(url_for("pm.property_users", property_id=property_id))
+
+
 @bp.route("/properties/<int:property_id>/users/<string:property_user_uid>", methods=["GET", "POST"])
 def property_user_detail(property_id: int, property_user_uid: str):
     user = get_current_user()
