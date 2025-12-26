@@ -5,12 +5,19 @@ import re
 import uuid
 
 from argon2 import PasswordHasher
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from sqlalchemy.orm import Session
+from werkzeug.exceptions import HTTPException
 
-from .db import get_property_engine, get_user_engine
+from .db import diagnose_property_engine, get_property_engine, get_user_engine
 from .logging_utils import log_event
-from .models import Property, PropertyUser, PropertyUserProfile, UserProperty
+from .models import (
+    Property,
+    PropertyUser,
+    PropertyUserProfile,
+    UserProperty,
+    create_property_schema,
+)
 from .security import (
     get_admin_active_property,
     get_current_user,
@@ -23,6 +30,18 @@ from .security import (
 
 bp = Blueprint("pm", __name__, url_prefix="/pm")
 _ph = PasswordHasher()
+
+
+def _flash_tenant_error(property_uid: str, fallback: str) -> None:
+    msg = ""
+    try:
+        msg = diagnose_property_engine(property_uid)
+    except Exception:  # noqa: BLE001
+        msg = ""
+    msg = (msg or "").strip() or str(fallback or "").strip()
+    if not msg:
+        msg = "Tenant database is unavailable."
+    flash(msg, "error")
 
 
 def _get_property_and_tenant_engine(property_id: int):
@@ -128,6 +147,58 @@ def pm_property_enter(property_id: int):
     return redirect(url_for("pm.index"))
 
 
+@bp.post("/properties/<int:property_id>/provision")
+def pm_property_provision(property_id: int):
+    user = get_current_user()
+    if not (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ):
+        abort(403)
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    prop_uid = ""
+    try:
+        with Session(engine) as db:
+            prop = db.get(Property, int(property_id))
+            if prop is None:
+                abort(404)
+            prop_uid = str(getattr(prop, "uid", "") or "").strip()
+            if not prop_uid:
+                prop_uid = uuid.uuid4().hex
+                prop.uid = prop_uid
+                db.add(prop)
+                db.commit()
+
+        tenant_engine = get_property_engine(prop_uid)
+        if tenant_engine is None:
+            raise RuntimeError(diagnose_property_engine(prop_uid))
+
+        create_property_schema(tenant_engine)
+
+        with tenant_engine.connect() as conn:
+            conn.execute("SELECT 1")
+
+        flash("Provisioned tenant database and verified schema.", "success")
+        actor = get_current_user()
+        log_event(
+            "ADMIN_PROPERTY_TENANT_PROVISION",
+            user_id=actor.id if actor else None,
+            details=f"property_id={property_id}, property_uid={prop_uid}, source=pm",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(prop_uid, exc)
+
+    return redirect(url_for("pm.index"))
+
+
 @bp.post("/properties/context/clear")
 def pm_property_context_clear():
     user = get_current_user()
@@ -221,6 +292,7 @@ def property_users(property_id: int):
     errors: list[str] = []
     try:
         prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+        prop_uid = str(getattr(prop, "uid", "") or "").strip()
         with Session(tenant_engine) as db:
             PropertyUser.__table__.create(
                 bind=tenant_engine,
@@ -235,17 +307,24 @@ def property_users(property_id: int):
             )
     except Exception as exc:  # noqa: BLE001
         # Tenant DB might be missing/unreachable/disk-full; show page without crashing.
-        msg = str(exc)
-        if "No space left on device" in msg or "Errcode: 28" in msg:
-            errors.append(
-                "Tenant database error: disk is full on the database server. "
-                "Free space and reload."
-            )
-        else:
-            errors.append(
-                "Tenant database is unavailable or not yet provisioned. "
-                "Check DB config and disk space, then reload."
-            )
+        prop_uid = ""
+        try:
+            prop_uid = str(getattr(locals().get("prop", None), "uid", "") or "").strip()
+        except Exception:  # noqa: BLE001
+            prop_uid = ""
+        try:
+            errors.append(diagnose_property_engine(prop_uid))
+        except Exception:  # noqa: BLE001
+            msg = str(exc)
+            if "No space left on device" in msg or "Errcode: 28" in msg:
+                errors.append(
+                    "Tenant DB error: disk is full on the database server. Free space and reload."
+                )
+            else:
+                errors.append(
+                    "Tenant database is unavailable or not yet provisioned. Check DB config and disk space, then reload."
+                )
+
         engine = get_user_engine()
         prop = None
         if engine is not None:
@@ -298,41 +377,47 @@ def property_users_create(property_id: int):
     if pin and re.fullmatch(r"\d{8}", pin) is None:
         return redirect(url_for("pm.property_users", property_id=property_id))
 
-    _prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+    created_uid = None
     now_dt = datetime.now(timezone.utc)
+    prop_uid = ""
+    try:
+        prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+        prop_uid = str(getattr(prop, "uid", "") or "").strip()
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
 
-    with Session(tenant_engine) as db:
-        PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
-
-        existing = (
-            db.query(PropertyUser)
-            .filter(
-                PropertyUser.property_id == int(property_id),
-                PropertyUser.username == username,
+            existing = (
+                db.query(PropertyUser)
+                .filter(
+                    PropertyUser.property_id == int(property_id),
+                    PropertyUser.username == username,
+                )
+                .first()
             )
-            .first()
-        )
-        if existing is not None:
-            return redirect(url_for("pm.property_users", property_id=property_id))
+            if existing is not None:
+                return redirect(url_for("pm.property_users", property_id=property_id))
 
-        row = PropertyUser(
-            property_id=int(property_id),
-            uid=uuid.uuid4().hex,
-            username=username,
-            password_hash=_ph.hash(password),
-            pin_hash=_ph.hash(pin) if pin else None,
-            full_name=full_name,
-            is_active=1,
-            failed_pin_attempts=0,
-            pin_locked_until=None,
-            last_login_at=None,
-            last_pin_use_at=None,
-            created_at=now_dt,
-        )
-        db.add(row)
-        db.commit()
+            row = PropertyUser(
+                property_id=int(property_id),
+                uid=uuid.uuid4().hex,
+                username=username,
+                password_hash=_ph.hash(password),
+                pin_hash=_ph.hash(pin) if pin else None,
+                full_name=full_name,
+                is_active=1,
+                failed_pin_attempts=0,
+                pin_locked_until=None,
+                last_login_at=None,
+                last_pin_use_at=None,
+                created_at=now_dt,
+            )
+            db.add(row)
+            db.commit()
 
-        created_uid = getattr(row, "uid", None)
+            created_uid = getattr(row, "uid", None)
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(prop_uid, exc)
+        return redirect(url_for("pm.property_users", property_id=property_id))
 
     actor = get_current_user()
     log_event(
@@ -368,7 +453,11 @@ def property_user_detail(property_id: int, property_user_uid: str):
     if not _user_can_manage_property(user, property_id):
         abort(403)
 
-    prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+    try:
+        prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error("", exc)
+        return redirect(url_for("pm.property_users", property_id=property_id))
 
     errors: list[str] = []
     saved = False
@@ -378,34 +467,35 @@ def property_user_detail(property_id: int, property_user_uid: str):
 
     now_dt = datetime.now(timezone.utc)
 
-    with Session(tenant_engine) as db:
-        PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
-        PropertyUserProfile.__table__.create(bind=tenant_engine, checkfirst=True)
+    try:
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
+            PropertyUserProfile.__table__.create(bind=tenant_engine, checkfirst=True)
 
-        user_row = (
-            db.query(PropertyUser)
-            .filter(
-                PropertyUser.property_id == int(property_id),
-                PropertyUser.uid == uid_norm,
+            user_row = (
+                db.query(PropertyUser)
+                .filter(
+                    PropertyUser.property_id == int(property_id),
+                    PropertyUser.uid == uid_norm,
+                )
+                .first()
             )
-            .first()
-        )
-        if user_row is None:
-            abort(404)
+            if user_row is None:
+                abort(404)
 
-        profile_row = (
-            db.query(PropertyUserProfile)
-            .filter(PropertyUserProfile.property_user_id == int(user_row.id))
-            .first()
-        )
-        if profile_row is None:
-            profile_row = PropertyUserProfile(property_user_id=int(user_row.id))
-            db.add(profile_row)
-            db.commit()
+            profile_row = (
+                db.query(PropertyUserProfile)
+                .filter(PropertyUserProfile.property_user_id == int(user_row.id))
+                .first()
+            )
+            if profile_row is None:
+                profile_row = PropertyUserProfile(property_user_id=int(user_row.id))
+                db.add(profile_row)
+                db.commit()
 
-        if request.method == "POST":
-            if not validate_global_csrf_token(request.form.get("csrf_token")):
-                errors.append("Invalid or missing CSRF token.")
+            if request.method == "POST":
+                if not validate_global_csrf_token(request.form.get("csrf_token")):
+                    errors.append("Invalid or missing CSRF token.")
 
             profile_only = (request.form.get("profile_only") or "") == "1"
             if profile_only:
@@ -482,11 +572,11 @@ def property_user_detail(property_id: int, property_user_uid: str):
                     if pin:
                         user_row.pin_hash = _ph.hash(pin)
 
-            if not errors:
-                db.add(user_row)
-                db.add(profile_row)
-                db.commit()
-                saved = True
+                if not errors:
+                    db.add(user_row)
+                    db.add(profile_row)
+                    db.commit()
+                    saved = True
 
                 actor = get_current_user()
                 log_event(
@@ -498,30 +588,33 @@ def property_user_detail(property_id: int, property_user_uid: str):
                     ),
                 )
 
-        form = {
-            "username": getattr(user_row, "username", "") or "",
-            "full_name": getattr(user_row, "full_name", "") or "",
-            "is_active": bool(getattr(user_row, "is_active", 0)),
-        }
-        profile = {
-            "email": getattr(profile_row, "email", "") or "",
-            "primary_phone": getattr(profile_row, "primary_phone", "") or "",
-            "secondary_phone": getattr(profile_row, "secondary_phone", "") or "",
-            "unit_number": getattr(profile_row, "unit_number", "") or "",
-            "address_line1": getattr(profile_row, "address_line1", "") or "",
-            "address_line2": getattr(profile_row, "address_line2", "") or "",
-            "city": getattr(profile_row, "city", "") or "",
-            "state": getattr(profile_row, "state", "") or "",
-            "postal_code": getattr(profile_row, "postal_code", "") or "",
-            "country": getattr(profile_row, "country", "") or "",
-            "residency_status": getattr(profile_row, "residency_status", "") or "",
-            "emergency_contact_name": getattr(profile_row, "emergency_contact_name", "") or "",
-            "emergency_contact_phone": getattr(profile_row, "emergency_contact_phone", "") or "",
-            "emergency_contact_relation": getattr(profile_row, "emergency_contact_relation", "") or "",
-            "notes": getattr(profile_row, "notes", "") or "",
-        }
+            form = {
+                "username": getattr(user_row, "username", "") or "",
+                "full_name": getattr(user_row, "full_name", "") or "",
+                "is_active": bool(getattr(user_row, "is_active", 0)),
+            }
+            profile = {
+                "email": getattr(profile_row, "email", "") or "",
+                "primary_phone": getattr(profile_row, "primary_phone", "") or "",
+                "secondary_phone": getattr(profile_row, "secondary_phone", "") or "",
+                "unit_number": getattr(profile_row, "unit_number", "") or "",
+                "address_line1": getattr(profile_row, "address_line1", "") or "",
+                "address_line2": getattr(profile_row, "address_line2", "") or "",
+                "city": getattr(profile_row, "city", "") or "",
+                "state": getattr(profile_row, "state", "") or "",
+                "postal_code": getattr(profile_row, "postal_code", "") or "",
+                "country": getattr(profile_row, "country", "") or "",
+                "residency_status": getattr(profile_row, "residency_status", "") or "",
+                "emergency_contact_name": getattr(profile_row, "emergency_contact_name", "") or "",
+                "emergency_contact_phone": getattr(profile_row, "emergency_contact_phone", "") or "",
+                "emergency_contact_relation": getattr(profile_row, "emergency_contact_relation", "") or "",
+                "notes": getattr(profile_row, "notes", "") or "",
+            }
 
-        db.expunge(user_row)
+            db.expunge(user_row)
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(str(getattr(prop, "uid", "") or "").strip(), exc)
+        return redirect(url_for("pm.property_users", property_id=property_id))
 
     return render_template(
         "pm/property_user_detail.html",
@@ -553,27 +646,37 @@ def property_users_toggle_uid(property_id: int, property_user_uid: str):
     if not validate_global_csrf_token(request.form.get("csrf_token")):
         abort(400)
 
-    _prop, tenant_engine = _get_property_and_tenant_engine(property_id)
     uid_norm = (property_user_uid or "").strip().lower()
     if re.fullmatch(r"[a-f0-9]{32}", uid_norm) is None:
         abort(404)
 
-    with Session(tenant_engine) as db:
-        PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
-        row = (
-            db.query(PropertyUser)
-            .filter(
-                PropertyUser.property_id == int(property_id),
-                PropertyUser.uid == uid_norm,
+    prop_uid = ""
+    new_state = None
+    try:
+        prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+        prop_uid = str(getattr(prop, "uid", "") or "").strip()
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
+            user_row = (
+                db.query(PropertyUser)
+                .filter(
+                    PropertyUser.property_id == int(property_id),
+                    PropertyUser.uid == uid_norm,
+                )
+                .first()
             )
-            .first()
-        )
-        if row is None:
-            abort(404)
-        row.is_active = 0 if int(getattr(row, "is_active", 1) or 1) else 1
-        db.add(row)
-        db.commit()
-        new_state = int(getattr(row, "is_active", 0) or 0)
+            if user_row is None:
+                abort(404)
+
+            user_row.is_active = 0 if int(getattr(user_row, "is_active", 0) or 0) else 1
+            db.add(user_row)
+            db.commit()
+            new_state = int(getattr(user_row, "is_active", 0) or 0)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(prop_uid, exc)
+        return redirect(url_for("pm.property_users", property_id=property_id))
 
     actor = get_current_user()
     log_event(
@@ -596,35 +699,29 @@ def property_users_toggle(property_id: int, property_user_id: int):
     if not validate_global_csrf_token(request.form.get("csrf_token")):
         abort(400)
 
-    engine = get_user_engine()
-    if engine is None:
-        abort(500)
+    prop_uid = ""
+    new_state = None
+    try:
+        prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+        prop_uid = str(getattr(prop, "uid", "") or "").strip()
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(
+                bind=tenant_engine,
+                checkfirst=True,
+            )
+            row = db.get(PropertyUser, property_user_id)
+            if row is None or int(getattr(row, "property_id", 0) or 0) != int(property_id):
+                abort(404)
+            row.is_active = 0 if int(getattr(row, "is_active", 1) or 1) else 1
+            db.add(row)
+            db.commit()
 
-    with Session(engine) as db:
-        prop = db.get(Property, property_id)
-        if prop is None or not getattr(prop, "uid", None):
-            abort(404)
-        prop_uid = str(prop.uid)
-
-    tenant_engine = get_property_engine(prop_uid)
-    if tenant_engine is None:
-        abort(500)
-
-    with Session(tenant_engine) as db:
-        PropertyUser.__table__.create(
-            bind=tenant_engine,
-            checkfirst=True,
-        )
-        row = db.get(PropertyUser, property_user_id)
-        if row is None or int(getattr(row, "property_id", 0) or 0) != int(
-            property_id
-        ):
-            abort(404)
-        row.is_active = 0 if int(getattr(row, "is_active", 1) or 1) else 1
-        db.add(row)
-        db.commit()
-
-        new_state = int(getattr(row, "is_active", 0) or 0)
+            new_state = int(getattr(row, "is_active", 0) or 0)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(prop_uid, exc)
+        return redirect(url_for("pm.property_users", property_id=property_id))
 
     actor = get_current_user()
     log_event(

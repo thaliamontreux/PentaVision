@@ -44,6 +44,18 @@
                         </form>
                       {% endif %}
                     {% endif %}
+                    {% if is_system_admin or is_property_admin %}
+                      <form
+                        method="post"
+                        action="{{ url_for('pm.pm_property_provision', property_id=p.id) }}"
+                        style="display: inline; margin-left: 0.35rem;"
+                      >
+                        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                        <button type="submit" class="pv-button pv-button-small">
+                          Provision
+                        </button>
+                      </form>
+                    {% endif %}
                     <a class="pv-link-muted" href="{{ url_for('pm.property_users', property_id=p.id) }}">Users</a>
                   </td>
                 </tr>

@@ -189,3 +189,73 @@ def get_property_engine(property_uid: str) -> Optional[Engine]:
 
     _engines[cache_key] = engine
     return engine
+
+
+def diagnose_property_engine(property_uid: str) -> str:
+    """Return a human-friendly diagnostic message for tenant DB connectivity.
+
+    This is used by UI routes to show actionable toasts instead of crashing.
+    """
+
+    app_url_base = str(
+        current_app.config.get("PROPERTY_DB_APP_URL_BASE") or ""
+    ).strip()
+    if not app_url_base:
+        return "Tenant DB is not configured: PROPERTY_DB_APP_URL_BASE is missing."
+
+    uid_norm = str(property_uid or "").strip().lower()
+    if not uid_norm:
+        return "Tenant DB is not configured for this property (missing uid)."
+
+    db_name = _normalize_property_db_name(uid_norm)
+
+    try:
+        url = make_url(app_url_base).set(database=db_name)
+    except Exception:  # noqa: BLE001
+        url = make_url(app_url_base).set(database=db_name)
+
+    admin_url_raw = str(current_app.config.get("PROPERTY_DB_ADMIN_URL") or "").strip()
+
+    engine = create_engine(
+        url,
+        future=True,
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout=10,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+        pool_use_lifo=True,
+    )
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return "Tenant DB is reachable."
+    except OperationalError as exc:
+        errno = None
+        try:
+            args = getattr(getattr(exc, "orig", None), "args", None)
+            if args and len(args) > 0:
+                errno = int(args[0])
+        except Exception:  # noqa: BLE001
+            errno = None
+
+        msg = str(exc)
+        if "No space left on device" in msg or "Errcode: 28" in msg:
+            return (
+                "Tenant DB error: disk is full on the database server. "
+                "Free disk space and retry."
+            )
+        if errno == 1049 and not admin_url_raw:
+            return (
+                "Tenant DB does not exist and auto-provisioning is disabled. "
+                "Set PROPERTY_DB_ADMIN_URL so the app can create tenant databases."
+            )
+        if errno in {1045, 1044}:
+            return (
+                "Tenant DB authentication failed. Check PROPERTY_DB_APP_URL_BASE "
+                "credentials and grants."
+            )
+        return (
+            "Tenant DB connection failed. Check DB host/port, credentials, "
+            "and disk space."
+        )

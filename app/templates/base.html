@@ -346,7 +346,9 @@
           toastEl.style.display = 'block';
           void toastEl.offsetWidth;
           toastEl.classList.add('is-showing');
-          setLastError(msg);
+          if (kind === 'error') {
+            setLastError(msg);
+          }
 
           window.clearTimeout(showToast._t);
           showToast._t = window.setTimeout(function () {
@@ -370,16 +372,23 @@
             {{ _pv_flash|tojson }}
               .map(function (pair) {
                 try {
-                  return String((pair && pair.length > 1 ? pair[1] : pair) || '');
+                  var cat = (pair && pair.length > 1 ? pair[0] : 'notice') || 'notice';
+                  var msg = String((pair && pair.length > 1 ? pair[1] : pair) || '');
+                  if (!msg) return null;
+                  var kind = (cat === 'success' || cat === 'error' || cat === 'notice') ? cat : 'notice';
+                  return { kind: kind, msg: msg };
                 } catch (e) {
-                  return '';
+                  return null;
                 }
               })
-              .filter(function (m) { return !!m; })
+              .filter(function (item) { return !!item; })
           ).concat(
             {{ _pv_errors|tojson }}
-              .map(function (m) { return String(m || ''); })
-              .filter(function (m) { return !!m; })
+              .map(function (m) {
+                var msg = String(m || '');
+                return msg ? { kind: 'error', msg: msg } : null;
+              })
+              .filter(function (item) { return !!item; })
           );
         } catch (e) {
           queue = [];
@@ -389,7 +398,7 @@
 
         function drain(i) {
           if (!queue || i >= queue.length) return;
-          showToast(queue[i], 'error');
+          showToast(queue[i].msg, queue[i].kind);
           window.setTimeout(function () {
             drain(i + 1);
           }, 10500);

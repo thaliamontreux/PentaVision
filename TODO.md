@@ -31,6 +31,7 @@
 ## Pentastar-web UI rules / polish
 
 - [x] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.
+- [x] Toast auto-hide: bottom-right messages fade after 10 seconds.
 - [ ] Match Storage Modules UI to `docs\ui-references\storage-modules-manager-reference.png`.
 
 ## Admin UX polish
@@ -43,6 +44,9 @@
 
 - [ ] Implement Property Manager portal (`/pm`) for global users linked to properties.
 - [ ] Implement property-local user management (create/disable users, set passwords, optional 8-digit PIN).
+- [x] Add per-property tenant DB provisioning & schema verification (create DB if missing, ensure tenant tables/columns/indexes).
+- [x] Backfill legacy properties missing `properties.uid` so tenant DB naming works.
+- [x] Harden tenant DB failures so UI does not crash; show actionable bottom-right toast diagnostics.
 - [ ] Upgrade `/property-login` to support password or 8-digit PIN login with audit logging + lockout.
 - [ ] Implement property-scoped roles/permissions UI for property managers.
 
