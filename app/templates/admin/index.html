@@ -10,70 +10,101 @@
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
         <div class="pv-grid pv-admin-grid">
-      <a href="{{ url_for('admin.users_list') }}" class="pv-card">
-        <h2 class="pv-card-title">Users</h2>
-        <p class="pv-card-subtitle">Create, edit, and deactivate user accounts. Manage global roles such as System Administrator and Technician.</p>
-      </a>
+          {% if is_system_admin %}
+            <a href="{{ url_for('admin.index') }}" class="pv-card">
+              <h2 class="pv-card-title">Overview</h2>
+              <p class="pv-card-subtitle">Administrative shortcuts for users, cameras, storage, recording policies, and security controls.</p>
+            </a>
 
-      <a href="{{ url_for('admin.properties_list') }}" class="pv-card">
-        <h2 class="pv-card-title">Properties</h2>
-        <p class="pv-card-subtitle">Manage properties and link users to sites for future per-property access control.</p>
-      </a>
+            <a href="{{ url_for('admin.users_list') }}" class="pv-card">
+              <h2 class="pv-card-title">Users</h2>
+              <p class="pv-card-subtitle">Create, edit, and deactivate user accounts. Manage global roles such as System Administrator and Technician.</p>
+            </a>
 
-      <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-card">
-        <h2 class="pv-card-title">Cameras</h2>
-        <p class="pv-card-subtitle">Configure cameras, templates, storage policies, and per-property camera assignments.</p>
-      </a>
+            <a href="{{ url_for('admin.properties_list') }}" class="pv-card">
+              <h2 class="pv-card-title">Properties</h2>
+              <p class="pv-card-subtitle">Manage properties and link users to sites for future per-property access control.</p>
+            </a>
+          {% endif %}
 
-      <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-card">
-        <h2 class="pv-card-title">Camera URL templates</h2>
-        <p class="pv-card-subtitle">Maintain URL templates for common camera vendors and models.</p>
-      </a>
+          {% if is_system_admin or is_technician %}
+            <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-card">
+              <h2 class="pv-card-title">Cameras</h2>
+              <p class="pv-card-subtitle">Configure cameras, templates, storage policies, and per-property camera assignments.</p>
+            </a>
 
-      <a href="{{ url_for('main.recordings') }}" class="pv-card">
-        <h2 class="pv-card-title">Recordings</h2>
-        <p class="pv-card-subtitle">Review recorded footage and verify that retention and storage targets are working as expected.</p>
-      </a>
+            <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-card">
+              <h2 class="pv-card-title">Camera URL templates</h2>
+              <p class="pv-card-subtitle">Maintain URL templates for common camera vendors and models.</p>
+            </a>
 
-      <a href="{{ url_for('admin.storage_settings') }}" class="pv-card">
-        <h2 class="pv-card-title">Storage</h2>
-        <p class="pv-card-subtitle">Manage storage modules and verify active providers for camera recordings.</p>
-      </a>
+            <a href="{{ url_for('camera_admin.rtmp_list') }}" class="pv-card">
+              <h2 class="pv-card-title">RTMP outputs</h2>
+              <p class="pv-card-subtitle">Manage RTMP outputs and control remote RTMP publishing per camera.</p>
+            </a>
+          {% endif %}
 
-      <a href="{{ url_for('admin.access_control') }}" class="pv-card">
-        <h2 class="pv-card-title">Block / Allow</h2>
-        <p class="pv-card-subtitle">Manage IP exemptions, IP blocks, and country access policies.</p>
-      </a>
+          {% if is_system_admin %}
+            <a href="{{ url_for('admin.recordings_alias') }}" class="pv-card">
+              <h2 class="pv-card-title">Recordings</h2>
+              <p class="pv-card-subtitle">Review recorded footage and verify that retention and storage targets are working as expected.</p>
+            </a>
 
-      <a href="{{ url_for('admin.blocklist_distribution') }}" class="pv-card">
-        <h2 class="pv-card-title">Blocklist Distribution</h2>
-        <p class="pv-card-subtitle">Configure external blocklist publication for pfSense/firewalls and view current distribution health.</p>
-      </a>
+            <a href="{{ url_for('admin.recording_settings_alias') }}" class="pv-card">
+              <h2 class="pv-card-title">Recording settings</h2>
+              <p class="pv-card-subtitle">Manage recording schedules, per-camera storage targets, and recording policies.</p>
+            </a>
 
-      <a href="{{ url_for('admin.services') }}" class="pv-card">
-        <h2 class="pv-card-title">Services</h2>
-        <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
-      </a>
+            <a href="{{ url_for('admin.storage_settings') }}" class="pv-card">
+              <h2 class="pv-card-title">Storage</h2>
+              <p class="pv-card-subtitle">Manage storage modules and verify active providers for camera recordings.</p>
+            </a>
 
-      <a href="#" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}" role="button">
-        <h2 class="pv-card-title">Pull GitHub Update</h2>
-        <p class="pv-card-subtitle">Run scripts/git_pull.sh on the server and watch output live (read-only).</p>
-      </a>
+            <a href="{{ url_for('admin.access_control') }}" class="pv-card">
+              <h2 class="pv-card-title">Block / Allow</h2>
+              <p class="pv-card-subtitle">Manage IP exemptions, IP blocks, and country access policies.</p>
+            </a>
 
-      <a href="{{ url_for('admin.login_failures_list') }}" class="pv-card">
-        <h2 class="pv-card-title">Login failures</h2>
-        <p class="pv-card-subtitle">Review failed login attempts and decrypt the attempted password (admin-only).</p>
-      </a>
+            <a href="{{ url_for('admin.blocklist_distribution') }}" class="pv-card">
+              <h2 class="pv-card-title">Blocklist Distribution</h2>
+              <p class="pv-card-subtitle">Configure external blocklist publication for pfSense/firewalls and view current distribution health.</p>
+            </a>
 
-      <a href="{{ url_for('installer.install') }}" class="pv-card">
-        <h2 class="pv-card-title">Installer & databases</h2>
-        <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
-      </a>
+            <a href="{{ url_for('admin.blocklist_integration') }}" class="pv-card">
+              <h2 class="pv-card-title">Blocklist Integration</h2>
+              <p class="pv-card-subtitle">Configure how blocklist publication is exposed and secured for external systems.</p>
+            </a>
 
-      <a href="{{ url_for('main.audit_events') }}" class="pv-card">
-        <h2 class="pv-card-title">Audit log</h2>
-        <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
-      </a>
+            <a href="{{ url_for('admin.blocklist_audit') }}" class="pv-card">
+              <h2 class="pv-card-title">Blocklist Audit</h2>
+              <p class="pv-card-subtitle">Review blocklist generation, enforcement actions, and recent audit entries.</p>
+            </a>
+
+            <a href="{{ url_for('admin.services') }}" class="pv-card">
+              <h2 class="pv-card-title">Services</h2>
+              <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
+            </a>
+
+            <a href="#" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}" role="button">
+              <h2 class="pv-card-title">Pull GitHub Update</h2>
+              <p class="pv-card-subtitle">Run scripts/git_pull.sh on the server and watch output live (read-only).</p>
+            </a>
+
+            <a href="{{ url_for('admin.audit_alias') }}" class="pv-card">
+              <h2 class="pv-card-title">Audit log</h2>
+              <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
+            </a>
+
+            <a href="{{ url_for('admin.login_failures_list') }}" class="pv-card">
+              <h2 class="pv-card-title">Login failures</h2>
+              <p class="pv-card-subtitle">Review failed login attempts and decrypt the attempted password (admin-only).</p>
+            </a>
+
+            <a href="{{ url_for('installer.install') }}" class="pv-card">
+              <h2 class="pv-card-title">Installer & databases</h2>
+              <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
+            </a>
+          {% endif %}
         </div>
       </div>
     </div>
