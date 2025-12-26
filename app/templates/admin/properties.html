@@ -50,11 +50,31 @@
               <td>{{ prop.timezone or '' }}</td>
               <td>
                 <div class="pv-admin-action-group">
+                  {% if active_admin_property and active_admin_property.id == prop.id %}
+                    <span class="pv-badge">Active</span>
+                  {% else %}
+                    <form
+                      method="post"
+                      action="{{ url_for('admin.property_enter', property_id=prop.id) }}"
+                      style="display: inline;"
+                    >
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <button type="submit" class="pv-button pv-button-small pv-button-primary">
+                        Enter
+                      </button>
+                    </form>
+                  {% endif %}
                   <a
                     href="{{ url_for('admin.property_edit', property_id=prop.id) }}"
                     class="pv-button pv-button-small"
                   >
                     Edit
+                  </a>
+                  <a
+                    href="{{ url_for('admin.property_workspace', property_id=prop.id) }}"
+                    class="pv-button pv-button-small"
+                  >
+                    Workspace
                   </a>
                   <form
                     method="post"

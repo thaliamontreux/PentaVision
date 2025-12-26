@@ -12,6 +12,7 @@ from .db import get_property_engine, get_user_engine
 from .logging_utils import log_event
 from .models import Property, PropertyUser, PropertyUserProfile, UserProperty
 from .security import (
+    get_admin_active_property,
     get_current_user,
     user_has_role,
     validate_global_csrf_token,
@@ -68,6 +69,16 @@ def _user_can_manage_property(user, property_id: int) -> bool:
         return exists is not None
 
 
+def _admin_context_property_id() -> int | None:
+    prop = get_admin_active_property()
+    if prop is None:
+        return None
+    try:
+        return int(getattr(prop, "id", None) or 0) or None
+    except (TypeError, ValueError):
+        return None
+
+
 @bp.before_request
 def _pm_require_login():
     return _require_global_user()
@@ -79,6 +90,8 @@ def index():
     engine = get_user_engine()
     props: list[Property] = []
 
+    ctx_id = _admin_context_property_id()
+
     if engine is not None:
         with Session(engine) as db:
             try:
@@ -88,7 +101,15 @@ def index():
                 pass
 
             if user_has_role(user, "System Administrator"):
-                props = db.query(Property).order_by(Property.name).all()
+                if ctx_id:
+                    props = (
+                        db.query(Property)
+                        .filter(Property.id == int(ctx_id))
+                        .order_by(Property.name)
+                        .all()
+                    )
+                else:
+                    props = db.query(Property).order_by(Property.name).all()
             else:
                 prop_ids = [
                     int(pid)
@@ -110,6 +131,13 @@ def index():
 @bp.get("/properties/<int:property_id>/users")
 def property_users(property_id: int):
     user = get_current_user()
+    ctx_id = _admin_context_property_id()
+    if (
+        ctx_id
+        and user_has_role(user, "System Administrator")
+        and int(property_id) != int(ctx_id)
+    ):
+        return redirect(url_for("pm.property_users", property_id=int(ctx_id)))
     if not _user_can_manage_property(user, property_id):
         abort(403)
 
@@ -138,6 +166,13 @@ def property_users(property_id: int):
 @bp.post("/properties/<int:property_id>/users/create")
 def property_users_create(property_id: int):
     user = get_current_user()
+    ctx_id = _admin_context_property_id()
+    if (
+        ctx_id
+        and user_has_role(user, "System Administrator")
+        and int(property_id) != int(ctx_id)
+    ):
+        return redirect(url_for("pm.property_users", property_id=int(ctx_id)))
     if not _user_can_manage_property(user, property_id):
         abort(403)
 
@@ -209,6 +244,19 @@ def property_users_create(property_id: int):
 @bp.route("/properties/<int:property_id>/users/<string:property_user_uid>", methods=["GET", "POST"])
 def property_user_detail(property_id: int, property_user_uid: str):
     user = get_current_user()
+    ctx_id = _admin_context_property_id()
+    if (
+        ctx_id
+        and user_has_role(user, "System Administrator")
+        and int(property_id) != int(ctx_id)
+    ):
+        return redirect(
+            url_for(
+                "pm.property_user_detail",
+                property_id=int(ctx_id),
+                property_user_uid=property_user_uid,
+            )
+        )
     if not _user_can_manage_property(user, property_id):
         abort(403)
 
@@ -381,6 +429,13 @@ def property_user_detail(property_id: int, property_user_uid: str):
 @bp.post("/properties/<int:property_id>/users/<string:property_user_uid>/toggle")
 def property_users_toggle_uid(property_id: int, property_user_uid: str):
     user = get_current_user()
+    ctx_id = _admin_context_property_id()
+    if (
+        ctx_id
+        and user_has_role(user, "System Administrator")
+        and int(property_id) != int(ctx_id)
+    ):
+        return redirect(url_for("pm.property_users", property_id=int(ctx_id)))
     if not _user_can_manage_property(user, property_id):
         abort(403)
 

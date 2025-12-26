@@ -38,7 +38,12 @@ from .models import (
     UserProperty,
 )
 from .models_iptv import CameraIptvChannel
-from .security import get_current_user, user_has_property_access, user_has_role
+from .security import (
+    get_admin_active_property,
+    get_current_user,
+    user_has_property_access,
+    user_has_role,
+)
 from .stream_service import get_stream_manager
 from .camera_utils import build_camera_url
 
@@ -274,10 +279,25 @@ def _upsert_camera_property_link(
     session_db.add(link)
 
 
+def _admin_context_property_id() -> Optional[int]:
+    prop = get_admin_active_property()
+    if prop is None:
+        return None
+    try:
+        return int(getattr(prop, "id", None) or 0) or None
+    except (TypeError, ValueError):
+        return None
+
+
 def _load_properties_for_user(user) -> list[Property]:
     engine = get_user_engine()
     if engine is None or user is None:
         return []
+
+    ctx_id = _admin_context_property_id()
+    if user_has_role(user, "System Administrator") and ctx_id:
+        active = get_admin_active_property()
+        return [active] if active is not None else []
 
     with Session(engine) as db:
         if user_has_role(user, "System Administrator"):
@@ -1134,7 +1154,18 @@ def list_devices():
                     info["active"] += 1
 
         user = get_current_user()
-        if user is not None and not user_has_role(user, "System Administrator"):
+        ctx_id = _admin_context_property_id()
+
+        if user is not None and user_has_role(user, "System Administrator") and ctx_id:
+            filtered: List[CameraDevice] = []
+            for d in devices:
+                prop_id = device_properties.get(d.id)
+                if not prop_id:
+                    continue
+                if int(prop_id) == int(ctx_id):
+                    filtered.append(d)
+            devices = filtered
+        elif user is not None and not user_has_role(user, "System Administrator"):
             filtered: List[CameraDevice] = []
             for d in devices:
                 prop_id = device_properties.get(d.id)
@@ -1855,7 +1886,11 @@ def create_device():
 
     user = get_current_user()
     is_admin = user_has_role(user, "System Administrator") if user else False
+    ctx_id = _admin_context_property_id() if is_admin else None
     properties = _load_properties_for_user(user)
+
+    if ctx_id and request.method == "GET":
+        form["property_id"] = str(ctx_id)
 
     storage_targets_default = _get_default_storage_targets(engine)
 
@@ -1876,7 +1911,10 @@ def create_device():
 
         form["name"] = (request.form.get("name") or "").strip()
         form["pattern_id"] = (request.form.get("pattern_id") or "").strip()
-        form["property_id"] = (request.form.get("property_id") or "").strip()
+        if ctx_id:
+            form["property_id"] = str(ctx_id)
+        else:
+            form["property_id"] = (request.form.get("property_id") or "").strip()
         form["ip_address"] = (request.form.get("ip_address") or "").strip()
         form["mac_address"] = (request.form.get("mac_address") or "").strip()
         form["port"] = (request.form.get("port") or "").strip()
@@ -1915,7 +1953,9 @@ def create_device():
             pattern_id_int = None
 
         property_id_int: Optional[int]
-        if form.get("property_id"):
+        if ctx_id:
+            property_id_int = int(ctx_id)
+        elif form.get("property_id"):
             try:
                 property_id_int = int(form["property_id"])
             except ValueError:
@@ -1924,7 +1964,9 @@ def create_device():
             else:
                 allowed_ids = {p.id for p in properties}
                 if property_id_int not in allowed_ids:
-                    errors.append("You are not allowed to assign cameras to that property.")
+                    errors.append(
+                        "You are not allowed to assign cameras to that property."
+                    )
         else:
             property_id_int = None
 
@@ -2035,6 +2077,7 @@ def edit_device(device_id: int):
 
     user = get_current_user()
     is_admin = user_has_role(user, "System Administrator") if user else False
+    ctx_id = _admin_context_property_id() if is_admin else None
     properties = _load_properties_for_user(user)
 
     storage_targets_default = _get_default_storage_targets(engine)
@@ -2164,21 +2207,25 @@ def edit_device(device_id: int):
                 pattern_id_int = None
 
             property_id_int: Optional[int]
-            form["property_id"] = (request.form.get("property_id") or "").strip()
-            if form["property_id"]:
-                try:
-                    property_id_int = int(form["property_id"])
-                except ValueError:
-                    errors.append("Invalid property selection.")
-                    property_id_int = None
-                else:
-                    allowed_ids = {p.id for p in properties}
-                    if property_id_int not in allowed_ids:
-                        errors.append(
-                            "You are not allowed to assign cameras to that property."
-                        )
+            if ctx_id:
+                form["property_id"] = str(ctx_id)
+                property_id_int = int(ctx_id)
             else:
-                property_id_int = None
+                form["property_id"] = (request.form.get("property_id") or "").strip()
+                if form["property_id"]:
+                    try:
+                        property_id_int = int(form["property_id"])
+                    except ValueError:
+                        errors.append("Invalid property selection.")
+                        property_id_int = None
+                    else:
+                        allowed_ids = {p.id for p in properties}
+                        if property_id_int not in allowed_ids:
+                            errors.append(
+                                "You are not allowed to assign cameras to that property."
+                            )
+                else:
+                    property_id_int = None
 
             port_int: Optional[int]
             if form["port"]:

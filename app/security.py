@@ -10,9 +10,10 @@ from flask import abort, g, jsonify, redirect, request, session, url_for
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .db import get_user_engine
+from .db import get_property_engine, get_user_engine
 from .logging_utils import evaluate_ip_access_policies
 from .models import (
+    Property,
     PropertyUser,
     Role,
     SiteThemeSettings,
@@ -25,6 +26,7 @@ from .models import (
 _SESSION_USER_ID_KEY = "user_id"
 _SESSION_PROPERTY_USER_ID_KEY = "property_user_id"
 _SESSION_PROPERTY_UID_KEY = "property_uid"
+_SESSION_ADMIN_PROPERTY_UID_KEY = "admin_property_uid"
 _GLOBAL_CSRF_KEY = "global_csrf"
 
 
@@ -85,7 +87,10 @@ def get_current_property_user() -> Optional[PropertyUser]:
             if engine is not None:
                 with Session(engine) as db:
                     try:
-                        PropertyUser.__table__.create(bind=engine, checkfirst=True)
+                        PropertyUser.__table__.create(
+                            bind=engine,
+                            checkfirst=True,
+                        )
                     except Exception:  # noqa: BLE001
                         pass
                     user_obj = db.get(PropertyUser, int(user_id))
@@ -108,12 +113,62 @@ def login_property_user(user: PropertyUser, property_uid: Optional[str] = None) 
         session[_SESSION_PROPERTY_UID_KEY] = str(property_uid or "").strip()
 
 
+def get_admin_active_property() -> Optional[Property]:
+    prop = getattr(g, "admin_active_property", None)
+    if prop is not None:
+        return prop
+
+    user = get_current_user()
+    if not user_has_role(user, "System Administrator"):
+        g.admin_active_property = None
+        return None
+
+    uid = session.get(_SESSION_ADMIN_PROPERTY_UID_KEY)
+    uid_norm = str(uid or "").strip().lower()
+    if not uid_norm:
+        g.admin_active_property = None
+        return None
+
+    if re.fullmatch(r"[a-f0-9]{32}", uid_norm) is None:
+        session.pop(_SESSION_ADMIN_PROPERTY_UID_KEY, None)
+        g.admin_active_property = None
+        return None
+
+    engine = get_user_engine()
+    if engine is None:
+        g.admin_active_property = None
+        return None
+
+    prop_obj: Optional[Property] = None
+    with Session(engine) as db:
+        prop_obj = (
+            db.query(Property)
+            .filter(Property.uid == uid_norm)
+            .first()
+        )
+        if prop_obj is not None:
+            db.expunge(prop_obj)
+    if prop_obj is None:
+        session.pop(_SESSION_ADMIN_PROPERTY_UID_KEY, None)
+    g.admin_active_property = prop_obj
+    return prop_obj
+
+
 def set_property_uid_for_session(property_uid: str) -> None:
     session[_SESSION_PROPERTY_UID_KEY] = str(property_uid or "").strip()
 
 
+def set_admin_property_uid_for_session(property_uid: str) -> None:
+    session[_SESSION_ADMIN_PROPERTY_UID_KEY] = str(property_uid or "").strip()
+
+
+def clear_admin_property_uid_for_session() -> None:
+    session.pop(_SESSION_ADMIN_PROPERTY_UID_KEY, None)
+
+
 def logout_user() -> None:
     session.pop(_SESSION_USER_ID_KEY, None)
+    session.pop(_SESSION_ADMIN_PROPERTY_UID_KEY, None)
     if hasattr(g, "current_user"):
         g.current_user = None
 
@@ -366,6 +421,7 @@ def init_security(app) -> None:
 
         user = get_current_user() or get_current_property_user()
         global_user = get_current_user()
+        active_admin_property = get_admin_active_property()
         main_theme, admin_theme = _load_theme_settings()
 
         is_property_manager = False
@@ -394,6 +450,7 @@ def init_security(app) -> None:
             ),
             "is_technician": user_has_role(global_user, "Technician"),
             "is_property_manager": is_property_manager,
+            "active_admin_property": active_admin_property,
             "current_timezone": _current_timezone_name(),
             "active_main_theme": main_theme,
             "active_admin_theme": admin_theme,

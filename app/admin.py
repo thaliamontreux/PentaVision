@@ -55,7 +55,14 @@ from .models import (
     SiteTheme,
     SiteThemeSettings,
 )
-from .security import get_current_user, user_has_role
+from .security import (
+    clear_admin_property_uid_for_session,
+    get_admin_active_property,
+    get_current_user,
+    set_admin_property_uid_for_session,
+    user_has_role,
+    validate_global_csrf_token,
+)
 from .storage_settings_page import storage_settings_page
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -2260,6 +2267,53 @@ def properties_list():
         errors=errors,
         csrf_token=csrf_token,
     )
+
+
+@bp.post("/properties/<int:property_id>/enter")
+def property_enter(property_id: int):
+    engine = get_user_engine()
+    if engine is None:
+        return redirect(url_for("admin.properties_list"))
+
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    prop_uid = None
+    prop_name = None
+    with Session(engine) as db:
+        prop = db.get(Property, property_id)
+        if prop is None or not getattr(prop, "uid", None):
+            abort(404)
+        prop_uid = str(prop.uid)
+        prop_name = str(getattr(prop, "name", "") or "")
+
+    set_admin_property_uid_for_session(prop_uid)
+    actor = get_current_user()
+    log_event(
+        "ADMIN_PROPERTY_CONTEXT_ENTER",
+        user_id=actor.id if actor else None,
+        details=f"property_id={property_id}, property_uid={prop_uid}, name={prop_name}",
+    )
+    return redirect(url_for("admin.property_workspace", property_id=property_id))
+
+
+@bp.post("/properties/context/clear")
+def property_context_clear():
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    previous = get_admin_active_property()
+    prev_id = int(getattr(previous, "id", 0) or 0) if previous else None
+    prev_uid = str(getattr(previous, "uid", "") or "") if previous else None
+    clear_admin_property_uid_for_session()
+
+    actor = get_current_user()
+    log_event(
+        "ADMIN_PROPERTY_CONTEXT_EXIT",
+        user_id=actor.id if actor else None,
+        details=f"previous_property_id={prev_id}, previous_property_uid={prev_uid}",
+    )
+    return redirect(url_for("admin.properties_list"))
 
 
 @bp.route("/properties/new", methods=["GET", "POST"])
