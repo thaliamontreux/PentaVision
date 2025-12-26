@@ -56,6 +56,7 @@
                 <thead>
                   <tr>
                     <th>Username</th>
+                    <th>UID</th>
                     <th>Name</th>
                     <th>Status</th>
                     <th></th>
@@ -64,7 +65,10 @@
                 <tbody>
                   {% for u in rows %}
                     <tr>
-                      <td style="font-weight: 800;">{{ u.username }}</td>
+                      <td style="font-weight: 800;">
+                        <a class="pv-link-muted" href="{{ url_for('pm.property_user_detail', property_id=prop.id, property_user_uid=(u.uid or '')) }}">{{ u.username }}</a>
+                      </td>
+                      <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 0.9rem; color: #9ca3af;">{{ u.uid or '' }}</td>
                       <td>{{ u.full_name or '' }}</td>
                       <td>
                         {% if u.is_active %}
@@ -74,7 +78,8 @@
                         {% endif %}
                       </td>
                       <td style="white-space: nowrap;">
-                        <form method="post" action="{{ url_for('pm.property_users_toggle', property_id=prop.id, property_user_id=u.id) }}" style="display:inline;">
+                        <a class="pv-button pv-button-small" href="{{ url_for('pm.property_user_detail', property_id=prop.id, property_user_uid=(u.uid or '')) }}">Manage</a>
+                        <form method="post" action="{{ url_for('pm.property_users_toggle_uid', property_id=prop.id, property_user_uid=(u.uid or '')) }}" style="display:inline;">
                           <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
                           <button type="submit" class="pv-button pv-button-small">{% if u.is_active %}Disable{% else %}Enable{% endif %}</button>
                         </form>

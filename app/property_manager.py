@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import re
+import uuid
 
 from argon2 import PasswordHasher
 from flask import Blueprint, abort, redirect, render_template, request, url_for
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .db import get_property_engine, get_user_engine
 from .logging_utils import log_event
-from .models import Property, PropertyUser, UserProperty
+from .models import Property, PropertyUser, PropertyUserProfile, UserProperty
 from .security import (
     get_current_user,
     user_has_role,
@@ -19,6 +20,24 @@ from .security import (
 
 bp = Blueprint("pm", __name__, url_prefix="/pm")
 _ph = PasswordHasher()
+
+
+def _get_property_and_tenant_engine(property_id: int):
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        prop = db.get(Property, property_id)
+        if prop is None or not getattr(prop, "uid", None):
+            abort(404)
+        prop_uid = str(prop.uid)
+        db.expunge(prop)
+
+    tenant_engine = get_property_engine(prop_uid)
+    if tenant_engine is None:
+        abort(500)
+    return prop, tenant_engine
 
 
 def _require_global_user():
@@ -94,20 +113,7 @@ def property_users(property_id: int):
     if not _user_can_manage_property(user, property_id):
         abort(403)
 
-    engine = get_user_engine()
-    if engine is None:
-        abort(500)
-
-    with Session(engine) as db:
-        prop = db.get(Property, property_id)
-        if prop is None or not getattr(prop, "uid", None):
-            abort(404)
-        prop_uid = str(prop.uid)
-        db.expunge(prop)
-
-    tenant_engine = get_property_engine(prop_uid)
-    if tenant_engine is None:
-        abort(500)
+    prop, tenant_engine = _get_property_and_tenant_engine(property_id)
 
     with Session(tenant_engine) as db:
         PropertyUser.__table__.create(
@@ -145,26 +151,14 @@ def property_users_create(property_id: int):
 
     if not username:
         return redirect(url_for("pm.property_users", property_id=property_id))
+
     if not password:
         return redirect(url_for("pm.property_users", property_id=property_id))
 
     if pin and re.fullmatch(r"\d{8}", pin) is None:
         return redirect(url_for("pm.property_users", property_id=property_id))
 
-    engine = get_user_engine()
-    if engine is None:
-        abort(500)
-
-    with Session(engine) as db:
-        prop = db.get(Property, property_id)
-        if prop is None or not getattr(prop, "uid", None):
-            abort(404)
-        prop_uid = str(prop.uid)
-
-    tenant_engine = get_property_engine(prop_uid)
-    if tenant_engine is None:
-        abort(500)
-
+    _prop, tenant_engine = _get_property_and_tenant_engine(property_id)
     now_dt = datetime.now(timezone.utc)
 
     with Session(tenant_engine) as db:
@@ -179,15 +173,11 @@ def property_users_create(property_id: int):
             .first()
         )
         if existing is not None:
-            return redirect(
-                url_for(
-                    "pm.property_users",
-                    property_id=property_id,
-                )
-            )
+            return redirect(url_for("pm.property_users", property_id=property_id))
 
         row = PropertyUser(
             property_id=int(property_id),
+            uid=uuid.uuid4().hex,
             username=username,
             password_hash=_ph.hash(password),
             pin_hash=_ph.hash(pin) if pin else None,
@@ -202,11 +192,231 @@ def property_users_create(property_id: int):
         db.add(row)
         db.commit()
 
+        created_uid = getattr(row, "uid", None)
+
     actor = get_current_user()
     log_event(
         "PROPERTY_USER_CREATE",
         user_id=actor.id if actor else None,
-        details=f"property_id={property_id}, username={username}",
+        details=(
+            f"property_id={property_id}, username={username}, "
+            f"property_user_uid={created_uid}"
+        ),
+    )
+    return redirect(url_for("pm.property_users", property_id=property_id))
+
+
+@bp.route("/properties/<int:property_id>/users/<string:property_user_uid>", methods=["GET", "POST"])
+def property_user_detail(property_id: int, property_user_uid: str):
+    user = get_current_user()
+    if not _user_can_manage_property(user, property_id):
+        abort(403)
+
+    prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+
+    errors: list[str] = []
+    saved = False
+    uid_norm = (property_user_uid or "").strip().lower()
+    if re.fullmatch(r"[a-f0-9]{32}", uid_norm) is None:
+        abort(404)
+
+    now_dt = datetime.now(timezone.utc)
+
+    with Session(tenant_engine) as db:
+        PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
+        PropertyUserProfile.__table__.create(bind=tenant_engine, checkfirst=True)
+
+        user_row = (
+            db.query(PropertyUser)
+            .filter(
+                PropertyUser.property_id == int(property_id),
+                PropertyUser.uid == uid_norm,
+            )
+            .first()
+        )
+        if user_row is None:
+            abort(404)
+
+        profile_row = (
+            db.query(PropertyUserProfile)
+            .filter(PropertyUserProfile.property_user_id == int(user_row.id))
+            .first()
+        )
+        if profile_row is None:
+            profile_row = PropertyUserProfile(property_user_id=int(user_row.id))
+            db.add(profile_row)
+            db.commit()
+
+        if request.method == "POST":
+            if not validate_global_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+
+            profile_only = (request.form.get("profile_only") or "") == "1"
+            if profile_only:
+                profile_row.email = (request.form.get("email") or "").strip() or None
+                profile_row.primary_phone = (
+                    request.form.get("primary_phone") or ""
+                ).strip() or None
+                profile_row.secondary_phone = (
+                    request.form.get("secondary_phone") or ""
+                ).strip() or None
+
+                profile_row.unit_number = (
+                    request.form.get("unit_number") or ""
+                ).strip() or None
+                profile_row.address_line1 = (
+                    request.form.get("address_line1") or ""
+                ).strip() or None
+                profile_row.address_line2 = (
+                    request.form.get("address_line2") or ""
+                ).strip() or None
+                profile_row.city = (request.form.get("city") or "").strip() or None
+                profile_row.state = (request.form.get("state") or "").strip() or None
+                profile_row.postal_code = (
+                    request.form.get("postal_code") or ""
+                ).strip() or None
+                profile_row.country = (
+                    request.form.get("country") or ""
+                ).strip() or None
+                profile_row.residency_status = (
+                    request.form.get("residency_status") or ""
+                ).strip() or None
+                profile_row.emergency_contact_name = (
+                    request.form.get("emergency_contact_name") or ""
+                ).strip() or None
+                profile_row.emergency_contact_phone = (
+                    request.form.get("emergency_contact_phone") or ""
+                ).strip() or None
+                profile_row.emergency_contact_relation = (
+                    request.form.get("emergency_contact_relation") or ""
+                ).strip() or None
+                profile_row.notes = (request.form.get("notes") or "").strip() or None
+                profile_row.updated_at = now_dt
+            else:
+                username = (request.form.get("username") or "").strip().lower()
+                full_name = (request.form.get("full_name") or "").strip() or None
+                password = request.form.get("password") or ""
+                pin = (request.form.get("pin") or "").strip()
+
+                if not username:
+                    errors.append("Username is required.")
+
+                if pin and re.fullmatch(r"\d{8}", pin) is None:
+                    errors.append("PIN must be exactly 8 digits.")
+
+                if not errors:
+                    existing = (
+                        db.query(PropertyUser)
+                        .filter(
+                            PropertyUser.property_id == int(property_id),
+                            PropertyUser.username == username,
+                            PropertyUser.id != int(user_row.id),
+                        )
+                        .first()
+                    )
+                    if existing is not None:
+                        errors.append("Username is already in use.")
+
+                if not errors:
+                    user_row.username = username
+                    user_row.full_name = full_name
+                    user_row.is_active = 1 if request.form.get("is_active") == "1" else 0
+                    if password:
+                        user_row.password_hash = _ph.hash(password)
+                    if pin:
+                        user_row.pin_hash = _ph.hash(pin)
+
+            if not errors:
+                db.add(user_row)
+                db.add(profile_row)
+                db.commit()
+                saved = True
+
+                actor = get_current_user()
+                log_event(
+                    "PROPERTY_USER_UPDATE",
+                    user_id=actor.id if actor else None,
+                    details=(
+                        f"property_id={property_id}, property_user_uid={uid_norm}, "
+                        f"profile_only={1 if profile_only else 0}"
+                    ),
+                )
+
+        form = {
+            "username": getattr(user_row, "username", "") or "",
+            "full_name": getattr(user_row, "full_name", "") or "",
+            "is_active": bool(getattr(user_row, "is_active", 0)),
+        }
+        profile = {
+            "email": getattr(profile_row, "email", "") or "",
+            "primary_phone": getattr(profile_row, "primary_phone", "") or "",
+            "secondary_phone": getattr(profile_row, "secondary_phone", "") or "",
+            "unit_number": getattr(profile_row, "unit_number", "") or "",
+            "address_line1": getattr(profile_row, "address_line1", "") or "",
+            "address_line2": getattr(profile_row, "address_line2", "") or "",
+            "city": getattr(profile_row, "city", "") or "",
+            "state": getattr(profile_row, "state", "") or "",
+            "postal_code": getattr(profile_row, "postal_code", "") or "",
+            "country": getattr(profile_row, "country", "") or "",
+            "residency_status": getattr(profile_row, "residency_status", "") or "",
+            "emergency_contact_name": getattr(profile_row, "emergency_contact_name", "") or "",
+            "emergency_contact_phone": getattr(profile_row, "emergency_contact_phone", "") or "",
+            "emergency_contact_relation": getattr(profile_row, "emergency_contact_relation", "") or "",
+            "notes": getattr(profile_row, "notes", "") or "",
+        }
+
+        db.expunge(user_row)
+
+    return render_template(
+        "pm/property_user_detail.html",
+        prop=prop,
+        user_row=user_row,
+        form=form,
+        profile=profile,
+        errors=errors,
+        saved=saved,
+    )
+
+
+@bp.post("/properties/<int:property_id>/users/<string:property_user_uid>/toggle")
+def property_users_toggle_uid(property_id: int, property_user_uid: str):
+    user = get_current_user()
+    if not _user_can_manage_property(user, property_id):
+        abort(403)
+
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    _prop, tenant_engine = _get_property_and_tenant_engine(property_id)
+    uid_norm = (property_user_uid or "").strip().lower()
+    if re.fullmatch(r"[a-f0-9]{32}", uid_norm) is None:
+        abort(404)
+
+    with Session(tenant_engine) as db:
+        PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
+        row = (
+            db.query(PropertyUser)
+            .filter(
+                PropertyUser.property_id == int(property_id),
+                PropertyUser.uid == uid_norm,
+            )
+            .first()
+        )
+        if row is None:
+            abort(404)
+        row.is_active = 0 if int(getattr(row, "is_active", 1) or 1) else 1
+        db.add(row)
+        db.commit()
+        new_state = int(getattr(row, "is_active", 0) or 0)
+
+    actor = get_current_user()
+    log_event(
+        "PROPERTY_USER_TOGGLE",
+        user_id=actor.id if actor else None,
+        details=(
+            f"property_id={property_id}, property_user_uid={uid_norm}, "
+            f"is_active={new_state}"
+        ),
     )
     return redirect(url_for("pm.property_users", property_id=property_id))
 

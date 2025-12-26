@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS user_properties (
 
 CREATE TABLE IF NOT EXISTS property_users (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  uid VARCHAR(32) NULL,
   property_id INT NOT NULL,
   username VARCHAR(128) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
@@ -108,7 +109,31 @@ CREATE TABLE IF NOT EXISTS property_users (
   last_pin_use_at DATETIME(6) NULL,
   created_at DATETIME(6) NULL,
   KEY ix_property_users_property_id (property_id),
-  KEY ix_property_users_username (username)
+  KEY ix_property_users_username (username),
+  KEY ix_property_users_uid (uid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS property_user_profiles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  property_user_id INT NOT NULL,
+  email VARCHAR(255) NULL,
+  primary_phone VARCHAR(64) NULL,
+  secondary_phone VARCHAR(64) NULL,
+  address_line1 VARCHAR(255) NULL,
+  address_line2 VARCHAR(255) NULL,
+  city VARCHAR(128) NULL,
+  state VARCHAR(128) NULL,
+  postal_code VARCHAR(32) NULL,
+  country VARCHAR(64) NULL,
+  unit_number VARCHAR(64) NULL,
+  residency_status VARCHAR(64) NULL,
+  notes VARCHAR(2048) NULL,
+  emergency_contact_name VARCHAR(255) NULL,
+  emergency_contact_phone VARCHAR(64) NULL,
+  emergency_contact_relation VARCHAR(128) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL,
+  KEY ix_property_user_profiles_property_user_id (property_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS property_roles (

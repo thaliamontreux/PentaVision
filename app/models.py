@@ -251,6 +251,7 @@ class PropertyUser(UserBase):
     __tablename__ = "property_users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uid: Mapped[Optional[str]] = mapped_column(String(32), index=True, nullable=True)
     property_id: Mapped[int] = mapped_column(Integer, index=True)
     username: Mapped[str] = mapped_column(String(128), index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
@@ -269,6 +270,45 @@ class PropertyUser(UserBase):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PropertyUserProfile(UserBase):
+    __tablename__ = "property_user_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    property_user_id: Mapped[int] = mapped_column(Integer, index=True)
+
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    primary_phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    secondary_phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    unit_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    residency_status: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+
+    emergency_contact_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    emergency_contact_phone: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
+    emergency_contact_relation: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
@@ -938,6 +978,7 @@ def create_property_schema(engine) -> None:
 
     for tbl in (
         PropertyUser.__table__,
+        PropertyUserProfile.__table__,
         PropertyRole.__table__,
         PropertyUserRole.__table__,
         PropertyGroup.__table__,
@@ -948,11 +989,13 @@ def create_property_schema(engine) -> None:
     ):
         tbl.create(bind=engine, checkfirst=True)
 
-    # Migration-lite: property user PIN support.
+    # Migration-lite: property user PIN + UID support.
     try:
         insp = inspect(engine)
         cols = {c.get("name") for c in insp.get_columns("property_users")}
         alters: list[str] = []
+        if "uid" not in cols:
+            alters.append("ADD COLUMN uid VARCHAR(32) NULL")
         if "pin_hash" not in cols:
             alters.append("ADD COLUMN pin_hash VARCHAR(255) NULL")
         if "failed_pin_attempts" not in cols:
@@ -966,6 +1009,29 @@ def create_property_schema(engine) -> None:
         if alters:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE property_users " + ", ".join(alters)))
+
+        if "uid" in cols or alters:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "UPDATE property_users "
+                        "SET uid = REPLACE(UUID(), '-', '') "
+                        "WHERE uid IS NULL OR uid = ''"
+                    )
+                )
+
+        try:
+            indexes = {i.get("name") for i in insp.get_indexes("property_users")}
+            if "ix_property_users_uid" not in indexes:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "CREATE INDEX ix_property_users_uid "
+                            "ON property_users (uid)"
+                        )
+                    )
+        except Exception:  # noqa: BLE001
+            pass
     except Exception:  # noqa: BLE001
         pass
 
