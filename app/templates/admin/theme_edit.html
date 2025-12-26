@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Theme · Admin · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <h1>Edit Theme</h1>
+
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+
+        {% if errors %}
+          <div class="pv-alert pv-alert-error" role="alert">
+            <ul>
+              {% for error in errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        {% if messages %}
+          <div class="pv-alert pv-alert-success" role="status">
+            <ul>
+              {% for msg in messages %}
+                <li>{{ msg }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <div>
+              <h2 style="margin-bottom: 0.25rem;">{{ name }}</h2>
+              <p class="pv-card-subtitle">Scope: <strong>{{ scope }}</strong> · Slug: <code>{{ slug }}</code></p>
+            </div>
+            <div class="pv-admin-actions">
+              <a class="pv-button-secondary" href="{{ url_for('admin.themes') }}">Back to Themes</a>
+              <a class="pv-button-secondary" href="{{ url_for('admin.theme_export', scope=scope, slug=slug) }}">Export</a>
+            </div>
+          </div>
+
+          <form method="post" class="pv-form" style="max-width: 980px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+            <div class="pv-field-group">
+              <label for="pv_theme_name">Theme name</label>
+              <input id="pv_theme_name" name="name" value="{{ name }}" />
+            </div>
+
+            <div class="pv-card" style="margin-top: 0.75rem;">
+              <h3 style="margin-top: 0;">Colors</h3>
+              <p class="pv-card-subtitle">Click a swatch to pick a color. Hex codes are not shown.</p>
+
+              <div class="pv-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem;">
+                {% set fields = [
+                  ('bg','Background'),
+                  ('text','Text'),
+                  ('surface','Section surface'),
+                  ('card','Card'),
+                  ('border','Border'),
+                  ('muted_text','Muted text'),
+                  ('primary_bg','Primary button'),
+                  ('primary_text','Primary button text'),
+                  ('secondary_bg','Secondary button'),
+                  ('secondary_text','Secondary button text'),
+                  ('link','Link')
+                ] %}
+
+                {% for key,label in fields %}
+                  <div class="pv-card" style="padding: 0.75rem;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap: 0.75rem;">
+                      <div style="font-weight: 800;">{{ label }}</div>
+                      <div class="pv-theme-swatch" data-key="{{ key }}" style="width: 42px; height: 28px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.35); background: {{ colors.get(key) }};"></div>
+                    </div>
+
+                    <input type="color" class="pv-theme-color" data-key="{{ key }}" value="{{ colors.get(key) }}" style="position:absolute; left:-9999px; width:1px; height:1px;" />
+                    <input type="hidden" name="{{ key }}" id="pv_theme_{{ key }}" value="{{ colors.get(key) }}" />
+
+                    <div style="margin-top: 0.55rem; font-size: 0.85rem; color: #9ca3af;">
+                      Current color
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="pv-form-actions">
+              <button type="submit" class="pv-button-primary">Save theme</button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      function byKey(selector, key) {
+        return document.querySelector(selector + '[data-key="' + key + '"]');
+      }
+
+      const swatches = document.querySelectorAll('.pv-theme-swatch');
+      swatches.forEach((sw) => {
+        const key = sw.getAttribute('data-key');
+        const picker = byKey('.pv-theme-color', key);
+        const hidden = document.getElementById('pv_theme_' + key);
+        if (!picker || !hidden) return;
+
+        sw.addEventListener('click', () => {
+          picker.click();
+        });
+
+        picker.addEventListener('input', () => {
+          // Do not show hex text; only update swatch + hidden field.
+          const v = picker.value || '';
+          sw.style.background = v;
+          hidden.value = v;
+        });
+      });
+    })();
+  </script>
+{% endblock %}

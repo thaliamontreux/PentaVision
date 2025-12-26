@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import secrets
 import time
+import re
 from collections import defaultdict
 
 from flask import (
@@ -49,6 +50,7 @@ from .logging_utils import log_event, pv_log
 from .models import (
     AuditEvent,
     CameraDevice,
+    CameraGroupLink,
     CameraPropertyLink,
     CameraRecording,
     CameraRecordingSchedule,
@@ -58,7 +60,14 @@ from .models import (
     DlnaSettings,
     FaceEmbedding,
     FacePrivacySetting,
+    IpAllowlist,
+    IpBlocklist,
+    LoginFailure,
+    Property,
+    PropertyGroupMember,
+    PropertyUser,
     RecordingData,
+    SiteTheme,
     StorageModule,
     StorageModuleEvent,
     StorageModuleHealthCheck,
@@ -90,13 +99,6 @@ from .storage_providers import (
 )
 from .storage_csal import get_storage_router, StorageError
 from .net_utils import get_ipv4_interfaces
-from .db import get_user_engine
-from .models import (
-    CameraGroupLink,
-    Property,
-    PropertyGroupMember,
-    PropertyUser,
-)
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -106,6 +108,85 @@ bp = Blueprint("main", __name__)
 
 
 FACE_MATCH_THRESHOLD = 0.6
+
+
+def _hex_color(value: str | None, fallback: str) -> str:
+    raw = str(value or "").strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", raw) is None:
+        return fallback
+    return raw
+
+
+def _theme_css_from_json(scope: str, theme_json: str) -> str:
+    try:
+        data = json.loads(theme_json or "{}")
+    except Exception:  # noqa: BLE001
+        data = {}
+    colors = data.get("colors") if isinstance(data, dict) else None
+    if not isinstance(colors, dict):
+        colors = {}
+
+    bg = _hex_color(colors.get("bg"), "#0b1120")
+    text = _hex_color(colors.get("text"), "#e5e7eb")
+    surface = _hex_color(colors.get("surface"), "#0f172a")
+    card = _hex_color(colors.get("card"), "#0f172a")
+    border = _hex_color(colors.get("border"), "#1f2937")
+    muted = _hex_color(colors.get("muted_text"), "#9ca3af")
+    primary_bg = _hex_color(colors.get("primary_bg"), "#2563eb")
+    primary_text = _hex_color(colors.get("primary_text"), "#0b1120")
+    secondary_bg = _hex_color(colors.get("secondary_bg"), "#111827")
+    secondary_text = _hex_color(colors.get("secondary_text"), "#e5e7eb")
+    link = _hex_color(colors.get("link"), "#93c5fd")
+
+    prefix = ".pv-is-admin " if scope == "admin" else ""
+    return (
+        f"{prefix}body{{background:{bg};color:{text};}}\n"
+        f"{prefix}.pv-section{{background:{surface};border-color:{border};}}\n"
+        f"{prefix}.pv-card{{background:{card};border-color:{border};}}\n"
+        f"{prefix}.pv-card-subtitle{{color:{muted};}}\n"
+        f"{prefix}.pv-table th{{color:{muted};}}\n"
+        f"{prefix}.pv-table th,{prefix}.pv-table td{{border-bottom-color:{border};}}\n"
+        f"{prefix}.pv-table tr:nth-child(even){{background-color:{secondary_bg};}}\n"
+        f"{prefix}.pv-button-primary{{background:{primary_bg};color:{primary_text};}}\n"
+        f"{prefix}.pv-button-secondary{{background:{secondary_bg};color:{secondary_text};border-color:{border};}}\n"
+        f"{prefix}.pv-link-muted{{color:{link};}}\n"
+    )
+
+
+@bp.get("/theme-css/<scope>/<slug>.css")
+def theme_css(scope: str, slug: str):
+    scope_norm = str(scope or "").strip().lower()
+    if scope_norm not in ("main", "admin"):
+        abort(404)
+    slug_norm = str(slug or "").strip().lower()
+    if re.fullmatch(r"[a-z0-9_\-]{1,64}", slug_norm) is None:
+        abort(404)
+
+    engine = get_user_engine()
+    if engine is not None:
+        with Session(engine) as db:
+            try:
+                SiteTheme.__table__.create(bind=engine, checkfirst=True)
+            except Exception:  # noqa: BLE001
+                pass
+            row = (
+                db.query(SiteTheme)
+                .filter(SiteTheme.scope == scope_norm, SiteTheme.slug == slug_norm)
+                .first()
+            )
+            if row is not None and getattr(row, "theme_json", None):
+                css = _theme_css_from_json(scope_norm, str(row.theme_json or ""))
+                resp = Response(css, mimetype="text/css")
+                resp.headers["Cache-Control"] = "no-store"
+                return resp
+
+    base_dir = Path(__file__).resolve().parent / "static" / "css" / "themes"
+    theme_path = base_dir / scope_norm / f"{slug_norm}.css"
+    if theme_path.exists():
+        resp = send_file(str(theme_path), mimetype="text/css", conditional=True)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    abort(404)
 
 
 _pv_status_cache: dict[str, object] = {

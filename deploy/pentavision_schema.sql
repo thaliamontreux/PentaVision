@@ -173,6 +173,19 @@ CREATE TABLE IF NOT EXISTS site_theme_settings (
   updated_at DATETIME(6) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS site_themes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  scope VARCHAR(16) NOT NULL,
+  slug VARCHAR(64) NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  is_system INT NULL,
+  is_readonly INT NULL,
+  theme_json VARCHAR(8192) NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL,
+  UNIQUE KEY ux_site_themes_scope_slug (scope, slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS ip_allowlist (
   id INT AUTO_INCREMENT PRIMARY KEY,
   cidr VARCHAR(64) NOT NULL,

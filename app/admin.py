@@ -5,6 +5,7 @@ import subprocess
 from datetime import datetime, timezone
 import json
 import os
+import re
 import uuid
 from urllib.request import urlopen
 
@@ -13,6 +14,7 @@ from typing import Dict, List, Sequence, Set
 from argon2 import PasswordHasher
 from flask import (
     Blueprint,
+    Response,
     abort,
     current_app,
     jsonify,
@@ -50,6 +52,7 @@ from .models import (
     PropertyGroupScheduleAssignment,
     UserRole,
     LoginFailure,
+    SiteTheme,
     SiteThemeSettings,
 )
 from .security import get_current_user, user_has_role
@@ -82,6 +85,127 @@ def _pid_is_running(pid: int | None) -> bool:
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 _ph = PasswordHasher()
+
+
+_SYSTEM_THEME_NAMES: dict[str, dict[str, str]] = {
+    "main": {
+        "default": "Default",
+        "ocean_blue": "Ocean Blue",
+        "midnight": "Midnight",
+        "high_contrast": "High Contrast",
+    },
+    "admin": {
+        "default": "Default",
+        "restricted_red": "Restricted Red",
+        "stealth": "Stealth",
+        "terminal_green": "Terminal Green",
+    },
+}
+
+
+def _slugify(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    raw = re.sub(r"[^a-z0-9_\-]+", "-", raw)
+    raw = raw.strip("-_")
+    raw = re.sub(r"-+", "-", raw)
+    raw = re.sub(r"_+", "_", raw)
+    if not raw:
+        return "theme"
+    return raw[:64]
+
+
+def _parse_hex_color(value: str | None) -> str | None:
+    raw = str(value or "").strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", raw) is None:
+        return None
+    return raw.upper()
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
+    r = int(hex_color[1:3], 16) / 255.0
+    g = int(hex_color[3:5], 16) / 255.0
+    b = int(hex_color[5:7], 16) / 255.0
+    return r, g, b
+
+
+def _rel_luminance(hex_color: str) -> float:
+    r, g, b = _hex_to_rgb(hex_color)
+
+    def conv(c: float) -> float:
+        if c <= 0.03928:
+            return c / 12.92
+        return ((c + 0.055) / 1.055) ** 2.4
+
+    rr = conv(r)
+    gg = conv(g)
+    bb = conv(b)
+    return 0.2126 * rr + 0.7152 * gg + 0.0722 * bb
+
+
+def _contrast_ratio(a: str, b: str) -> float:
+    l1 = _rel_luminance(a)
+    l2 = _rel_luminance(b)
+    hi = max(l1, l2)
+    lo = min(l1, l2)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _default_theme_payload(scope: str) -> dict:
+    if scope == "admin":
+        colors = {
+            "bg": "#0B1120",
+            "text": "#E5E7EB",
+            "surface": "#0F172A",
+            "card": "#0F172A",
+            "border": "#1F2937",
+            "muted_text": "#9CA3AF",
+            "primary_bg": "#2563EB",
+            "primary_text": "#0B1120",
+            "secondary_bg": "#111827",
+            "secondary_text": "#E5E7EB",
+            "link": "#93C5FD",
+        }
+    else:
+        colors = {
+            "bg": "#0B1120",
+            "text": "#E5E7EB",
+            "surface": "#0F172A",
+            "card": "#0F172A",
+            "border": "#1F2937",
+            "muted_text": "#9CA3AF",
+            "primary_bg": "#2563EB",
+            "primary_text": "#0B1120",
+            "secondary_bg": "#111827",
+            "secondary_text": "#E5E7EB",
+            "link": "#93C5FD",
+        }
+    return {"version": 1, "scope": scope, "colors": colors}
+
+
+def _validate_theme_contrast(colors: dict[str, str], errors: List[str]) -> None:
+    def get(key: str, fallback: str) -> str:
+        raw = _parse_hex_color(colors.get(key))
+        return raw or fallback
+
+    bg = get("bg", "#0B1120")
+    text = get("text", "#E5E7EB")
+    muted = get("muted_text", "#9CA3AF")
+    primary_bg = get("primary_bg", "#2563EB")
+    primary_text = get("primary_text", "#0B1120")
+    secondary_bg = get("secondary_bg", "#111827")
+    secondary_text = get("secondary_text", "#E5E7EB")
+    link = get("link", "#93C5FD")
+
+    if _contrast_ratio(text, bg) < 4.5:
+        errors.append("Text color does not have enough contrast against the background.")
+    if _contrast_ratio(muted, bg) < 3.0:
+        errors.append("Muted text color does not have enough contrast against the background.")
+    if _contrast_ratio(primary_text, primary_bg) < 4.5:
+        errors.append("Primary button text does not have enough contrast against the primary button background.")
+    if _contrast_ratio(secondary_text, secondary_bg) < 4.5:
+        errors.append("Secondary button text does not have enough contrast against the secondary button background.")
+    if _contrast_ratio(link, bg) < 3.0:
+        errors.append("Link color does not have enough contrast against the background.")
 
 
 def _git_pull_runs_dir() -> str:
@@ -188,24 +312,16 @@ def themes():
     messages: List[str] = []
     csrf_token = _ensure_csrf_token()
 
-    main_theme_options = [
-        "default",
-        "ocean_blue",
-        "midnight",
-        "high_contrast",
-    ]
-    admin_theme_options = [
-        "default",
-        "restricted_red",
-        "stealth",
-        "terminal_green",
-    ]
+    main_theme_options: List[tuple[str, str, str]] = []
+    admin_theme_options: List[tuple[str, str, str]] = []
 
     selected_main = "default"
     selected_admin = "restricted_red"
 
     if engine is None:
         errors.append("User database is not configured.")
+        main_theme_options = [("default", "Default", "system")]
+        admin_theme_options = [("default", "Default", "system")]
         return render_template(
             "admin/themes.html",
             errors=errors,
@@ -215,11 +331,18 @@ def themes():
             admin_theme_options=admin_theme_options,
             selected_main=selected_main,
             selected_admin=selected_admin,
+            system_themes=_SYSTEM_THEME_NAMES,
+            custom_themes={"main": [], "admin": []},
         )
 
     with Session(engine) as db:
         try:
             SiteThemeSettings.__table__.create(bind=engine, checkfirst=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+        try:
+            SiteTheme.__table__.create(bind=engine, checkfirst=True)
         except Exception:  # noqa: BLE001
             pass
 
@@ -239,6 +362,25 @@ def themes():
         selected_main = (settings.main_theme or "").strip() or "default"
         selected_admin = (settings.admin_theme or "").strip() or "restricted_red"
 
+        main_theme_options = [(slug, name, "system") for slug, name in _SYSTEM_THEME_NAMES["main"].items()]
+        admin_theme_options = [(slug, name, "system") for slug, name in _SYSTEM_THEME_NAMES["admin"].items()]
+
+        custom_themes: dict[str, list[dict]] = {"main": [], "admin": []}
+        rows = db.query(SiteTheme).order_by(SiteTheme.scope, SiteTheme.name).all()
+        for r in rows:
+            scope = str(getattr(r, "scope", "") or "").strip().lower()
+            if scope not in ("main", "admin"):
+                continue
+            slug = str(getattr(r, "slug", "") or "").strip().lower()
+            name = str(getattr(r, "name", "") or "").strip() or slug
+            if not slug:
+                continue
+            custom_themes[scope].append({"slug": slug, "name": name})
+            if scope == "main":
+                main_theme_options.append((slug, name, "custom"))
+            else:
+                admin_theme_options.append((slug, name, "custom"))
+
         if request.method == "POST":
             if not _validate_csrf_token(request.form.get("csrf_token")):
                 errors.append("Invalid or missing CSRF token.")
@@ -246,9 +388,12 @@ def themes():
                 main_form = (request.form.get("main_theme") or "").strip() or "default"
                 admin_form = (request.form.get("admin_theme") or "").strip() or "default"
 
-                if main_form not in main_theme_options:
+                allowed_main = {slug for slug, _name, _kind in main_theme_options}
+                allowed_admin = {slug for slug, _name, _kind in admin_theme_options}
+
+                if main_form not in allowed_main:
                     errors.append("Invalid main theme selection.")
-                if admin_form not in admin_theme_options:
+                if admin_form not in allowed_admin:
                     errors.append("Invalid admin theme selection.")
 
                 if not errors:
@@ -283,6 +428,338 @@ def themes():
         admin_theme_options=admin_theme_options,
         selected_main=selected_main,
         selected_admin=selected_admin,
+        system_themes=_SYSTEM_THEME_NAMES,
+        custom_themes=custom_themes,
+    )
+
+
+@bp.post("/themes/new")
+def themes_new():
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    scope = str(request.form.get("scope") or "").strip().lower()
+    name = str(request.form.get("name") or "").strip() or "New Theme"
+    if scope not in ("main", "admin"):
+        abort(400)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    slug_base = _slugify(name)
+    slug = slug_base
+    with Session(engine) as db:
+        SiteTheme.__table__.create(bind=engine, checkfirst=True)
+        existing = {r.slug for r in db.query(SiteTheme).filter(SiteTheme.scope == scope).all()}
+        if slug in existing or slug in _SYSTEM_THEME_NAMES.get(scope, {}):
+            i = 2
+            while True:
+                slug_try = f"{slug_base}-{i}"
+                if slug_try not in existing and slug_try not in _SYSTEM_THEME_NAMES.get(scope, {}):
+                    slug = slug_try
+                    break
+                i += 1
+        payload = _default_theme_payload(scope)
+        row = SiteTheme(
+            scope=scope,
+            slug=slug,
+            name=name,
+            is_system=0,
+            is_readonly=0,
+            theme_json=json.dumps(payload, separators=(",", ":")),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.add(row)
+        db.commit()
+    return redirect(url_for("admin.theme_edit", scope=scope, slug=slug))
+
+
+@bp.post("/themes/duplicate")
+def themes_duplicate():
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    scope = str(request.form.get("scope") or "").strip().lower()
+    slug = str(request.form.get("slug") or "").strip().lower()
+    name = str(request.form.get("name") or "").strip() or "Copied Theme"
+    source_kind = str(request.form.get("source_kind") or "").strip().lower()
+    if scope not in ("main", "admin"):
+        abort(400)
+    if re.fullmatch(r"[a-z0-9_\-]{1,64}", slug) is None:
+        abort(400)
+    if source_kind not in ("system", "custom"):
+        abort(400)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        SiteTheme.__table__.create(bind=engine, checkfirst=True)
+        if source_kind == "custom":
+            src = (
+                db.query(SiteTheme)
+                .filter(SiteTheme.scope == scope, SiteTheme.slug == slug)
+                .first()
+            )
+            if src is None:
+                abort(404)
+            payload_raw = str(getattr(src, "theme_json", "") or "")
+        else:
+            if slug not in _SYSTEM_THEME_NAMES.get(scope, {}):
+                abort(404)
+            payload_raw = json.dumps(_default_theme_payload(scope), separators=(",", ":"))
+
+        slug_base = _slugify(name)
+        out_slug = slug_base
+        existing = {r.slug for r in db.query(SiteTheme).filter(SiteTheme.scope == scope).all()}
+        if out_slug in existing or out_slug in _SYSTEM_THEME_NAMES.get(scope, {}):
+            i = 2
+            while True:
+                slug_try = f"{slug_base}-{i}"
+                if slug_try not in existing and slug_try not in _SYSTEM_THEME_NAMES.get(scope, {}):
+                    out_slug = slug_try
+                    break
+                i += 1
+        row = SiteTheme(
+            scope=scope,
+            slug=out_slug,
+            name=name,
+            is_system=0,
+            is_readonly=0,
+            theme_json=payload_raw,
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.add(row)
+        db.commit()
+    return redirect(url_for("admin.theme_edit", scope=scope, slug=out_slug))
+
+
+@bp.post("/themes/import")
+def themes_import():
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    upload = request.files.get("theme_file")
+    if upload is None:
+        return redirect(url_for("admin.themes"))
+
+    try:
+        raw = upload.read()
+    except Exception:  # noqa: BLE001
+        raw = b""
+
+    try:
+        payload = json.loads(raw.decode("utf-8", errors="replace"))
+    except Exception:  # noqa: BLE001
+        payload = None
+
+    if not isinstance(payload, dict):
+        return redirect(url_for("admin.themes"))
+
+    scope = str(payload.get("scope") or "").strip().lower()
+    slug = _slugify(str(payload.get("slug") or "imported-theme"))
+    name = str(payload.get("name") or slug).strip() or slug
+    colors = payload.get("colors")
+    if scope not in ("main", "admin"):
+        return redirect(url_for("admin.themes"))
+    if not isinstance(colors, dict):
+        colors = {}
+
+    sanitized: dict[str, str] = {}
+    for key in (
+        "bg",
+        "text",
+        "surface",
+        "card",
+        "border",
+        "muted_text",
+        "primary_bg",
+        "primary_text",
+        "secondary_bg",
+        "secondary_text",
+        "link",
+    ):
+        v = _parse_hex_color(colors.get(key))
+        if v is not None:
+            sanitized[key] = v
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        SiteTheme.__table__.create(bind=engine, checkfirst=True)
+        existing = {r.slug for r in db.query(SiteTheme).filter(SiteTheme.scope == scope).all()}
+        if slug in existing or slug in _SYSTEM_THEME_NAMES.get(scope, {}):
+            base = slug
+            i = 2
+            while True:
+                slug_try = f"{base}-{i}"
+                if slug_try not in existing and slug_try not in _SYSTEM_THEME_NAMES.get(scope, {}):
+                    slug = slug_try
+                    break
+                i += 1
+        out = {"version": 1, "scope": scope, "colors": sanitized}
+        row = SiteTheme(
+            scope=scope,
+            slug=slug,
+            name=name,
+            is_system=0,
+            is_readonly=0,
+            theme_json=json.dumps(out, separators=(",", ":")),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.add(row)
+        db.commit()
+    return redirect(url_for("admin.theme_edit", scope=scope, slug=slug))
+
+
+@bp.get("/themes/export/<scope>/<slug>.json")
+def theme_export(scope: str, slug: str):
+    scope_norm = str(scope or "").strip().lower()
+    slug_norm = str(slug or "").strip().lower()
+    if scope_norm not in ("main", "admin"):
+        abort(404)
+    if re.fullmatch(r"[a-z0-9_\-]{1,64}", slug_norm) is None:
+        abort(404)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        SiteTheme.__table__.create(bind=engine, checkfirst=True)
+        row = (
+            db.query(SiteTheme)
+            .filter(SiteTheme.scope == scope_norm, SiteTheme.slug == slug_norm)
+            .first()
+        )
+        if row is None:
+            abort(404)
+        try:
+            payload = json.loads(str(row.theme_json or "{}"))
+        except Exception:  # noqa: BLE001
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        payload["scope"] = scope_norm
+        payload["slug"] = slug_norm
+        payload["name"] = str(getattr(row, "name", "") or slug_norm)
+        payload["version"] = int(payload.get("version") or 1)
+        out = json.dumps(payload, indent=2, sort_keys=True)
+        resp = Response(out, mimetype="application/json")
+        resp.headers["Content-Disposition"] = f"attachment; filename={scope_norm}-{slug_norm}.json"
+        return resp
+
+
+@bp.route("/themes/edit/<scope>/<slug>", methods=["GET", "POST"])
+def theme_edit(scope: str, slug: str):
+    engine = get_user_engine()
+    errors: List[str] = []
+    messages: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    scope_norm = str(scope or "").strip().lower()
+    slug_norm = str(slug or "").strip().lower()
+    if scope_norm not in ("main", "admin"):
+        abort(404)
+    if re.fullmatch(r"[a-z0-9_\-]{1,64}", slug_norm) is None:
+        abort(404)
+
+    if engine is None:
+        errors.append("User database is not configured.")
+        return render_template(
+            "admin/theme_edit.html",
+            errors=errors,
+            messages=messages,
+            csrf_token=csrf_token,
+            scope=scope_norm,
+            slug=slug_norm,
+            name=slug_norm,
+            colors=_default_theme_payload(scope_norm)["colors"],
+        )
+
+    with Session(engine) as db:
+        SiteTheme.__table__.create(bind=engine, checkfirst=True)
+        row = (
+            db.query(SiteTheme)
+            .filter(SiteTheme.scope == scope_norm, SiteTheme.slug == slug_norm)
+            .first()
+        )
+        if row is None:
+            abort(404)
+
+        is_readonly = bool(int(getattr(row, "is_readonly", 0) or 0))
+        if is_readonly:
+            abort(403)
+
+        try:
+            payload = json.loads(str(row.theme_json or "{}"))
+        except Exception:  # noqa: BLE001
+            payload = {}
+        colors = payload.get("colors") if isinstance(payload, dict) else None
+        if not isinstance(colors, dict):
+            colors = {}
+
+        name_val = str(getattr(row, "name", "") or slug_norm)
+
+        if request.method == "POST":
+            if not _validate_csrf_token(request.form.get("csrf_token")):
+                errors.append("Invalid or missing CSRF token.")
+            else:
+                new_name = str(request.form.get("name") or "").strip() or name_val
+                new_colors: dict[str, str] = {}
+                for key in (
+                    "bg",
+                    "text",
+                    "surface",
+                    "card",
+                    "border",
+                    "muted_text",
+                    "primary_bg",
+                    "primary_text",
+                    "secondary_bg",
+                    "secondary_text",
+                    "link",
+                ):
+                    v = _parse_hex_color(request.form.get(key))
+                    if v is None:
+                        errors.append(f"Invalid color for {key}.")
+                    else:
+                        new_colors[key] = v
+
+                if not errors:
+                    _validate_theme_contrast(new_colors, errors)
+
+                if not errors:
+                    row.name = new_name
+                    row.theme_json = json.dumps(
+                        {"version": 1, "scope": scope_norm, "colors": new_colors},
+                        separators=(",", ":"),
+                    )
+                    row.updated_at = datetime.now(timezone.utc)
+                    db.add(row)
+                    db.commit()
+                    messages.append("Theme saved.")
+                    name_val = new_name
+                    colors = new_colors
+
+        try:
+            db.expunge(row)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return render_template(
+        "admin/theme_edit.html",
+        errors=errors,
+        messages=messages,
+        csrf_token=csrf_token,
+        scope=scope_norm,
+        slug=slug_norm,
+        name=name_val,
+        colors=colors,
     )
 
 

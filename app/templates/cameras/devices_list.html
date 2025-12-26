@@ -4,12 +4,28 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Installed Cameras</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
-        <p>Configure individual cameras using the URL templates defined in the Camera URL Patterns list.</p>
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <div>
+              <h1 style="margin-bottom: 0.25rem;">Installed Cameras</h1>
+              <p class="pv-card-subtitle">Configure individual cameras using the URL templates defined in the Camera URL Patterns list.</p>
+            </div>
+            <div class="pv-admin-actions">
+              <a class="pv-button-primary" href="{{ url_for('camera_admin.create_device') }}">
+                Add camera
+              </a>
+              <a
+                class="pv-button-secondary"
+                href="{{ url_for('camera_admin.scan') }}"
+                onclick="window.open(this.href, 'pvScan', 'width=960,height=720,resizable=yes,scrollbars=yes'); return false;"
+              >
+                Scan network
+              </a>
+            </div>
+          </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error">
@@ -20,20 +36,6 @@
             </ul>
           </div>
         {% endif %}
-
-        <div style="margin-bottom: 1rem;">
-          <a class="pv-button-primary" href="{{ url_for('camera_admin.create_device') }}">
-            Add camera
-          </a>
-          <a
-            class="pv-button-primary"
-            href="{{ url_for('camera_admin.scan') }}"
-            style="margin-left: 0.5rem;"
-            onclick="window.open(this.href, 'pvScan', 'width=960,height=720,resizable=yes,scrollbars=yes'); return false;"
-          >
-            Scan network
-          </a>
-        </div>
 
         {% if devices %}
           <div style="overflow-x: auto;">
@@ -70,34 +72,31 @@
                       {% endif %}
                     </td>
                     <td>{% if pat %}{{ pat.protocol or 'RTSP' }}{% else %}{% endif %}</td>
-                    <td>{{ 'Yes' if d.is_active else 'No' }}</td>
+                    <td>
+                      {% if d.is_active %}
+                        <span class="pv-badge pv-badge-ok">Active</span>
+                      {% else %}
+                        <span class="pv-badge pv-badge-not_configured">Inactive</span>
+                      {% endif %}
+                    </td>
                     <td>
                       {% set rtmp = rtmp_status.get(d.id) if rtmp_status else None %}
                       {% if rtmp and rtmp.active %}
-                        <span style="color: #16a34a;">
-                          {{ rtmp.active }} / {{ rtmp.total }} active
-                        </span>
+                        <span class="pv-badge pv-badge-ok">{{ rtmp.active }} / {{ rtmp.total }} active</span>
                       {% elif rtmp %}
-                        <span style="color: #6b7280;">
-                          0 / {{ rtmp.total }} active
-                        </span>
+                        <span class="pv-badge pv-badge-not_configured">0 / {{ rtmp.total }} active</span>
                       {% else %}
-                        <span style="color: #6b7280;">None</span>
+                        <span class="pv-badge pv-badge-not_configured">None</span>
                       {% endif %}
                     </td>
                     <td>
                       {% set info = stream_status.get(d.id) if stream_status else None %}
                       {% if d.is_active and info and info.permanent_failure %}
-                        <span
-                          style="color: #dc2626; font-weight: 600;"
-                          title="{{ info.last_error.message if info.last_error else '' }}"
-                        >
-                          Needs attention
-                        </span>
+                        <span class="pv-badge pv-badge-error" title="{{ info.last_error.message if info.last_error else '' }}">Needs attention</span>
                       {% elif d.is_active %}
-                        <span style="color: #16a34a;">OK</span>
+                        <span class="pv-badge pv-badge-ok">OK</span>
                       {% else %}
-                        <span style="color: #6b7280;">Inactive</span>
+                        <span class="pv-badge pv-badge-not_configured">Inactive</span>
                       {% endif %}
                     </td>
                     <td style="white-space: nowrap;">
@@ -106,7 +105,7 @@
                         class="pv-link-muted"
                         style="margin-right: 0.5rem;"
                       >
-                        RTMP7
+                        RTMP
                       </a>
                       <a href="{{ url_for('camera_admin.edit_device', device_id=d.id) }}">Edit</a>
                       <form
@@ -128,6 +127,7 @@
         {% else %}
           <p>No cameras configured yet.</p>
         {% endif %}
+        </div>
       </div>
     </div>
   </section>

@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <title>{% block title %}PentaVision{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {% set _pv_path = request.path if request else '' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
     {% if active_main_theme and active_main_theme != 'default' %}
-      <link rel="stylesheet" href="{{ url_for('static', filename='css/themes/main/' ~ active_main_theme ~ '.css') }}" />
+      <link rel="stylesheet" href="{{ url_for('main.theme_css', scope='main', slug=active_main_theme) }}" />
     {% endif %}
-    {% set _pv_path = request.path if request else '' %}
     {% if _pv_path.startswith('/admin') and active_admin_theme and active_admin_theme != 'default' %}
-      <link rel="stylesheet" href="{{ url_for('static', filename='css/themes/admin/' ~ active_admin_theme ~ '.css') }}" />
+      <link rel="stylesheet" href="{{ url_for('main.theme_css', scope='admin', slug=active_admin_theme) }}" />
     {% endif %}
     <style>
       .pv-toast {

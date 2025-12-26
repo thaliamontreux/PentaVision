@@ -335,6 +335,24 @@ class BlocklistDistributionSettings(UserBase):
     )
 
 
+class SiteTheme(UserBase):
+    __tablename__ = "site_themes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    scope: Mapped[str] = mapped_column(String(16))
+    slug: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(128))
+    is_system: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_readonly: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    theme_json: Mapped[Optional[str]] = mapped_column(String(8192), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class SiteThemeSettings(UserBase):
     __tablename__ = "site_theme_settings"
 

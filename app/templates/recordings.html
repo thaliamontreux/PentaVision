@@ -8,10 +8,13 @@
       <div class="pv-admin-layout">
         {% include 'admin/_nav.html' %}
         <div class="pv-admin-main">
-          <h1>Recordings</h1>
-          <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
-            Browse captured segments across cameras and storage providers.
-          </p>
+          <div class="pv-card">
+            <div class="pv-card-header">
+              <div>
+                <h1 style="margin-bottom: 0.25rem;">Recordings</h1>
+                <p class="pv-card-subtitle">Browse captured segments across cameras and storage providers.</p>
+              </div>
+            </div>
 
           {% if device %}
             <p style="font-size: 0.9rem; margin-bottom: 0.75rem;">
@@ -21,64 +24,70 @@
           {% endif %}
 
           {% if recordings %}
-            <table class="pv-table">
-              <thead>
-                <tr>
-                  <th>Time ({{ current_timezone }})</th>
-                  <th>Camera</th>
-                  <th>Provider</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for r in recordings %}
+            <div style="overflow-x: auto;">
+              <table class="pv-table">
+                <thead>
                   <tr>
-                    <td>{{ r.created_at|local_dt }}</td>
-                    <td>
-                      {% set dev = devices_index.get(r.device_id) if devices_index else None %}
-                      {% if dev %}
+                    <th>Time ({{ current_timezone }})</th>
+                    <th>Camera</th>
+                    <th>Provider</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in recordings %}
+                    <tr>
+                      <td>{{ r.created_at|local_dt }}</td>
+                      <td>
+                        {% set dev = devices_index.get(r.device_id) if devices_index else None %}
+                        {% if dev %}
+                          <a
+                            href="{{ url_for('main.camera_detail', device_id=dev.id) }}"
+                            class="pv-link-muted"
+                          >
+                            {{ dev.name }}
+                          </a>
+                        {% else %}
+                          Unknown
+                        {% endif %}
+                      </td>
+                      <td>{{ r.storage_provider }}</td>
+                      <td>
                         <a
-                          href="{{ url_for('main.camera_detail', device_id=dev.id) }}"
+                          href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
                           class="pv-link-muted"
                         >
-                          {{ dev.name }}
+                          Play
                         </a>
-                      {% else %}
-                        Unknown
-                      {% endif %}
-                    </td>
-                    <td>{{ r.storage_provider }}</td>
-                    <td>
-                      <a
-                        href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
-                        class="pv-link-muted"
-                      >
-                        Play
-                      </a>
-                      <span aria-hidden="true"> · </span>
-                      <a
-                        href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
-                        class="pv-link-muted"
-                      >
-                        Download
-                      </a>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                        <span aria-hidden="true"> · </span>
+                        <a
+                          href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
+                          class="pv-link-muted"
+                        >
+                          Download
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
           {% else %}
             <p style="font-size: 0.9rem; color: #9ca3af;">
               No recordings found.
             </p>
           {% endif %}
+          </div>
         </div>
       </div>
     {% else %}
-      <h1>Recordings</h1>
-      <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
-        Browse captured segments across cameras and storage providers.
-      </p>
+      <div class="pv-card">
+        <div class="pv-card-header">
+          <div>
+            <h1 style="margin-bottom: 0.25rem;">Recordings</h1>
+            <p class="pv-card-subtitle">Browse captured segments across cameras and storage providers.</p>
+          </div>
+        </div>
 
       {% if device %}
         <p style="font-size: 0.9rem; margin-bottom: 0.75rem;">
@@ -88,57 +97,60 @@
       {% endif %}
 
       {% if recordings %}
-        <table class="pv-table">
-          <thead>
-            <tr>
-              <th>Time ({{ current_timezone }})</th>
-              <th>Camera</th>
-              <th>Provider</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in recordings %}
+        <div style="overflow-x: auto;">
+          <table class="pv-table">
+            <thead>
               <tr>
-                <td>{{ r.created_at|local_dt }}</td>
-                <td>
-                  {% set dev = devices_index.get(r.device_id) if devices_index else None %}
-                  {% if dev %}
+                <th>Time ({{ current_timezone }})</th>
+                <th>Camera</th>
+                <th>Provider</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in recordings %}
+                <tr>
+                  <td>{{ r.created_at|local_dt }}</td>
+                  <td>
+                    {% set dev = devices_index.get(r.device_id) if devices_index else None %}
+                    {% if dev %}
+                      <a
+                        href="{{ url_for('main.camera_detail', device_id=dev.id) }}"
+                        class="pv-link-muted"
+                      >
+                        {{ dev.name }}
+                      </a>
+                    {% else %}
+                      Unknown
+                    {% endif %}
+                  </td>
+                  <td>{{ r.storage_provider }}</td>
+                  <td>
                     <a
-                      href="{{ url_for('main.camera_detail', device_id=dev.id) }}"
+                      href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
                       class="pv-link-muted"
                     >
-                      {{ dev.name }}
+                      Play
                     </a>
-                  {% else %}
-                    Unknown
-                  {% endif %}
-                </td>
-                <td>{{ r.storage_provider }}</td>
-                <td>
-                  <a
-                    href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
-                    class="pv-link-muted"
-                  >
-                    Play
-                  </a>
-                  <span aria-hidden="true"> · </span>
-                  <a
-                    href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
-                    class="pv-link-muted"
-                  >
-                    Download
-                  </a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+                    <span aria-hidden="true"> · </span>
+                    <a
+                      href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
+                      class="pv-link-muted"
+                    >
+                      Download
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       {% else %}
         <p style="font-size: 0.9rem; color: #9ca3af;">
           No recordings found.
         </p>
       {% endif %}
+      </div>
     {% endif %}
   </section>
 {% endblock %}
