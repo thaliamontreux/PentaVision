@@ -332,27 +332,6 @@ CREATE TABLE IF NOT EXISTS upload_queue (
   KEY ix_upload_queue_device_id (device_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS storage_settings (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  storage_targets VARCHAR(255) NULL,
-  local_storage_path VARCHAR(512) NULL,
-  recording_base_dir VARCHAR(512) NULL,
-  s3_bucket VARCHAR(255) NULL,
-  s3_endpoint VARCHAR(255) NULL,
-  s3_region VARCHAR(64) NULL,
-  s3_access_key VARCHAR(255) NULL,
-  s3_secret_key VARCHAR(255) NULL,
-  gcs_bucket VARCHAR(255) NULL,
-  azure_blob_connection_string VARCHAR(1024) NULL,
-  azure_blob_container VARCHAR(255) NULL,
-  dropbox_access_token VARCHAR(512) NULL,
-  webdav_base_url VARCHAR(512) NULL,
-  webdav_username VARCHAR(255) NULL,
-  webdav_password VARCHAR(255) NULL,
-  created_at DATETIME(6) NULL,
-  updated_at DATETIME(6) NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 CREATE TABLE IF NOT EXISTS storage_provider_modules (
   id INT AUTO_INCREMENT PRIMARY KEY,
   provider_type VARCHAR(64) NOT NULL,

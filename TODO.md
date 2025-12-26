@@ -50,6 +50,12 @@
 - [x] Toast auto-hide: bottom-right messages fade after 10 seconds.
 - [x] Polish all storage provider forms (each provider template individually; edit + wizard).
 
+## Legacy storage removal (module-only)
+
+- [x] Convert `/storage` into a redirect-only shim to `/admin/storage`.
+- [x] Remove legacy `StorageSettings` fallback from `build_storage_providers()`.
+- [x] Remove `StorageSettings` model/table and remaining references.
+
 ## System setup & security
 
 - [x] Provision Ubuntu 24.04 minimal server (see `deploy/install_ubuntu_24.sh` for automated setup steps).
