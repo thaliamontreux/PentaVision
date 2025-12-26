@@ -23,6 +23,7 @@ from .security import (
     get_current_user,
     set_admin_property_uid_for_session,
     clear_admin_property_uid_for_session,
+    user_has_permission,
     user_has_role,
     validate_global_csrf_token,
 )
@@ -79,8 +80,10 @@ def _user_can_manage_property(user, property_id: int) -> bool:
     if user is None:
         return False
     if (
-        user_has_role(user, "System Administrator")
-        or user_has_role(user, "Property Administrator")
+        user_has_permission(user, "Cust.Properties.*")
+        or user_has_permission(user, "Cust.*")
+        or user_has_permission(user, "Platform.*")
+        or user_has_permission(user, "*")
     ):
         return True
     engine = get_user_engine()
@@ -111,10 +114,7 @@ def _admin_context_property_id() -> int | None:
 @bp.post("/properties/<int:property_id>/enter")
 def pm_property_enter(property_id: int):
     user = get_current_user()
-    if not (
-        user_has_role(user, "System Administrator")
-        or user_has_role(user, "Property Administrator")
-    ):
+    if user is None:
         abort(403)
     if not validate_global_csrf_token(request.form.get("csrf_token")):
         abort(400)
@@ -150,10 +150,7 @@ def pm_property_enter(property_id: int):
 @bp.post("/properties/<int:property_id>/provision")
 def pm_property_provision(property_id: int):
     user = get_current_user()
-    if not (
-        user_has_role(user, "System Administrator")
-        or user_has_role(user, "Property Administrator")
-    ):
+    if user is None:
         abort(403)
     if not validate_global_csrf_token(request.form.get("csrf_token")):
         abort(400)
@@ -202,10 +199,7 @@ def pm_property_provision(property_id: int):
 @bp.post("/properties/context/clear")
 def pm_property_context_clear():
     user = get_current_user()
-    if not (
-        user_has_role(user, "System Administrator")
-        or user_has_role(user, "Property Administrator")
-    ):
+    if user is None:
         abort(403)
     if not validate_global_csrf_token(request.form.get("csrf_token")):
         abort(400)
@@ -242,10 +236,17 @@ def index():
             except Exception:  # noqa: BLE001
                 pass
 
-            if (
-                user_has_role(user, "System Administrator")
-                or user_has_role(user, "Property Administrator")
-            ):
+            can_list_all = False
+            if user is not None:
+                can_list_all = bool(
+                    user_has_permission(user, "Cust.Properties.List")
+                    or user_has_permission(user, "Cust.Properties.*")
+                    or user_has_permission(user, "Cust.*")
+                    or user_has_permission(user, "Platform.*")
+                    or user_has_permission(user, "*")
+                )
+
+            if can_list_all:
                 if ctx_id:
                     props = (
                         db.query(Property)
@@ -277,14 +278,7 @@ def index():
 def property_users(property_id: int):
     user = get_current_user()
     ctx_id = _admin_context_property_id()
-    if (
-        ctx_id
-        and (
-            user_has_role(user, "System Administrator")
-            or user_has_role(user, "Property Administrator")
-        )
-        and int(property_id) != int(ctx_id)
-    ):
+    if ctx_id and int(property_id) != int(ctx_id):
         return redirect(url_for("pm.property_users", property_id=int(ctx_id)))
     if not _user_can_manage_property(user, property_id):
         abort(403)
@@ -348,14 +342,7 @@ def property_users(property_id: int):
 def property_users_create(property_id: int):
     user = get_current_user()
     ctx_id = _admin_context_property_id()
-    if (
-        ctx_id
-        and (
-            user_has_role(user, "System Administrator")
-            or user_has_role(user, "Property Administrator")
-        )
-        and int(property_id) != int(ctx_id)
-    ):
+    if ctx_id and int(property_id) != int(ctx_id):
         return redirect(url_for("pm.property_users", property_id=int(ctx_id)))
     if not _user_can_manage_property(user, property_id):
         abort(403)

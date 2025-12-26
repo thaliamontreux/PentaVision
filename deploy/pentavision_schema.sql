@@ -222,6 +222,11 @@ CREATE TABLE IF NOT EXISTS permissions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(128) NOT NULL,
   description VARCHAR(512) NULL,
+  risk_level VARCHAR(16) NULL,
+  requires_mfa INT NOT NULL DEFAULT 0,
+  requires_approval INT NOT NULL DEFAULT 0,
+  break_glass_only INT NOT NULL DEFAULT 0,
+  always_audit INT NOT NULL DEFAULT 1,
   created_at DATETIME(6) NULL,
   UNIQUE KEY ux_permissions_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -230,8 +235,10 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   role_id INT NOT NULL,
   permission_id INT NOT NULL,
+  effect VARCHAR(8) NOT NULL DEFAULT 'allow',
   KEY ix_role_permissions_role_id (role_id),
-  KEY ix_role_permissions_permission_id (permission_id)
+  KEY ix_role_permissions_permission_id (permission_id),
+  UNIQUE KEY ux_role_permissions_role_permission (role_id, permission_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS user_roles (

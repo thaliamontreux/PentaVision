@@ -30,7 +30,6 @@ from .models import (
 )
 from .security import (
     get_current_user,
-    user_has_role,
     validate_global_csrf_token,
 )
 from .storage_csal import StorageError, get_storage_router
@@ -41,10 +40,6 @@ def storage_settings_page():
     if user is None:
         next_url = request.path or url_for("main.index")
         return redirect(url_for("main.login", next=next_url))
-    if not user_has_role(user, "System Administrator"):
-        from flask import abort
-
-        abort(403)
 
     errors: list[str] = []
     saved = False

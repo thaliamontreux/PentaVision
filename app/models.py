@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     String,
+    UniqueConstraint,
     func,
     inspect,
     text,
@@ -647,6 +648,11 @@ class Permission(UserBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    risk_level: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    requires_mfa: Mapped[int] = mapped_column(Integer, server_default="0")
+    requires_approval: Mapped[int] = mapped_column(Integer, server_default="0")
+    break_glass_only: Mapped[int] = mapped_column(Integer, server_default="0")
+    always_audit: Mapped[int] = mapped_column(Integer, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -654,10 +660,18 @@ class Permission(UserBase):
 
 class RolePermission(UserBase):
     __tablename__ = "role_permissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "role_id",
+            "permission_id",
+            name="ux_role_permissions_role_permission",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     role_id: Mapped[int] = mapped_column(Integer, index=True)
     permission_id: Mapped[int] = mapped_column(Integer, index=True)
+    effect: Mapped[str] = mapped_column(String(8), server_default="allow")
 
 
 class UserRole(UserBase):
@@ -945,6 +959,54 @@ def create_user_schema(engine) -> None:
         if "timezone" not in cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN timezone VARCHAR(64)"))
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        insp = inspect(engine)
+        perms_cols = {c.get("name") for c in insp.get_columns("permissions")}
+        alters: list[str] = []
+        if "risk_level" not in perms_cols:
+            alters.append("ADD COLUMN risk_level VARCHAR(16) NULL")
+        if "requires_mfa" not in perms_cols:
+            alters.append("ADD COLUMN requires_mfa INTEGER NOT NULL DEFAULT 0")
+        if "requires_approval" not in perms_cols:
+            alters.append("ADD COLUMN requires_approval INTEGER NOT NULL DEFAULT 0")
+        if "break_glass_only" not in perms_cols:
+            alters.append("ADD COLUMN break_glass_only INTEGER NOT NULL DEFAULT 0")
+        if "always_audit" not in perms_cols:
+            alters.append("ADD COLUMN always_audit INTEGER NOT NULL DEFAULT 1")
+        if alters:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE permissions " + ", ".join(alters)))
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        insp = inspect(engine)
+        rp_cols = {c.get("name") for c in insp.get_columns("role_permissions")}
+        if "effect" not in rp_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE role_permissions "
+                        "ADD COLUMN effect VARCHAR(8) NOT NULL DEFAULT 'allow'"
+                    )
+                )
+
+        try:
+            indexes = {i.get("name") for i in insp.get_indexes("role_permissions")}
+            if "ux_role_permissions_role_permission" not in indexes:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "CREATE UNIQUE INDEX "
+                            "ux_role_permissions_role_permission "
+                            "ON role_permissions (role_id, permission_id)"
+                        )
+                    )
+        except Exception:  # noqa: BLE001
+            pass
     except Exception:  # noqa: BLE001
         pass
 

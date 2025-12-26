@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 import re
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Callable, Iterable, Optional, Set
+from typing import Callable, Dict, Iterable, Optional, Set, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import abort, g, jsonify, redirect, request, session, url_for
@@ -13,9 +14,11 @@ from sqlalchemy.orm import Session
 from .db import get_property_engine, get_user_engine
 from .logging_utils import evaluate_ip_access_policies
 from .models import (
+    Permission,
     Property,
     PropertyUser,
     Role,
+    RolePermission,
     SiteThemeSettings,
     User,
     UserProperty,
@@ -106,7 +109,9 @@ def login_user(user: User) -> None:
     session[_SESSION_USER_ID_KEY] = int(user.id)
 
 
-def login_property_user(user: PropertyUser, property_uid: Optional[str] = None) -> None:
+def login_property_user(
+    user: PropertyUser, property_uid: Optional[str] = None
+) -> None:
     session.clear()
     session[_SESSION_PROPERTY_USER_ID_KEY] = int(user.id)
     if property_uid:
@@ -119,9 +124,15 @@ def get_admin_active_property() -> Optional[Property]:
         return prop
 
     user = get_current_user()
+    if user is None:
+        g.admin_active_property = None
+        return None
+
     if not (
-        user_has_role(user, "System Administrator")
-        or user_has_role(user, "Property Administrator")
+        user_has_permission(user, "Cust.Properties.*")
+        or user_has_permission(user, "Cust.*")
+        or user_has_permission(user, "Platform.*")
+        or user_has_permission(user, "*")
     ):
         g.admin_active_property = None
         return None
@@ -223,6 +234,171 @@ def user_has_role(user: Optional[User], role_name: str) -> bool:
         roles = _load_user_roles(user)
         g.current_user_roles = roles
     return role_name in roles
+
+
+def _permission_candidates(permission_name: str) -> Set[str]:
+    raw = str(permission_name or "").strip()
+    if not raw:
+        return set()
+
+    parts = [p for p in raw.split(".") if p]
+    if not parts:
+        return set()
+
+    candidates: Set[str] = set()
+    candidates.add(".".join(parts))
+    if len(parts) == 1:
+        candidates.add(parts[0] + ".*")
+        candidates.add("*")
+        return candidates
+
+    for i in range(len(parts) - 1, 0, -1):
+        candidates.add(".".join(parts[:i]) + ".*")
+    candidates.add("*")
+    return candidates
+
+
+def _load_user_permissions(
+    user: User, property_id: Optional[int]
+) -> Tuple[Set[str], Set[str]]:
+    allow: Set[str] = set()
+    deny: Set[str] = set()
+
+    engine = get_user_engine()
+    if engine is None:
+        return allow, deny
+
+    with Session(engine) as db:
+        q = (
+            db.query(Permission.name, RolePermission.effect)
+            .join(
+                RolePermission,
+                RolePermission.permission_id == Permission.id,
+            )
+            .join(Role, Role.id == RolePermission.role_id)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .filter(UserRole.user_id == int(user.id))
+        )
+        if property_id is None:
+            q = q.filter(UserRole.property_id.is_(None))
+        else:
+            q = q.filter(
+                (UserRole.property_id.is_(None))
+                | (UserRole.property_id == int(property_id))
+            )
+        rows = q.all()
+
+    for name, effect in rows:
+        perm_name = str(name or "").strip()
+        eff = str(effect or "").strip().lower()
+        if not perm_name:
+            continue
+        if eff == "deny":
+            deny.add(perm_name)
+        else:
+            allow.add(perm_name)
+    return allow, deny
+
+
+def user_has_permission(
+    user: Optional[User],
+    permission_name: str,
+    property_id: Optional[int] = None,
+) -> bool:
+    if user is None:
+        return False
+
+    cache: Dict[Optional[int], Tuple[Set[str], Set[str]]] = getattr(
+        g,
+        "current_user_permission_cache",
+        None,
+    )
+    if cache is None:
+        cache = {}
+        g.current_user_permission_cache = cache
+
+    entry = cache.get(property_id)
+    if entry is None:
+        entry = _load_user_permissions(user, property_id)
+        cache[property_id] = entry
+    allow, deny = entry
+
+    candidates = _permission_candidates(permission_name)
+    if not candidates:
+        return False
+    if deny & candidates:
+        return False
+    return bool(allow & candidates)
+
+
+def require_permissions(permissions: Iterable[str]) -> Callable:
+    perm_set = {
+        str(p or "").strip()
+        for p in permissions
+        if str(p or "").strip()
+    }
+
+    def decorator(view: Callable) -> Callable:
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            user = get_current_user()
+            if user is None:
+                next_url = request.path or url_for("main.index")
+                return redirect(url_for("main.login", next=next_url))
+            if not perm_set:
+                abort(403)
+            for perm in perm_set:
+                if user_has_permission(user, perm):
+                    return view(*args, **kwargs)
+            abort(403)
+
+        return wrapper
+
+    return decorator
+
+
+def apply_sql_seed_file(engine, file_path: str) -> None:
+    path = str(file_path or "").strip()
+    if not path:
+        return
+    if not os.path.isfile(path):
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except Exception:  # noqa: BLE001
+        return
+
+    cleaned_lines: list[str] = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("--"):
+            continue
+        cleaned_lines.append(line)
+
+    sql_text = "\n".join(cleaned_lines)
+    statements = [s.strip() for s in sql_text.split(";") if s.strip()]
+
+    try:
+        from sqlalchemy import text  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return
+
+    try:
+        with engine.begin() as conn:
+            for stmt in statements:
+                cleaned = (stmt or "").strip()
+                if not cleaned:
+                    continue
+                try:
+                    conn.execute(text(cleaned))
+                except Exception:  # noqa: BLE001
+                    continue
+    except Exception:  # noqa: BLE001
+        return
 
 
 def get_user_property_link(
@@ -375,6 +551,195 @@ def init_security(app) -> None:
     def _load_current_user() -> None:  # pragma: no cover - request wiring
         get_current_user()
         get_current_property_user()
+
+    def _rbac_is_exempt_path(path: str) -> bool:
+        p = str(path or "")
+        if not p:
+            return True
+        if p.startswith("/static/"):
+            return True
+        if p.startswith("/theme-css/"):
+            return True
+        if p.startswith("/install"):
+            return True
+        if p.startswith("/api/auth"):
+            return True
+        if p.startswith("/api/status"):
+            return True
+        if p.startswith("/api/diagnostics"):
+            return True
+        if p.startswith("/health"):
+            return True
+        if p.startswith("/property-login"):
+            return True
+        if p.startswith("/property-logout"):
+            return True
+        if p.startswith("/login"):
+            return True
+        if p.startswith("/logout"):
+            return True
+        return False
+
+    def _rbac_permissions_for_request() -> Set[str] | None:
+        path = str(getattr(request, "path", "") or "")
+        endpoint = str(getattr(request, "endpoint", "") or "")
+        blueprint = str(getattr(request, "blueprint", "") or "")
+
+        if not endpoint or _rbac_is_exempt_path(path):
+            return None
+
+        # Main system UI
+        if blueprint == "main":
+            if path == "/":
+                return {"Video.Live.View", "Video.*"}
+            if path.startswith("/cameras/"):
+                return {"Video.Live.View", "Video.*"}
+            if path.startswith("/streams/status"):
+                return {"Video.Live.View", "Video.*"}
+            if path.startswith("/recordings"):
+                if path.endswith("/download"):
+                    return {
+                        "Video.Export.Download",
+                        "Video.Export.*",
+                        "Video.*",
+                    }
+                return {"Video.Playback.View", "Video.Playback.*", "Video.*"}
+            if path.startswith("/recording-settings"):
+                return {
+                    "Storage.View",
+                    "Storage.*",
+                    "Platform.StorageBackends.Configure",
+                    "Platform.*",
+                }
+            if path.startswith("/audit"):
+                return {"Audit.Logs.View", "Audit.*"}
+            if path.startswith("/profile"):
+                return None
+            if (
+                path.startswith("/faces-demo")
+                or path.startswith("/auth-demo")
+            ):
+                return {"Video.Live.View", "Video.*"}
+            if path.startswith("/api/face/"):
+                return {"Video.Live.TakeSnapshot", "Video.*"}
+            if path.startswith("/api/user/"):
+                return None
+            if path.startswith("/api/status"):
+                return None
+
+        # Admin area
+        if blueprint == "admin":
+            if path in ("/admin", "/admin/"):
+                return {
+                    "Platform.*",
+                    "IAM.*",
+                    "Sec.*",
+                    "Audit.*",
+                    "Cust.*",
+                    "Storage.*",
+                }
+            if path.startswith("/admin/users"):
+                return {
+                    "IAM.Users.View",
+                    "IAM.Users.List",
+                    "IAM.Users.*",
+                    "IAM.*",
+                }
+            if path.startswith("/admin/properties"):
+                return {
+                    "Cust.Properties.View",
+                    "Cust.Properties.List",
+                    "Cust.Properties.*",
+                    "Cust.*",
+                }
+            if path.startswith("/admin/access-control"):
+                return {"Sec.IPAllowlist.Manage", "Sec.*", "Platform.*"}
+            if path.startswith("/admin/blocklist"):
+                return {"Sec.IPAllowlist.Manage", "Sec.*", "Platform.*"}
+            if path.startswith("/admin/services"):
+                return {"Platform.Updates.Manage", "Platform.*"}
+            if path.startswith("/admin/themes"):
+                return {
+                    "Platform.Settings.Update",
+                    "Platform.Settings.View",
+                    "Platform.*",
+                }
+            if path.startswith("/admin/git-pull"):
+                return {"Platform.Updates.Manage", "Platform.*"}
+            if path.startswith("/admin/storage"):
+                return {"Storage.View", "Storage.*", "Platform.*"}
+            if path.startswith("/admin/audit"):
+                return {"Audit.Logs.View", "Audit.*"}
+            if path.startswith("/admin/login-failures"):
+                return {"Audit.Logs.View", "Audit.*"}
+            return {"Platform.*"}
+
+        # Camera admin area
+        if blueprint == "camera_admin":
+            return {
+                "Devices.List",
+                "Devices.View",
+                "Devices.Update",
+                "Devices.*",
+            }
+
+        # Property manager portal
+        if blueprint == "pm":
+            return {
+                "Cust.Properties.List",
+                "Cust.Properties.View",
+                "Cust.Properties.*",
+                "Cust.Customers.View",
+                "Cust.Customers.List",
+                "Cust.*",
+            }
+
+        return {"*"}
+
+    @app.before_request
+    def _enforce_enterprise_rbac():
+        if request.method == "OPTIONS":
+            return None
+
+        path = str(getattr(request, "path", "") or "")
+        if _rbac_is_exempt_path(path):
+            return None
+
+        # Property-user sessions are not governed by main-system staff RBAC.
+        prop_user = get_current_property_user()
+        if prop_user is not None and get_current_user() is None:
+            return None
+
+        user = get_current_user()
+        if user is None:
+            endpoint = str(getattr(request, "endpoint", "") or "")
+            if not endpoint:
+                return None
+
+            accept_json = (
+                request.accept_mimetypes["application/json"]
+                >= request.accept_mimetypes["text/html"]
+            )
+            if path.startswith("/api/") or accept_json:
+                return jsonify({"error": "authentication required"}), 401
+
+            next_url = path or url_for("main.index")
+            if not str(next_url).startswith("/"):
+                next_url = url_for("main.index")
+            return redirect(url_for("main.login", next=next_url))
+
+        perms = _rbac_permissions_for_request()
+        if not perms:
+            return None
+
+        # System Administrator has full access.
+        if user_has_permission(user, "*"):
+            return None
+
+        for perm in perms:
+            if user_has_permission(user, perm):
+                return None
+        abort(403)
 
     @app.context_processor
     def _inject_user() -> dict:  # pragma: no cover - template wiring

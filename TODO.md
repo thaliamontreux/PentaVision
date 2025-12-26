@@ -79,6 +79,14 @@
 - [x] Set up Fail2ban or similar intrusion-prevention tooling.
 - [x] Enable services on boot and ensure regular security updates.
 
+- [ ] Implement comprehensive main-system RBAC (staff roles & permissions)
+  - [x] Add permission-aware RBAC helpers (`user_has_permission`, `require_permissions`).
+  - [x] Add idempotent RBAC seed SQL for staff roles + permissions (`deploy/pentavision_rbac_seed.sql`).
+  - [x] Enforce enterprise RBAC globally via app-wide permission gate (remove legacy role-only blockers).
+  - [ ] Add admin UI to manage roles, permissions, and role assignments (beyond the current limited role toggles).
+  - [x] Wire startup/installer flow to apply RBAC seed automatically and keep it in sync.
+  - [ ] Smoke-test enterprise RBAC enforcement end-to-end (login, dashboard, cameras, recordings, admin, diagnostics).
+
 ## Graphical web installer
 
 - [x] Design installer flow (multi-step wizard: DB setup, admin account, security options).

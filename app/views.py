@@ -1192,8 +1192,6 @@ def audit_events():
     if user is None:
         next_url = request.path or url_for("main.index")
         return redirect(url_for("main.login", next=next_url))
-    if not user_has_role(user, "System Administrator"):
-        abort(403)
 
     user_engine = get_user_engine()
     events = []
@@ -2089,8 +2087,6 @@ def recording_settings():
     if user is None:
         next_url = request.path or url_for("main.index")
         return redirect(url_for("main.login", next=next_url))
-    if not user_has_role(user, "System Administrator"):
-        abort(403)
 
     errors: list[str] = []
     saved = False

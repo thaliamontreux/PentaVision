@@ -27,7 +27,11 @@ from .models import (
     create_user_schema,
     StorageModule,
 )
-from .security import init_security, seed_system_admin_role_for_email
+from .security import (
+    apply_sql_seed_file,
+    init_security,
+    seed_system_admin_role_for_email,
+)
 from .storage_startup import start_storage_startup_checks
 from .url_healthcheck import start_startup_url_healthcheck
 from .views import bp as main_bp
@@ -60,6 +64,18 @@ def create_app() -> Flask:
             engine = get_user_engine()
             if engine is not None:
                 create_user_schema(engine)
+                try:
+                    seed_path = os.path.abspath(
+                        os.path.join(
+                            os.path.dirname(__file__),
+                            "..",
+                            "deploy",
+                            "pentavision_rbac_seed.sql",
+                        )
+                    )
+                    apply_sql_seed_file(engine, seed_path)
+                except Exception:  # noqa: BLE001
+                    pass
         except Exception:  # noqa: BLE001
             pass
 

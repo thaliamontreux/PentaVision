@@ -60,7 +60,6 @@ from .security import (
     get_admin_active_property,
     get_current_user,
     set_admin_property_uid_for_session,
-    user_has_role,
     validate_global_csrf_token,
 )
 from .storage_settings_page import storage_settings_page
@@ -285,16 +284,6 @@ def _login_failures_fernet() -> Fernet | None:
         return Fernet(key.encode("utf-8"))
     except Exception:
         return None
-
-
-@bp.before_request
-def _require_system_admin():
-    user = get_current_user()
-    if user is None:
-        next_url = request.path or url_for("main.index")
-        return redirect(url_for("main.login", next=next_url))
-    if not user_has_role(user, "System Administrator"):
-        abort(403)
 
 
 @bp.get("/")

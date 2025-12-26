@@ -51,20 +51,6 @@ from .camera_utils import build_camera_url
 bp = Blueprint("camera_admin", __name__, url_prefix="/admin/cameras")
 
 
-@bp.before_request
-def _require_admin_or_technician():
-    user = get_current_user()
-    if user is None:
-        next_url = request.path or url_for("camera_admin.list_devices")
-        return redirect(url_for("main.login", next=next_url))
-    if not (
-        user_has_role(user, "System Administrator")
-        or user_has_role(user, "Property Administrator")
-        or user_has_role(user, "Technician")
-    ):
-        abort(403)
-
-
 _SCAN_JOBS: dict[str, dict] = {}
 _SCAN_JOBS_LOCK = threading.Lock()
 
