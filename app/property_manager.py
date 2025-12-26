@@ -32,9 +32,14 @@ def _get_property_and_tenant_engine(property_id: int):
 
     with Session(engine) as db:
         prop = db.get(Property, property_id)
-        if prop is None or not getattr(prop, "uid", None):
+        if prop is None:
             abort(404)
-        prop_uid = str(prop.uid)
+        prop_uid = str(getattr(prop, "uid", None) or "").strip()
+        if not prop_uid:
+            prop_uid = uuid.uuid4().hex
+            prop.uid = prop_uid
+            db.add(prop)
+            db.commit()
         db.expunge(prop)
 
     tenant_engine = get_property_engine(prop_uid)
@@ -101,9 +106,14 @@ def pm_property_enter(property_id: int):
 
     with Session(engine) as db:
         prop = db.get(Property, int(property_id))
-        if prop is None or not getattr(prop, "uid", None):
+        if prop is None:
             abort(404)
-        prop_uid = str(prop.uid)
+        prop_uid = str(getattr(prop, "uid", None) or "").strip()
+        if not prop_uid:
+            prop_uid = uuid.uuid4().hex
+            prop.uid = prop_uid
+            db.add(prop)
+            db.commit()
 
     set_admin_property_uid_for_session(prop_uid)
 
