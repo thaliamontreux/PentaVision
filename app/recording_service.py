@@ -169,20 +169,13 @@ def _is_time_in_window(
 def _should_record_now(app: Flask, device_id: int) -> bool:
     engine = get_record_engine()
     if engine is None:
-        return True
+        return False
     now_utc = datetime.now(timezone.utc)
     with Session(engine) as session:
         CameraStorageScheduleEntry.__table__.create(bind=engine, checkfirst=True)
-        CameraRecordingSchedule.__table__.create(bind=engine, checkfirst=True)
-        CameraRecordingWindow.__table__.create(bind=engine, checkfirst=True)
-        CameraPropertyLink.__table__.create(bind=engine, checkfirst=True)
-        Property.__table__.create(bind=engine, checkfirst=True)
 
-        active_entry = _get_active_storage_schedule_entry(session, app, device_id, now_utc)
-        if active_entry is not None:
-            return True
-
-        # If schedule entries exist for this camera but none are active, do not record.
+        # Storage schedule entries are authoritative: if no enabled entries exist
+        # for this camera, do not record at all.
         try:
             any_entries = (
                 session.query(CameraStorageScheduleEntry)
@@ -192,97 +185,21 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
             )
         except Exception:  # noqa: BLE001
             any_entries = 0
-        if any_entries:
+        if not any_entries:
             return False
 
-        schedule = (
-            session.query(CameraRecordingSchedule)
-            .filter(CameraRecordingSchedule.device_id == device_id)
-            .first()
+        active_entry = _get_active_storage_schedule_entry(
+            session,
+            app,
+            device_id,
+            now_utc,
         )
-        if schedule is None:
-            return True
-        windows_raw = (
-            session.query(CameraRecordingWindow)
-            .filter(CameraRecordingWindow.schedule_id == schedule.id)
-            .all()
-        )
-        windows = [
-            {
-                "day_of_week": w.day_of_week,
-                "start_time": w.start_time or "",
-                "end_time": w.end_time or "",
-                "mode": (w.mode or "").strip().lower() or None,
-            }
-            for w in windows_raw
-        ]
-        link = (
-            session.query(CameraPropertyLink)
-            .filter(CameraPropertyLink.device_id == device_id)
-            .first()
-        )
-        property_tz = None
-        if link is not None and getattr(link, "property_id", None) is not None:
-            prop = session.get(Property, link.property_id)
-            if prop is not None:
-                property_tz = getattr(prop, "timezone", None)
-        mode = (schedule.mode or "always").strip().lower()
-        days_raw = (schedule.days_of_week or "*").strip()
-        sched_tz_name = schedule.timezone or property_tz
-        if not sched_tz_name:
-            sched_tz_name = str(app.config.get("DEFAULT_TIMEZONE") or "UTC")
-
-    try:
-        tz = ZoneInfo(str(sched_tz_name))
-    except Exception:
-        tz = timezone.utc
-
-    now_local = now_utc.astimezone(tz)
-    weekday = now_local.weekday()
-    now_minutes = now_local.hour * 60 + now_local.minute
-
-    if windows:
-        day_windows: list[tuple[int, int, str]] = []
-        for item in windows:
-            day = item.get("day_of_week")
-            if day is not None and day != weekday:
-                continue
-            start_minutes = _parse_time_str(item.get("start_time", "") or "")
-            end_minutes = _parse_time_str(item.get("end_time", "") or "")
-            if start_minutes is None or end_minutes is None:
-                continue
-            window_mode = item.get("mode") or mode
-            day_windows.append((start_minutes, end_minutes, window_mode))
-
-        for start_minutes, end_minutes, _window_mode in day_windows:
-            if _is_time_in_window(now_minutes, start_minutes, end_minutes):
-                return True
-
-        return False
-
-    if days_raw and days_raw != "*":
-        allowed_days: set[int] = set()
-        for token in days_raw.split(","):
-            token = token.strip()
-            if not token:
-                continue
-            try:
-                day_idx = int(token)
-            except ValueError:
-                continue
-            if 0 <= day_idx <= 6:
-                allowed_days.add(day_idx)
-        if allowed_days and weekday not in allowed_days:
+        if active_entry is None:
             return False
-
-    if mode in {"always", "motion_only"}:
+        raw_targets = (getattr(active_entry, "storage_targets", None) or "").strip()
+        if not raw_targets:
+            return False
         return True
-
-    start_minutes = _parse_time_str(getattr(schedule, "start_time", "") or "")
-    end_minutes = _parse_time_str(getattr(schedule, "end_time", "") or "")
-    if start_minutes is None or end_minutes is None:
-        return True
-    return _is_time_in_window(now_minutes, start_minutes, end_minutes)
 
 
 def _get_active_storage_schedule_entry(
@@ -1555,12 +1472,9 @@ class RecordingManager:
         with Session(engine) as session:
             devices = session.query(CameraDevice).all()
             patterns = session.query(CameraUrlPattern).all()
-            CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
-            policies = session.query(CameraStoragePolicy).all()
             CameraStorageScheduleEntry.__table__.create(bind=engine, checkfirst=True)
             schedule_entries = session.query(CameraStorageScheduleEntry).all()
         patterns_index = {item.id: item for item in patterns}
-        policies_index = {p.device_id: p for p in policies}
         providers_index = {p.name: p for p in self.providers}
         entries_by_device: dict[int, list[CameraStorageScheduleEntry]] = {}
         for entry in schedule_entries:
@@ -1581,43 +1495,30 @@ class RecordingManager:
                 continue
             device_providers: List[StorageProvider] = list(self.providers)
 
-            # Prefer new schedule entries (multiple per camera) when present.
-            if device.id in entries_by_device:
-                active_targets = _get_active_storage_targets(self.app, int(device.id))
-                if active_targets is None:
-                    # schedule entries exist but none are active
-                    self._log_skip(int(device.id), "no active storage schedule entry")
-                    continue
-                if active_targets:
-                    selected = [
-                        providers_index[name]
-                        for name in active_targets
-                        if name in providers_index
-                    ]
-                    if selected:
-                        device_providers = selected
-                    else:
-                        self._log_skip(int(device.id), "storage targets not configured")
-                        continue
+            # Storage schedule entries are authoritative: if none exist for this
+            # camera, never start a recording worker.
+            if device.id not in entries_by_device:
+                self._log_skip(int(device.id), "no storage schedule configured")
+                continue
+
+            active_targets = _get_active_storage_targets(self.app, int(device.id))
+            if active_targets is None:
+                # schedule entries exist but none are active
+                self._log_skip(int(device.id), "no active storage schedule entry")
+                continue
+            if not active_targets:
+                self._log_skip(int(device.id), "storage targets not configured")
+                continue
+            selected = [
+                providers_index[name]
+                for name in active_targets
+                if name in providers_index
+            ]
+            if selected:
+                device_providers = selected
             else:
-                # Legacy per-camera policy fallback.
-                policy = policies_index.get(device.id)
-                if policy and policy.storage_targets:
-                    targets = {
-                        name.strip()
-                        for name in policy.storage_targets.split(",")
-                        if name.strip()
-                    }
-                    selected = [
-                        providers_index[name]
-                        for name in targets
-                        if name in providers_index
-                    ]
-                    if selected:
-                        device_providers = selected
-                    else:
-                        self._log_skip(int(device.id), "legacy storage targets not configured")
-                        continue
+                self._log_skip(int(device.id), "storage targets not configured")
+                continue
             if not device_providers:
                 self._log_skip(int(device.id), "no storage providers configured")
                 continue

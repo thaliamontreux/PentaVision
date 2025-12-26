@@ -34,13 +34,13 @@ from .models import (
     CameraStoragePolicy,
     CameraUrlPattern,
     Property,
+    StorageModule,
     UserProperty,
 )
 from .models_iptv import CameraIptvChannel
 from .security import get_current_user, user_has_property_access, user_has_role
 from .stream_service import get_stream_manager
 from .camera_utils import build_camera_url
-from .storage_providers import _load_storage_settings
 
 
 bp = Blueprint("camera_admin", __name__, url_prefix="/admin/cameras")
@@ -77,6 +77,36 @@ def _validate_csrf_token(token: Optional[str]) -> bool:
     if not token:
         return False
     return token == session.get("camera_admin_csrf")
+
+
+def _get_default_storage_targets(engine) -> str:
+    if engine is None:
+        return "local_fs"
+    try:
+        with Session(engine) as session_db:
+            StorageModule.metadata.create_all(bind=engine, tables=[StorageModule.__table__])
+            rows = (
+                session_db.query(StorageModule)
+                .filter(StorageModule.is_enabled != 0)
+                .order_by(
+                    getattr(StorageModule, "priority", StorageModule.id),
+                    StorageModule.id,
+                )
+                .all()
+            )
+        names = []
+        for r in rows:
+            try:
+                name = str(getattr(r, "name", "") or "").strip()
+            except Exception:  # noqa: BLE001
+                name = ""
+            if name:
+                names.append(name)
+        if names:
+            return ",".join(names)
+    except Exception:  # noqa: BLE001
+        pass
+    return "local_fs"
 
 
 @bp.post("/devices/detect-mac")
@@ -1775,7 +1805,7 @@ def iptv_edit(channel_id: int):
                 errors.append("Multicast address is required.")
 
             if not errors and device_id_int is not None and port_int is not None:
-                row = _upsert_iptv_channel(
+                _upsert_iptv_channel(
                     session_db,
                     device_id_int,
                     is_enabled_flag,
@@ -1827,15 +1857,7 @@ def create_device():
     is_admin = user_has_role(user, "System Administrator") if user else False
     properties = _load_properties_for_user(user)
 
-    db_settings = _load_storage_settings() or {}
-    raw_targets = (
-        db_settings.get("storage_targets")
-        or str(current_app.config.get("STORAGE_TARGETS", "") or "")
-        or "local_fs"
-    )
-    storage_targets_default = ",".join(
-        [item.strip() for item in str(raw_targets).split(",") if item.strip()]
-    )
+    storage_targets_default = _get_default_storage_targets(engine)
 
     if engine is None:
         errors.append("Record database is not configured.")
@@ -2015,15 +2037,7 @@ def edit_device(device_id: int):
     is_admin = user_has_role(user, "System Administrator") if user else False
     properties = _load_properties_for_user(user)
 
-    db_settings = _load_storage_settings() or {}
-    raw_targets = (
-        db_settings.get("storage_targets")
-        or str(current_app.config.get("STORAGE_TARGETS", "") or "")
-        or "local_fs"
-    )
-    storage_targets_default = ",".join(
-        [item.strip() for item in str(raw_targets).split(",") if item.strip()]
-    )
+    storage_targets_default = _get_default_storage_targets(engine)
 
     if engine is None:
         errors.append("Record database is not configured.")
@@ -2060,11 +2074,6 @@ def edit_device(device_id: int):
         prop_link = (
             session_db.query(CameraPropertyLink)
             .filter(CameraPropertyLink.device_id == device_id)
-            .first()
-        )
-        rtmp_row = (
-            session_db.query(CameraRtmpOutput)
-            .filter(CameraRtmpOutput.device_id == device_id)
             .first()
         )
 
