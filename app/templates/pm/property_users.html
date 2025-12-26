@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Property Users · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <div class="pv-card">
+      <div class="pv-card-header">
+        <div>
+          <h1 style="margin-bottom: 0.25rem;">{{ prop.name }} · Users</h1>
+          <p class="pv-card-subtitle">Create and manage property-local users (password and optional 8-digit PIN).</p>
+        </div>
+        <div class="pv-admin-actions">
+          <a class="pv-button-secondary" href="{{ url_for('pm.index') }}">Back to properties</a>
+        </div>
+      </div>
+
+      <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.1rem; align-items: start;">
+        <div class="pv-card" style="padding: 0.85rem;">
+          <div style="font-weight: 900; margin-bottom: 0.35rem;">Create user</div>
+          <form method="post" action="{{ url_for('pm.property_users_create', property_id=prop.id) }}" class="pv-form" style="margin-top: 0;">
+            <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+
+            <div class="pv-field-group">
+              <label for="pvPuUsername">Username</label>
+              <input id="pvPuUsername" name="username" autocomplete="username" />
+            </div>
+
+            <div class="pv-field-group">
+              <label for="pvPuFullName">Full name</label>
+              <input id="pvPuFullName" name="full_name" autocomplete="name" />
+            </div>
+
+            <div class="pv-field-group">
+              <label for="pvPuPassword">Password</label>
+              <input id="pvPuPassword" name="password" type="password" autocomplete="new-password" />
+            </div>
+
+            <div class="pv-field-group">
+              <label for="pvPuPin">PIN (optional, 8 digits)</label>
+              <input id="pvPuPin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" />
+            </div>
+
+            <div class="pv-form-actions">
+              <button class="pv-button-primary" type="submit">Create user</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="pv-card" style="padding: 0.85rem;">
+          <div style="font-weight: 900; margin-bottom: 0.35rem;">Existing users</div>
+
+          {% if rows and rows|length %}
+            <div style="overflow-x: auto;">
+              <table class="pv-table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for u in rows %}
+                    <tr>
+                      <td style="font-weight: 800;">{{ u.username }}</td>
+                      <td>{{ u.full_name or '' }}</td>
+                      <td>
+                        {% if u.is_active %}
+                          <span class="pv-badge pv-badge-ok">Active</span>
+                        {% else %}
+                          <span class="pv-badge pv-badge-not_configured">Disabled</span>
+                        {% endif %}
+                      </td>
+                      <td style="white-space: nowrap;">
+                        <form method="post" action="{{ url_for('pm.property_users_toggle', property_id=prop.id, property_user_id=u.id) }}" style="display:inline;">
+                          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                          <button type="submit" class="pv-button pv-button-small">{% if u.is_active %}Disable{% else %}Enable{% endif %}</button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div style="color:#9ca3af; font-size: 0.95rem;">No property users yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

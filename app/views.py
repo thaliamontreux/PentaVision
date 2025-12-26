@@ -2,15 +2,12 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import base64
-import hashlib
 import io
 import json
-import os
 import platform
 import pickle
 import subprocess
 import tempfile
-import secrets
 import time
 import re
 from collections import defaultdict
@@ -44,8 +41,9 @@ def _get_face_recognition_lib():
     except (SystemExit, ImportError, Exception) as exc:  # noqa: BLE001
         return None, exc
 
-from .auth import _authenticate_primary_factor, _authenticate_user, _verify_totp
+from .auth import _authenticate_primary_factor, _verify_totp
 from .db import get_face_engine, get_record_engine, get_user_engine
+from .db import get_property_engine
 from .logging_utils import log_event, pv_log
 from .models import (
     AuditEvent,
@@ -60,19 +58,13 @@ from .models import (
     DlnaSettings,
     FaceEmbedding,
     FacePrivacySetting,
-    IpAllowlist,
-    IpBlocklist,
-    LoginFailure,
     Property,
     PropertyGroupMember,
     PropertyUser,
     RecordingData,
     SiteTheme,
     StorageModule,
-    StorageModuleEvent,
-    StorageModuleHealthCheck,
     StorageModuleWriteStat,
-    UploadQueueItem,
     User,
     UserNotificationSettings,
     WebAuthnCredential,
@@ -352,7 +344,6 @@ def property_login():
         with Session(engine) as db:
             try:
                 Property.__table__.create(bind=db.get_bind(), checkfirst=True)
-                PropertyUser.__table__.create(bind=db.get_bind(), checkfirst=True)
                 properties = db.query(Property).order_by(Property.name).all()
             except Exception:
                 properties = []
@@ -363,6 +354,7 @@ def property_login():
         username = (request.form.get("username") or "").strip().lower()
         property_id_raw = (request.form.get("property_id") or "").strip()
         password = request.form.get("password") or ""
+        pin = (request.form.get("pin") or "").strip()
 
         try:
             property_id = int(property_id_raw)
@@ -372,37 +364,158 @@ def property_login():
             errors.append("Username is required.")
         if property_id <= 0:
             errors.append("Property is required.")
-        if not password:
-            errors.append("Password is required.")
+
+        use_pin = bool(pin)
+        if use_pin:
+            if re.fullmatch(r"\d{8}", pin) is None:
+                errors.append("PIN must be exactly 8 digits.")
+        else:
+            if not password:
+                errors.append("Password is required.")
 
         if not errors:
             if engine is None:
                 errors.append("User database is not configured.")
             else:
                 with Session(engine) as db:
-                    user_obj = (
-                        db.query(PropertyUser)
-                        .filter(
-                            PropertyUser.property_id == property_id,
-                            PropertyUser.username == username,
-                            PropertyUser.is_active == 1,
-                        )
-                        .first()
-                    )
+                    prop = db.get(Property, property_id)
+                    if prop is None or not getattr(prop, "uid", None):
+                        errors.append("Login failed.")
+                        user_obj = None
+                        prop_uid = None
+                    else:
+                        prop_uid = str(prop.uid)
+
+                if not errors:
+                    tenant_engine = get_property_engine(str(prop_uid))
+                    if tenant_engine is None:
+                        errors.append("Login failed.")
+                        user_obj = None
+                    else:
+                        with Session(tenant_engine) as db:
+                            PropertyUser.__table__.create(
+                                bind=db.get_bind(),
+                                checkfirst=True,
+                            )
+                            user_obj = (
+                                db.query(PropertyUser)
+                                .filter(
+                                    PropertyUser.property_id == property_id,
+                                    PropertyUser.username == username,
+                                    PropertyUser.is_active == 1,
+                                )
+                                .first()
+                            )
                     if user_obj is None:
                         errors.append("Login failed.")
+                        log_event(
+                            "PROPERTY_LOGIN_FAILED",
+                            details=(
+                                f"property_id={property_id}, username={username}, "
+                                f"method={'pin' if use_pin else 'password'}"
+                            ),
+                        )
                     else:
                         ph = PasswordHasher()
-                        try:
-                            ph.verify(user_obj.password_hash, password)
-                        except VerifyMismatchError:
-                            errors.append("Login failed.")
-                        except Exception:
-                            errors.append("Login failed.")
+                        now_dt = datetime.now(timezone.utc)
+
+                        if use_pin:
+                            locked_until = getattr(user_obj, "pin_locked_until", None)
+                            if locked_until is not None and locked_until > now_dt:
+                                errors.append("Login failed.")
+                                log_event(
+                                    "PROPERTY_PIN_LOCKED",
+                                    details=(
+                                        f"property_id={property_id}, username={username}"
+                                    ),
+                                )
+                            else:
+                                pin_hash = getattr(user_obj, "pin_hash", None)
+                                if not pin_hash:
+                                    errors.append("Login failed.")
+                                else:
+                                    try:
+                                        ph.verify(pin_hash, pin)
+                                    except VerifyMismatchError:
+                                        errors.append("Login failed.")
+                                        try:
+                                            user_obj.failed_pin_attempts = int(
+                                                getattr(
+                                                    user_obj,
+                                                    "failed_pin_attempts",
+                                                    0,
+                                                )
+                                                or 0
+                                            ) + 1
+                                            if int(user_obj.failed_pin_attempts) >= 5:
+                                                user_obj.pin_locked_until = (
+                                                    now_dt
+                                                    + timedelta(minutes=10)
+                                                )
+                                                user_obj.failed_pin_attempts = 0
+                                            db.add(user_obj)
+                                            db.commit()
+                                        except Exception:  # noqa: BLE001
+                                            pass
+                                        log_event(
+                                            "PROPERTY_LOGIN_FAILED",
+                                            details=(
+                                                f"property_id={property_id}, username={username}, method=pin"
+                                            ),
+                                        )
+                                    except Exception:  # noqa: BLE001
+                                        errors.append("Login failed.")
+                                    else:
+                                        user_obj.failed_pin_attempts = 0
+                                        user_obj.pin_locked_until = None
+                                        user_obj.last_pin_use_at = now_dt
+                                        user_obj.last_login_at = now_dt
+                                        db.add(user_obj)
+                                        db.commit()
+                                        log_event(
+                                            "PROPERTY_LOGIN_SUCCESS",
+                                            details=(
+                                                f"property_id={property_id}, username={username}, method=pin"
+                                            ),
+                                        )
+                                        db.expunge(user_obj)
+                                        login_property_user(
+                                            user_obj,
+                                            property_uid=str(prop_uid),
+                                        )
+                                        return redirect(next_url)
                         else:
-                            db.expunge(user_obj)
-                            login_property_user(user_obj)
-                            return redirect(next_url)
+                            try:
+                                ph.verify(user_obj.password_hash, password)
+                            except VerifyMismatchError:
+                                errors.append("Login failed.")
+                                log_event(
+                                    "PROPERTY_LOGIN_FAILED",
+                                    details=(
+                                        f"property_id={property_id}, username={username}, method=password"
+                                    ),
+                                )
+                            except Exception:  # noqa: BLE001
+                                errors.append("Login failed.")
+                            else:
+                                try:
+                                    user_obj.last_login_at = now_dt
+                                    db.add(user_obj)
+                                    db.commit()
+                                except Exception:  # noqa: BLE001
+                                    pass
+                                log_event(
+                                    "PROPERTY_LOGIN_SUCCESS",
+                                    details=(
+                                        f"property_id={property_id}, username={username}, method=password"
+                                    ),
+                                )
+                                db.expunge(user_obj)
+                                login_property_user(
+                                    user_obj,
+                                    property_uid=str(prop_uid),
+                                )
+                                return redirect(next_url)
 
     return render_template(
         "property_login.html",

@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
 
 CREATE TABLE IF NOT EXISTS properties (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  uid VARCHAR(64) NULL,
   name VARCHAR(255) NOT NULL,
   address_line1 VARCHAR(255) NULL,
   address_line2 VARCHAR(255) NULL,
@@ -91,6 +92,96 @@ CREATE TABLE IF NOT EXISTS user_properties (
   created_at DATETIME(6) NULL,
   KEY ix_user_properties_user_id (user_id),
   KEY ix_user_properties_property_id (property_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS property_users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  property_id INT NOT NULL,
+  username VARCHAR(128) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  pin_hash VARCHAR(255) NULL,
+  full_name VARCHAR(255) NULL,
+  is_active INT NOT NULL DEFAULT 1,
+  failed_pin_attempts INT NOT NULL DEFAULT 0,
+  pin_locked_until DATETIME(6) NULL,
+  last_login_at DATETIME(6) NULL,
+  last_pin_use_at DATETIME(6) NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_property_users_property_id (property_id),
+  KEY ix_property_users_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS property_roles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  property_id INT NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  description VARCHAR(512) NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_property_roles_property_id (property_id),
+  KEY ix_property_roles_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS property_user_roles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  property_user_id INT NOT NULL,
+  role_id INT NOT NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_property_user_roles_property_user_id (property_user_id),
+  KEY ix_property_user_roles_role_id (role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS property_groups (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  property_id INT NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  description VARCHAR(512) NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_property_groups_property_id (property_id),
+  KEY ix_property_groups_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS property_group_members (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  group_id INT NOT NULL,
+  property_user_id INT NOT NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_property_group_members_group_id (group_id),
+  KEY ix_property_group_members_property_user_id (property_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS property_zones (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  property_id INT NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  description VARCHAR(512) NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_property_zones_property_id (property_id),
+  KEY ix_property_zones_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_property_zone_links (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  property_id INT NOT NULL,
+  zone_id INT NOT NULL,
+  created_at DATETIME(6) NULL,
+  KEY ix_user_property_zone_links_user_id (user_id),
+  KEY ix_user_property_zone_links_property_id (property_id),
+  KEY ix_user_property_zone_links_zone_id (zone_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_property_access_windows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  property_id INT NOT NULL,
+  days_of_week VARCHAR(32) NOT NULL DEFAULT '0,1,2,3,4,5,6',
+  start_time VARCHAR(8) NOT NULL DEFAULT '00:00',
+  end_time VARCHAR(8) NOT NULL DEFAULT '23:59',
+  timezone VARCHAR(64) NULL,
+  is_enabled INT NOT NULL DEFAULT 1,
+  created_at DATETIME(6) NULL,
+  KEY ix_user_property_access_windows_user_id (user_id),
+  KEY ix_user_property_access_windows_property_id (property_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS roles (

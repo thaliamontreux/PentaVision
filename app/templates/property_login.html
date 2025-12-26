@@ -40,7 +40,16 @@
 
         <div style="grid-column: 1 / -1;">
           <label class="form-label" for="password">Password</label>
-          <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required />
+          <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" />
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <label class="form-label" for="pin">PIN (optional, 8 digits)</label>
+          <input class="form-control" id="pin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" />
+        </div>
+
+        <div style="grid-column: 1 / -1; color:#666; font-size: 13px;">
+          Use a password or an 8-digit PIN.
         </div>
       </div>
     </div>

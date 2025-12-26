@@ -20,6 +20,7 @@ from .diagnostics import (
     bp as diagnostics_bp,
 )
 from .installer import bp as installer_bp
+from .property_manager import bp as pm_bp
 from .models import (
     create_face_schema,
     create_record_schema,
@@ -92,7 +93,10 @@ def create_app() -> Flask:
 
                 try:
                     with Session(engine) as session_db:
-                        StorageModule.__table__.create(bind=engine, checkfirst=True)
+                        StorageModule.__table__.create(
+                            bind=engine,
+                            checkfirst=True,
+                        )
                         enabled_count = (
                             session_db.query(StorageModule)
                             .filter(StorageModule.is_enabled != 0)
@@ -114,14 +118,20 @@ def create_app() -> Flask:
                             if candidate is None:
                                 candidate = (
                                     session_db.query(StorageModule)
-                                    .filter(StorageModule.provider_type == "local_fs")
+                                    .filter(
+                                        StorageModule.provider_type
+                                        == "local_fs"
+                                    )
                                     .order_by(StorageModule.id)
                                     .first()
                                 )
                             if candidate is None:
                                 candidate = (
                                     session_db.query(StorageModule)
-                                    .order_by(StorageModule.priority, StorageModule.id)
+                                    .order_by(
+                                        StorageModule.priority,
+                                        StorageModule.id,
+                                    )
                                     .first()
                                 )
 
@@ -134,7 +144,10 @@ def create_app() -> Flask:
                                 ):
                                     cfg = {}
                                     try:
-                                        cfg = json.loads(candidate.config_json or "{}")
+                                        cfg = json.loads(
+                                            candidate.config_json
+                                            or "{}"
+                                        )
                                     except Exception:  # noqa: BLE001
                                         cfg = {}
                                     if not str(cfg.get("base_dir") or "").strip():
@@ -146,7 +159,9 @@ def create_app() -> Flask:
                             else:
                                 cfg_text = None
                                 try:
-                                    cfg_text = json.dumps({"base_dir": str(base_dir)})
+                                    cfg_text = json.dumps(
+                                        {"base_dir": str(base_dir)}
+                                    )
                                 except Exception:  # noqa: BLE001
                                     cfg_text = None
                                 session_db.add(
@@ -176,6 +191,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(camera_admin_bp)
+    app.register_blueprint(pm_bp)
 
     @app.errorhandler(Exception)
     def _handle_uncaught(err):  # pragma: no cover - error wiring

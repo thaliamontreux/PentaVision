@@ -24,6 +24,7 @@ from .models import (
 
 _SESSION_USER_ID_KEY = "user_id"
 _SESSION_PROPERTY_USER_ID_KEY = "property_user_id"
+_SESSION_PROPERTY_UID_KEY = "property_uid"
 _GLOBAL_CSRF_KEY = "global_csrf"
 
 
@@ -60,18 +61,36 @@ def get_current_property_user() -> Optional[PropertyUser]:
         return user
 
     user_id = session.get(_SESSION_PROPERTY_USER_ID_KEY)
+    prop_uid = session.get(_SESSION_PROPERTY_UID_KEY)
     user_obj: Optional[PropertyUser] = None
-    engine = get_user_engine()
-    if user_id is not None and engine is not None:
-        try:
-            uid = int(user_id)
-        except (TypeError, ValueError):
-            uid = None
-        if uid is not None:
-            with Session(engine) as db:
-                user_obj = db.get(PropertyUser, uid)
-                if user_obj is not None:
-                    db.expunge(user_obj)
+
+    if user_id is not None:
+        if prop_uid:
+            tenant_engine = get_property_engine(str(prop_uid))
+            if tenant_engine is not None:
+                with Session(tenant_engine) as db:
+                    try:
+                        PropertyUser.__table__.create(
+                            bind=tenant_engine,
+                            checkfirst=True,
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
+                    user_obj = db.get(PropertyUser, int(user_id))
+                    if user_obj is not None:
+                        db.expunge(user_obj)
+        else:
+            # Backwards-compatible fallback for older sessions.
+            engine = get_user_engine()
+            if engine is not None:
+                with Session(engine) as db:
+                    try:
+                        PropertyUser.__table__.create(bind=engine, checkfirst=True)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    user_obj = db.get(PropertyUser, int(user_id))
+                    if user_obj is not None:
+                        db.expunge(user_obj)
     g.current_property_user = user_obj
     return user_obj
 
@@ -82,9 +101,15 @@ def login_user(user: User) -> None:
     session[_SESSION_USER_ID_KEY] = int(user.id)
 
 
-def login_property_user(user: PropertyUser) -> None:
+def login_property_user(user: PropertyUser, property_uid: Optional[str] = None) -> None:
     session.clear()
     session[_SESSION_PROPERTY_USER_ID_KEY] = int(user.id)
+    if property_uid:
+        session[_SESSION_PROPERTY_UID_KEY] = str(property_uid or "").strip()
+
+
+def set_property_uid_for_session(property_uid: str) -> None:
+    session[_SESSION_PROPERTY_UID_KEY] = str(property_uid or "").strip()
 
 
 def logout_user() -> None:
@@ -95,6 +120,7 @@ def logout_user() -> None:
 
 def logout_property_user() -> None:
     session.pop(_SESSION_PROPERTY_USER_ID_KEY, None)
+    session.pop(_SESSION_PROPERTY_UID_KEY, None)
     if hasattr(g, "current_property_user"):
         g.current_property_user = None
 
@@ -262,7 +288,7 @@ def init_security(app) -> None:
 
     @app.before_request
     def _enforce_ip_access_policies():
-        allowed, reason = evaluate_ip_access_policies()
+        allowed, _reason = evaluate_ip_access_policies()
         if not allowed:
             accept_json = (
                 request.accept_mimetypes["application/json"]
@@ -341,6 +367,24 @@ def init_security(app) -> None:
         user = get_current_user() or get_current_property_user()
         global_user = get_current_user()
         main_theme, admin_theme = _load_theme_settings()
+
+        is_property_manager = False
+        if global_user is not None:
+            if user_has_role(global_user, "System Administrator"):
+                is_property_manager = True
+            else:
+                engine = get_user_engine()
+                if engine is not None:
+                    with Session(engine) as db:
+                        exists = (
+                            db.query(UserProperty.id)
+                            .filter(
+                                UserProperty.user_id
+                                == int(global_user.id),
+                            )
+                            .first()
+                        )
+                        is_property_manager = exists is not None
         return {
             "current_user": user,
             "global_csrf_token": ensure_global_csrf_token(),
@@ -349,6 +393,7 @@ def init_security(app) -> None:
                 "System Administrator",
             ),
             "is_technician": user_has_role(global_user, "Technician"),
+            "is_property_manager": is_property_manager,
             "current_timezone": _current_timezone_name(),
             "active_main_theme": main_theme,
             "active_admin_theme": admin_theme,

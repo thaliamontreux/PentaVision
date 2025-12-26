@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
 from typing import Dict, Optional
 
 from flask import current_app
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine import make_url
 
@@ -61,3 +62,85 @@ def get_face_engine() -> Optional[Engine]:
 
 def get_record_engine() -> Optional[Engine]:
     return _get_engine("record", "RECORD_DB_URL")
+
+
+def _normalize_property_db_name(property_uid: str) -> str:
+    raw = str(property_uid or "").strip().lower()
+    raw = raw.replace("-", "")
+    raw = re.sub(r"[^a-z0-9_]", "", raw)
+    prefix = str(current_app.config.get("PROPERTY_DB_NAME_PREFIX") or "pv_prop_")
+    prefix = re.sub(r"[^a-zA-Z0-9_]", "", prefix)
+    return f"{prefix}{raw}"
+
+
+def get_property_engine(property_uid: str) -> Optional[Engine]:
+    """Return an engine for the per-property tenant DB.
+
+    This will attempt to CREATE DATABASE when configured to do so.
+    """
+
+    app_url_base = str(current_app.config.get("PROPERTY_DB_APP_URL_BASE") or "").strip()
+    if not app_url_base:
+        return None
+
+    db_name = _normalize_property_db_name(property_uid)
+    cache_key = f"prop:{db_name}"
+    engine = _engines.get(cache_key)
+    if engine is not None:
+        return engine
+
+    try:
+        url = make_url(app_url_base)
+    except Exception:  # noqa: BLE001
+        url = make_url(app_url_base)
+
+    url = url.set(database=db_name)
+
+    # Provision database when admin URL is available.
+    admin_url_raw = str(current_app.config.get("PROPERTY_DB_ADMIN_URL") or "").strip()
+    if admin_url_raw:
+        try:
+            admin_url = make_url(admin_url_raw)
+            if not admin_url.database:
+                admin_url = admin_url.set(database="mysql")
+            admin_engine = create_engine(
+                admin_url,
+                future=True,
+                pool_size=1,
+                max_overflow=0,
+                pool_timeout=30,
+                pool_recycle=1800,
+                pool_pre_ping=True,
+                pool_use_lifo=True,
+            )
+            with admin_engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "CREATE DATABASE IF NOT EXISTS "
+                        + f"`{db_name}`"
+                        + " CHARACTER SET utf8mb4"
+                    )
+                )
+        except Exception:  # noqa: BLE001
+            pass
+
+    engine = create_engine(
+        url,
+        future=True,
+        pool_size=2,
+        max_overflow=0,
+        pool_timeout=30,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+        pool_use_lifo=True,
+    )
+
+    try:
+        from .models import create_property_schema
+
+        create_property_schema(engine)
+    except Exception:  # noqa: BLE001
+        pass
+
+    _engines[cache_key] = engine
+    return engine

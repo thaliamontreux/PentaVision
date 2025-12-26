@@ -28,7 +28,7 @@ from werkzeug.routing import BuildError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from .db import get_user_engine
+from .db import get_property_engine, get_record_engine, get_user_engine
 from .logging_utils import log_event, _client_ip
 from .models import (
     BlocklistDistributionSettings,
@@ -2310,8 +2310,12 @@ def property_create():
         if not errors:
             created_property_id = None
             created_property_name = None
+            created_property_uid = None
             with Session(engine) as db:
+                import uuid
+
                 prop = Property(
+                    uid=uuid.uuid4().hex,
                     name=form["name"],
                     address_line1=form["address_line1"] or None,
                     address_line2=form["address_line2"] or None,
@@ -2325,12 +2329,22 @@ def property_create():
                 db.flush()
                 created_property_id = prop.id
                 created_property_name = prop.name
+                created_property_uid = prop.uid
                 db.commit()
+
+            if created_property_uid:
+                try:
+                    get_property_engine(created_property_uid)
+                except Exception:  # noqa: BLE001
+                    pass
             actor = get_current_user()
             log_event(
                 "PROPERTY_CREATE",
                 user_id=actor.id if actor else None,
-                details=f"property_id={created_property_id}, name={created_property_name}",
+                details=(
+                    f"property_id={created_property_id}, uid={created_property_uid}, "
+                    f"name={created_property_name}"
+                ),
             )
             return redirect(url_for("admin.properties_list"))
 

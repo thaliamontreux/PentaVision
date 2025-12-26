@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Properties · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section">
+    <div class="pv-card">
+      <div class="pv-card-header">
+        <div>
+          <h1 style="margin-bottom: 0.25rem;">Properties</h1>
+          <p class="pv-card-subtitle">Manage the properties you have access to.</p>
+        </div>
+      </div>
+
+      {% if properties and properties|length %}
+        <div style="overflow-x: auto;">
+          <table class="pv-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Timezone</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in properties %}
+                <tr>
+                  <td style="font-weight: 800;">{{ p.name }}</td>
+                  <td>{{ p.timezone or '' }}</td>
+                  <td style="white-space: nowrap;">
+                    <a class="pv-link-muted" href="{{ url_for('pm.property_users', property_id=p.id) }}">Users</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div style="color:#9ca3af; font-size: 0.95rem;">No properties assigned.</div>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

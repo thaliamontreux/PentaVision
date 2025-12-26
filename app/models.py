@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, date
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Integer, LargeBinary, String, func, inspect, text
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Integer,
+    LargeBinary,
+    String,
+    func,
+    inspect,
+    text,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 
 class UserBase(DeclarativeBase):
@@ -244,8 +254,19 @@ class PropertyUser(UserBase):
     property_id: Mapped[int] = mapped_column(Integer, index=True)
     username: Mapped[str] = mapped_column(String(128), index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    pin_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[int] = mapped_column(Integer, server_default="1")
+    failed_pin_attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    pin_locked_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_pin_use_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -534,6 +555,7 @@ class Property(UserBase):
     __tablename__ = "properties"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uid: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     address_line2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -883,6 +905,67 @@ def create_user_schema(engine) -> None:
         if "timezone" not in cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN timezone VARCHAR(64)"))
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Migration-lite: ensure Property has a stable UID for tenant DB naming.
+    try:
+        insp = inspect(engine)
+        cols = {c.get("name") for c in insp.get_columns("properties")}
+        if "uid" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE properties ADD COLUMN uid VARCHAR(64)"))
+
+        with Session(engine) as db:
+            missing = (
+                db.query(Property)
+                .filter(
+                    (Property.uid == None)  # noqa: E711
+                )
+                .all()
+            )
+            if missing:
+                for prop in missing:
+                    prop.uid = uuid.uuid4().hex
+                    db.add(prop)
+                db.commit()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def create_property_schema(engine) -> None:
+    """Create tables for a per-property tenant database on the given engine."""
+
+    for tbl in (
+        PropertyUser.__table__,
+        PropertyRole.__table__,
+        PropertyUserRole.__table__,
+        PropertyGroup.__table__,
+        PropertyGroupMember.__table__,
+        PropertyZone.__table__,
+        UserPropertyZoneLink.__table__,
+        UserPropertyAccessWindow.__table__,
+    ):
+        tbl.create(bind=engine, checkfirst=True)
+
+    # Migration-lite: property user PIN support.
+    try:
+        insp = inspect(engine)
+        cols = {c.get("name") for c in insp.get_columns("property_users")}
+        alters: list[str] = []
+        if "pin_hash" not in cols:
+            alters.append("ADD COLUMN pin_hash VARCHAR(255) NULL")
+        if "failed_pin_attempts" not in cols:
+            alters.append("ADD COLUMN failed_pin_attempts INTEGER NOT NULL DEFAULT 0")
+        if "pin_locked_until" not in cols:
+            alters.append("ADD COLUMN pin_locked_until DATETIME(6) NULL")
+        if "last_login_at" not in cols:
+            alters.append("ADD COLUMN last_login_at DATETIME(6) NULL")
+        if "last_pin_use_at" not in cols:
+            alters.append("ADD COLUMN last_pin_use_at DATETIME(6) NULL")
+        if alters:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE property_users " + ", ".join(alters)))
     except Exception:  # noqa: BLE001
         pass
 

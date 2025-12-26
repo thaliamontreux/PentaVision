@@ -39,6 +39,13 @@
   - [x] Tighten admin table density and improve admin narrow-screen behavior (admin main scroll).
   - [x] Add admin action-row utility classes and use them on Users/Properties admin list pages.
 
+## Multi-tenant properties & property users
+
+- [ ] Implement Property Manager portal (`/pm`) for global users linked to properties.
+- [ ] Implement property-local user management (create/disable users, set passwords, optional 8-digit PIN).
+- [ ] Upgrade `/property-login` to support password or 8-digit PIN login with audit logging + lockout.
+- [ ] Implement property-scoped roles/permissions UI for property managers.
+
 ## Storage Modules Manager fixes
 
 - [x] Make existing-module Test on `/storage?edit_module=...` run via AJAX (no page reload) and show toast results.
