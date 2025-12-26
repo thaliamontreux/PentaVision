@@ -119,7 +119,7 @@
                   </thead>
                   <tbody>
                     {% for u in users %}
-                      {% set selected = zone_memberships.get(u.id, set()) %}
+                      {% set selected = zone_memberships.get(u.id, []) %}
                       <tr>
                         <td style="white-space:nowrap;">{{ u.email }}</td>
                         <td>
@@ -408,7 +408,7 @@
                   </thead>
                   <tbody>
                     {% for u in users %}
-                      {% set selected = group_scopes.get(u.id, set()) %}
+                      {% set selected = group_scopes.get(u.id, []) %}
                       <tr>
                         <td style="white-space:nowrap;">{{ u.email }}</td>
                         <td>
@@ -452,7 +452,7 @@
                   </thead>
                   <tbody>
                     {% for u in users %}
-                      {% set selected = role_overrides.get(u.id, set()) %}
+                      {% set selected = role_overrides.get(u.id, []) %}
                       <tr>
                         <td style="white-space:nowrap;">{{ u.email }}</td>
                         <td>
