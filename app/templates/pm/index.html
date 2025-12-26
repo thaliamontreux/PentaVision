@@ -28,6 +28,22 @@
                   <td style="font-weight: 800;">{{ p.name }}</td>
                   <td>{{ p.timezone or '' }}</td>
                   <td style="white-space: nowrap;">
+                    {% if is_system_admin or is_property_admin %}
+                      {% if active_admin_property and active_admin_property.id == p.id %}
+                        <span class="pv-badge">Active</span>
+                      {% else %}
+                        <form
+                          method="post"
+                          action="{{ url_for('pm.pm_property_enter', property_id=p.id) }}"
+                          style="display: inline;"
+                        >
+                          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                          <button type="submit" class="pv-button pv-button-small pv-button-primary">
+                            Enter
+                          </button>
+                        </form>
+                      {% endif %}
+                    {% endif %}
                     <a class="pv-link-muted" href="{{ url_for('pm.property_users', property_id=p.id) }}">Users</a>
                   </td>
                 </tr>

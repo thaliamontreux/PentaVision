@@ -14,6 +14,8 @@ from .models import Property, PropertyUser, PropertyUserProfile, UserProperty
 from .security import (
     get_admin_active_property,
     get_current_user,
+    set_admin_property_uid_for_session,
+    clear_admin_property_uid_for_session,
     user_has_role,
     validate_global_csrf_token,
 )
@@ -82,6 +84,62 @@ def _admin_context_property_id() -> int | None:
         return None
 
 
+@bp.post("/properties/<int:property_id>/enter")
+def pm_property_enter(property_id: int):
+    user = get_current_user()
+    if not (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ):
+        abort(403)
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    with Session(engine) as db:
+        prop = db.get(Property, int(property_id))
+        if prop is None or not getattr(prop, "uid", None):
+            abort(404)
+        prop_uid = str(prop.uid)
+
+    set_admin_property_uid_for_session(prop_uid)
+
+    actor = get_current_user()
+    log_event(
+        "ADMIN_PROPERTY_CONTEXT_ENTER",
+        user_id=actor.id if actor else None,
+        details=(
+            f"source=pm, property_id={property_id}, property_uid={prop_uid}"
+        ),
+    )
+    return redirect(url_for("pm.index"))
+
+
+@bp.post("/properties/context/clear")
+def pm_property_context_clear():
+    user = get_current_user()
+    if not (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ):
+        abort(403)
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    clear_admin_property_uid_for_session()
+
+    actor = get_current_user()
+    log_event(
+        "ADMIN_PROPERTY_CONTEXT_EXIT",
+        user_id=actor.id if actor else None,
+        details="source=pm",
+    )
+    return redirect(url_for("pm.index"))
+
+
 @bp.before_request
 def _pm_require_login():
     return _require_global_user()
@@ -140,7 +198,10 @@ def property_users(property_id: int):
     ctx_id = _admin_context_property_id()
     if (
         ctx_id
-        and user_has_role(user, "System Administrator")
+        and (
+            user_has_role(user, "System Administrator")
+            or user_has_role(user, "Property Administrator")
+        )
         and int(property_id) != int(ctx_id)
     ):
         return redirect(url_for("pm.property_users", property_id=int(ctx_id)))
@@ -175,7 +236,10 @@ def property_users_create(property_id: int):
     ctx_id = _admin_context_property_id()
     if (
         ctx_id
-        and user_has_role(user, "System Administrator")
+        and (
+            user_has_role(user, "System Administrator")
+            or user_has_role(user, "Property Administrator")
+        )
         and int(property_id) != int(ctx_id)
     ):
         return redirect(url_for("pm.property_users", property_id=int(ctx_id)))
@@ -253,7 +317,10 @@ def property_user_detail(property_id: int, property_user_uid: str):
     ctx_id = _admin_context_property_id()
     if (
         ctx_id
-        and user_has_role(user, "System Administrator")
+        and (
+            user_has_role(user, "System Administrator")
+            or user_has_role(user, "Property Administrator")
+        )
         and int(property_id) != int(ctx_id)
     ):
         return redirect(
@@ -438,7 +505,10 @@ def property_users_toggle_uid(property_id: int, property_user_uid: str):
     ctx_id = _admin_context_property_id()
     if (
         ctx_id
-        and user_has_role(user, "System Administrator")
+        and (
+            user_has_role(user, "System Administrator")
+            or user_has_role(user, "Property Administrator")
+        )
         and int(property_id) != int(ctx_id)
     ):
         return redirect(url_for("pm.property_users", property_id=int(ctx_id)))

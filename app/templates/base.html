@@ -122,7 +122,7 @@
         </div>
       </div>
 
-      {% if is_system_admin and active_admin_property %}
+      {% if (is_system_admin or is_property_admin) and active_admin_property %}
         <div
           style="display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; padding: 0.55rem 1rem; border-top: 1px solid rgba(148,163,184,0.20); background: linear-gradient(90deg, rgba(2,6,23,0.95), rgba(15,23,42,0.95)); color: rgba(226,232,240,0.95);"
         >
@@ -131,22 +131,39 @@
             <span style="font-weight: 800;">{{ active_admin_property.name }}</span>
             <span style="opacity: 0.7;">(ID {{ active_admin_property.id }})</span>
             <span style="opacity: 0.7;">|</span>
-            <a href="{{ url_for('admin.property_workspace', property_id=active_admin_property.id) }}" class="pv-link-muted" style="color: rgba(226,232,240,0.95);">
-              Workspace
-            </a>
+            {% if is_system_admin %}
+              <a href="{{ url_for('admin.property_workspace', property_id=active_admin_property.id) }}" class="pv-link-muted" style="color: rgba(226,232,240,0.95);">
+                Workspace
+              </a>
+            {% endif %}
             <a href="{{ url_for('pm.property_users', property_id=active_admin_property.id) }}" class="pv-link-muted" style="color: rgba(226,232,240,0.95);">
               Property users
             </a>
-            <a href="{{ url_for('admin.properties_list') }}" class="pv-link-muted" style="color: rgba(226,232,240,0.95);">
-              Switch
-            </a>
+            {% if is_system_admin %}
+              <a href="{{ url_for('admin.properties_list') }}" class="pv-link-muted" style="color: rgba(226,232,240,0.95);">
+                Switch
+              </a>
+            {% else %}
+              <a href="{{ url_for('pm.index') }}" class="pv-link-muted" style="color: rgba(226,232,240,0.95);">
+                Switch
+              </a>
+            {% endif %}
           </div>
-          <form method="post" action="{{ url_for('admin.property_context_clear') }}" style="margin: 0;">
-            <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-            <button type="submit" class="pv-button pv-button-small">
-              Exit
-            </button>
-          </form>
+          {% if is_system_admin %}
+            <form method="post" action="{{ url_for('admin.property_context_clear') }}" style="margin: 0;">
+              <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+              <button type="submit" class="pv-button pv-button-small">
+                Exit
+              </button>
+            </form>
+          {% else %}
+            <form method="post" action="{{ url_for('pm.pm_property_context_clear') }}" style="margin: 0;">
+              <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+              <button type="submit" class="pv-button pv-button-small">
+                Exit
+              </button>
+            </form>
+          {% endif %}
         </div>
       {% endif %}
     </header>

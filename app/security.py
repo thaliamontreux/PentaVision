@@ -119,7 +119,10 @@ def get_admin_active_property() -> Optional[Property]:
         return prop
 
     user = get_current_user()
-    if not user_has_role(user, "System Administrator"):
+    if not (
+        user_has_role(user, "System Administrator")
+        or user_has_role(user, "Property Administrator")
+    ):
         g.admin_active_property = None
         return None
 

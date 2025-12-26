@@ -296,7 +296,13 @@ def _load_properties_for_user(user) -> list[Property]:
         return []
 
     ctx_id = _admin_context_property_id()
-    if user_has_role(user, "System Administrator") and ctx_id:
+    if (
+        (
+            user_has_role(user, "System Administrator")
+            or user_has_role(user, "Property Administrator")
+        )
+        and ctx_id
+    ):
         active = get_admin_active_property()
         return [active] if active is not None else []
 
@@ -1159,25 +1165,34 @@ def list_devices():
 
         user = get_current_user()
         ctx_id = _admin_context_property_id()
-
-        if user is not None and user_has_role(user, "System Administrator") and ctx_id:
-            filtered: List[CameraDevice] = []
+        if (
+            user is not None
+            and (
+                user_has_role(user, "System Administrator")
+                or user_has_role(user, "Property Administrator")
+            )
+            and ctx_id
+        ):
+            filtered_devices: List[CameraDevice] = []
             for d in devices:
                 prop_id = device_properties.get(d.id)
                 if not prop_id:
                     continue
                 if int(prop_id) == int(ctx_id):
-                    filtered.append(d)
-            devices = filtered
-        elif user is not None and not user_has_role(user, "System Administrator"):
-            filtered: List[CameraDevice] = []
+                    filtered_devices.append(d)
+            devices = filtered_devices
+        elif user is not None and not (
+            user_has_role(user, "System Administrator")
+            or user_has_role(user, "Property Administrator")
+        ):
+            filtered_devices = []
             for d in devices:
                 prop_id = device_properties.get(d.id)
                 if not prop_id:
                     continue
-                if user_has_property_access(user, prop_id):
-                    filtered.append(d)
-            devices = filtered
+                if user_has_property_access(user, int(prop_id)):
+                    filtered_devices.append(d)
+            devices = filtered_devices
 
         manager = get_stream_manager(current_app)
         if manager is not None:
