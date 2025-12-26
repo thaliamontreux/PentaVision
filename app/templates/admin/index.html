@@ -10,103 +10,135 @@
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
         <div class="pv-grid pv-admin-grid">
-          {% if is_system_admin %}
+          {% if has_permission('Nav.Overview.View') %}
             <a href="{{ url_for('admin.index') }}" class="pv-card">
               <h2 class="pv-card-title">Overview</h2>
-              <p class="pv-card-subtitle">Administrative shortcuts for users, cameras, storage, recording policies, and security controls.</p>
+              <p class="pv-card-subtitle">Administrative shortcuts for users, properties, feeds, recording, storage, security, and services.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.IAM.Users.View') %}
             <a href="{{ url_for('admin.users_list') }}" class="pv-card">
               <h2 class="pv-card-title">Users</h2>
-              <p class="pv-card-subtitle">Create, edit, and deactivate user accounts. Manage global roles such as System Administrator and Technician.</p>
+              <p class="pv-card-subtitle">Create, edit, and deactivate user accounts. Manage staff roles and access.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Cust.Properties.View') %}
             <a href="{{ url_for('admin.properties_list') }}" class="pv-card">
               <h2 class="pv-card-title">Properties</h2>
-              <p class="pv-card-subtitle">Manage properties and link users to sites for future per-property access control.</p>
+              <p class="pv-card-subtitle">Manage properties and link staff to sites for property access control.</p>
             </a>
           {% endif %}
 
-          {% if is_system_admin or is_property_admin or is_technician %}
+          {% if has_permission('Nav.Feeds.Cameras.View') %}
             <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-card">
               <h2 class="pv-card-title">Cameras</h2>
-              <p class="pv-card-subtitle">Configure cameras, templates, storage policies, and per-property camera assignments.</p>
-            </a>
-
-            <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-card">
-              <h2 class="pv-card-title">Camera URL templates</h2>
-              <p class="pv-card-subtitle">Maintain URL templates for common camera vendors and models.</p>
-            </a>
-
-            <a href="{{ url_for('camera_admin.rtmp_list') }}" class="pv-card">
-              <h2 class="pv-card-title">RTMP outputs</h2>
-              <p class="pv-card-subtitle">Manage RTMP outputs and control remote RTMP publishing per camera.</p>
+              <p class="pv-card-subtitle">Configure camera devices and property-scoped camera assignments.</p>
             </a>
           {% endif %}
 
-          {% if is_system_admin %}
+          {% if has_permission('Nav.Feeds.CameraUrlTemplates.View') %}
+            <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-card">
+              <h2 class="pv-card-title">Camera URL Templates</h2>
+              <p class="pv-card-subtitle">Maintain URL templates for common camera vendors and models.</p>
+            </a>
+          {% endif %}
+
+          {% if has_permission('Nav.Feeds.RtmpOutputs.View') %}
+            <a href="{{ url_for('camera_admin.rtmp_list') }}" class="pv-card">
+              <h2 class="pv-card-title">RTMP Outputs</h2>
+              <p class="pv-card-subtitle">Manage RTMP outputs and control remote publishing per camera.</p>
+            </a>
+          {% endif %}
+
+          {% if has_permission('Nav.Recording.Recordings.View') %}
             <a href="{{ url_for('admin.recordings_alias') }}" class="pv-card">
               <h2 class="pv-card-title">Recordings</h2>
-              <p class="pv-card-subtitle">Review recorded footage and verify that retention and storage targets are working as expected.</p>
+              <p class="pv-card-subtitle">Review recorded footage and verify retention and storage targets.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Recording.Schedule.View') %}
             <a href="{{ url_for('admin.recording_settings_alias') }}" class="pv-card">
-              <h2 class="pv-card-title">Recording settings</h2>
-              <p class="pv-card-subtitle">Manage recording schedules, per-camera storage targets, and recording policies.</p>
+              <h2 class="pv-card-title">Recording Schedule</h2>
+              <p class="pv-card-subtitle">Manage recording schedules, storage targets, and recording policies.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Storage.Providers.View') %}
             <a href="{{ url_for('admin.storage_settings') }}" class="pv-card">
-              <h2 class="pv-card-title">Storage</h2>
-              <p class="pv-card-subtitle">Manage storage modules and verify active providers for camera recordings.</p>
+              <h2 class="pv-card-title">Storage Providers</h2>
+              <p class="pv-card-subtitle">Manage storage modules and verify active providers for recordings.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Themes.View') %}
             <a href="{{ url_for('admin.themes') }}" class="pv-card">
               <h2 class="pv-card-title">Themes</h2>
               <p class="pv-card-subtitle">Select a theme for the main site and a separate theme for the admin area.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.NetSec.BlockAllow.View') %}
             <a href="{{ url_for('admin.access_control') }}" class="pv-card">
               <h2 class="pv-card-title">Block / Allow</h2>
               <p class="pv-card-subtitle">Manage IP exemptions, IP blocks, and country access policies.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.NetSec.BlocklistDistribution.View') %}
             <a href="{{ url_for('admin.blocklist_distribution') }}" class="pv-card">
               <h2 class="pv-card-title">Blocklist Distribution</h2>
-              <p class="pv-card-subtitle">Configure external blocklist publication for pfSense/firewalls and view current distribution health.</p>
+              <p class="pv-card-subtitle">Configure external blocklist publication and view distribution health.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.NetSec.BlocklistIntegration.View') %}
             <a href="{{ url_for('admin.blocklist_integration') }}" class="pv-card">
               <h2 class="pv-card-title">Blocklist Integration</h2>
-              <p class="pv-card-subtitle">Configure how blocklist publication is exposed and secured for external systems.</p>
+              <p class="pv-card-subtitle">Configure how blocklist publication is exposed and secured externally.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Audit.BlocklistAudit.View') %}
             <a href="{{ url_for('admin.blocklist_audit') }}" class="pv-card">
               <h2 class="pv-card-title">Blocklist Audit</h2>
-              <p class="pv-card-subtitle">Review blocklist generation, enforcement actions, and recent audit entries.</p>
+              <p class="pv-card-subtitle">Review blocklist generation, enforcement actions, and audit entries.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Services.View') %}
             <a href="{{ url_for('admin.services') }}" class="pv-card">
               <h2 class="pv-card-title">Services</h2>
               <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Services.View') and has_permission('Services.Manage') %}
             <a href="#" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}" role="button">
               <h2 class="pv-card-title">Pull GitHub Update</h2>
               <p class="pv-card-subtitle">Run scripts/git_pull.sh on the server and watch output live (read-only).</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Audit.AuditLog.View') %}
             <a href="{{ url_for('admin.audit_alias') }}" class="pv-card">
-              <h2 class="pv-card-title">Audit log</h2>
+              <h2 class="pv-card-title">Audit Log</h2>
               <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Audit.LoginFailures.View') %}
             <a href="{{ url_for('admin.login_failures_list') }}" class="pv-card">
-              <h2 class="pv-card-title">Login failures</h2>
-              <p class="pv-card-subtitle">Review failed login attempts and decrypt the attempted password (admin-only).</p>
+              <h2 class="pv-card-title">Login Failures</h2>
+              <p class="pv-card-subtitle">Review failed login attempts and decrypt attempted passwords (if authorized).</p>
             </a>
+          {% endif %}
 
+          {% if has_permission('Nav.Installer.Databases.View') %}
             <a href="{{ url_for('installer.install') }}" class="pv-card">
-              <h2 class="pv-card-title">Installer & databases</h2>
+              <h2 class="pv-card-title">Installer &amp; Databases</h2>
               <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
             </a>
           {% endif %}

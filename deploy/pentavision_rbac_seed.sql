@@ -102,6 +102,62 @@ INSERT IGNORE INTO permissions (
 ) VALUES
   ('*', 'Wildcard permission for all actions.', 'critical', 1, 1, 1, 1),
 
+  ('Nav.Overview.View', 'Navigation: Overview menu.', 'low', 0, 0, 0, 1),
+  ('Nav.IAM.Users.View', 'Navigation: Users pages.', 'medium', 0, 0, 0, 1),
+  ('Nav.Cust.Properties.View', 'Navigation: Properties pages.', 'medium', 0, 0, 0, 1),
+
+  ('Nav.Feeds.Cameras.View', 'Navigation: Feeds > Cameras.', 'medium', 0, 0, 0, 1),
+  (
+    'Nav.Feeds.CameraUrlTemplates.View',
+    'Navigation: Feeds > Camera URL Templates.',
+    'medium',
+    0,
+    0,
+    0,
+    1
+  ),
+  ('Nav.Feeds.RtmpOutputs.View', 'Navigation: Feeds > RTMP Outputs.', 'medium', 0, 0, 0, 1),
+
+  ('Nav.Recording.Recordings.View', 'Navigation: Recording & Storage > Recordings.', 'medium', 0, 0, 0, 1),
+  ('Nav.Recording.Schedule.View', 'Navigation: Recording & Storage > Recording Schedule.', 'high', 1, 0, 0, 1),
+  ('Nav.Storage.Providers.View', 'Navigation: Recording & Storage > Storage Providers.', 'high', 1, 0, 0, 1),
+
+  ('Nav.Themes.View', 'Navigation: Themes pages.', 'high', 1, 0, 0, 1),
+
+  ('Nav.NetSec.BlockAllow.View', 'Navigation: Network Security > Block / Allow.', 'critical', 1, 0, 0, 1),
+  ('Nav.NetSec.BlocklistDistribution.View', 'Navigation: Network Security > Blocklist Distribution.', 'critical', 1, 0, 0, 1),
+  ('Nav.NetSec.BlocklistIntegration.View', 'Navigation: Network Security > Blocklist Integration.', 'critical', 1, 0, 0, 1),
+
+  ('Nav.Audit.AuditLog.View', 'Navigation: Audit & Security Events > Audit Log.', 'high', 1, 0, 0, 1),
+  ('Nav.Audit.BlocklistAudit.View', 'Navigation: Audit & Security Events > Blocklist Audit.', 'high', 1, 0, 0, 1),
+  ('Nav.Audit.LoginFailures.View', 'Navigation: Audit & Security Events > Login Failures.', 'critical', 1, 0, 0, 1),
+
+  ('Nav.Services.View', 'Navigation: Services pages.', 'high', 1, 0, 0, 1),
+  ('Nav.Installer.Databases.View', 'Navigation: Installer & Databases.', 'critical', 1, 0, 0, 1),
+
+  ('Users.Manage', 'Page actions: manage users.', 'critical', 1, 0, 0, 1),
+  ('Properties.Manage', 'Page actions: manage properties.', 'high', 0, 0, 0, 1),
+  ('Feeds.Cameras.Manage', 'Page actions: manage camera devices.', 'high', 0, 0, 0, 1),
+  (
+    'Feeds.CameraUrlTemplates.Manage',
+    'Page actions: manage camera URL templates.',
+    'high',
+    0,
+    0,
+    0,
+    1
+  ),
+  ('Feeds.RtmpOutputs.Manage', 'Page actions: manage RTMP outputs.', 'critical', 1, 0, 0, 1),
+  ('Recording.Schedule.Manage', 'Page actions: manage recording schedule.', 'critical', 1, 0, 0, 1),
+  ('Storage.Providers.Manage', 'Page actions: manage storage providers.', 'critical', 1, 0, 0, 1),
+  ('Themes.Manage', 'Page actions: manage themes.', 'critical', 1, 0, 0, 1),
+  ('NetSec.BlockAllow.Manage', 'Page actions: manage IP block/allow rules.', 'critical', 1, 0, 0, 1),
+  ('NetSec.BlocklistDistribution.Manage', 'Page actions: manage blocklist distribution.', 'critical', 1, 0, 0, 1),
+  ('NetSec.BlocklistIntegration.Manage', 'Page actions: manage blocklist integration.', 'critical', 1, 0, 0, 1),
+  ('Audit.LoginFailures.Decrypt', 'Page actions: decrypt login-failure records.', 'critical', 1, 0, 0, 1),
+  ('Services.Manage', 'Page actions: manage services and update actions.', 'critical', 1, 0, 0, 1),
+  ('Installer.Databases.Manage', 'Page actions: change installer/database settings.', 'critical', 1, 0, 0, 1),
+
   ('IAM.*', 'Identity and access management (all).', 'critical', 1, 0, 0, 1),
   ('IAM.Users.*', 'IAM users (all).', 'critical', 1, 0, 0, 1),
   ('IAM.Users.List', 'List users.', 'medium', 0, 0, 0, 1),
@@ -391,6 +447,9 @@ FROM roles r
 JOIN permissions p
 WHERE r.name = 'Viewer'
   AND p.name IN (
+    'Nav.Overview.View',
+    'Nav.Feeds.Cameras.View',
+    'Nav.Recording.Recordings.View',
     'Video.Live.View',
     'Video.Playback.View',
     'Ops.Incidents.List',
@@ -419,6 +478,11 @@ FROM roles r
 JOIN permissions p
 WHERE r.name = 'Technician'
   AND p.name IN (
+    'Nav.Overview.View',
+    'Nav.Feeds.Cameras.View',
+    'Nav.Feeds.CameraUrlTemplates.View',
+    'Feeds.Cameras.Manage',
+    'Feeds.CameraUrlTemplates.Manage',
     'Devices.List',
     'Devices.View',
     'Devices.Update',
@@ -448,6 +512,14 @@ FROM roles r
 JOIN permissions p
 WHERE r.name = 'Property Administrator'
   AND p.name IN (
+    'Nav.Overview.View',
+    'Nav.Cust.Properties.View',
+    'Nav.Feeds.Cameras.View',
+    'Nav.Recording.Recordings.View',
+    'Nav.Recording.Schedule.View',
+    'Nav.Storage.Providers.View',
+    'Recording.Schedule.Manage',
+    'Storage.Providers.Manage',
     'Cust.Properties.*',
     'Cust.Contacts.*',
     'Cust.Customers.View',

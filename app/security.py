@@ -7,7 +7,16 @@ from functools import wraps
 from typing import Callable, Dict, Iterable, Optional, Set, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from flask import abort, g, jsonify, redirect, request, session, url_for
+from flask import (
+    abort,
+    current_app,
+    g,
+    jsonify,
+    redirect,
+    request,
+    session,
+    url_for,
+)
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -561,7 +570,9 @@ def init_security(app) -> None:
         if p.startswith("/theme-css/"):
             return True
         if p.startswith("/install"):
-            return True
+            locked = str(current_app.config.get("INSTALL_LOCKED", "")).lower()
+            if locked != "true":
+                return True
         if p.startswith("/api/auth"):
             return True
         if p.startswith("/api/status"):
@@ -580,7 +591,13 @@ def init_security(app) -> None:
             return True
         return False
 
-    def _rbac_permissions_for_request() -> Set[str] | None:
+    def _rbac_require(
+        any_of: Iterable[str] | None = None,
+        all_of: Iterable[str] | None = None,
+    ) -> tuple[Set[str], Set[str]]:
+        return set(any_of or []), set(all_of or [])
+
+    def _rbac_permissions_for_request() -> tuple[Set[str], Set[str]] | None:
         path = str(getattr(request, "path", "") or "")
         endpoint = str(getattr(request, "endpoint", "") or "")
         blueprint = str(getattr(request, "blueprint", "") or "")
@@ -591,37 +608,44 @@ def init_security(app) -> None:
         # Main system UI
         if blueprint == "main":
             if path == "/":
-                return {"Video.Live.View", "Video.*"}
+                return _rbac_require(any_of=["Nav.Overview.View"])
             if path.startswith("/cameras/"):
-                return {"Video.Live.View", "Video.*"}
+                return _rbac_require(any_of=["Nav.Feeds.Cameras.View"])
             if path.startswith("/streams/status"):
-                return {"Video.Live.View", "Video.*"}
+                return _rbac_require(any_of=["Nav.Overview.View"])
             if path.startswith("/recordings"):
                 if path.endswith("/download"):
-                    return {
-                        "Video.Export.Download",
-                        "Video.Export.*",
-                        "Video.*",
-                    }
-                return {"Video.Playback.View", "Video.Playback.*", "Video.*"}
+                    return _rbac_require(
+                        any_of=[
+                            "Video.Export.Download",
+                            "Video.Export.*",
+                            "Video.*",
+                        ],
+                        all_of=["Nav.Recording.Recordings.View"],
+                    )
+                return _rbac_require(any_of=["Nav.Recording.Recordings.View"])
             if path.startswith("/recording-settings"):
-                return {
-                    "Storage.View",
-                    "Storage.*",
-                    "Platform.StorageBackends.Configure",
-                    "Platform.*",
-                }
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=[
+                            "Nav.Recording.Schedule.View",
+                            "Recording.Schedule.Manage",
+                        ]
+                    )
+                return _rbac_require(any_of=["Nav.Recording.Schedule.View"])
             if path.startswith("/audit"):
-                return {"Audit.Logs.View", "Audit.*"}
+                return _rbac_require(any_of=["Nav.Audit.AuditLog.View"])
             if path.startswith("/profile"):
                 return None
             if (
                 path.startswith("/faces-demo")
                 or path.startswith("/auth-demo")
             ):
-                return {"Video.Live.View", "Video.*"}
+                return _rbac_require(any_of=["Video.Live.View", "Video.*"])
             if path.startswith("/api/face/"):
-                return {"Video.Live.TakeSnapshot", "Video.*"}
+                return _rbac_require(
+                    any_of=["Video.Live.TakeSnapshot", "Video.*"]
+                )
             if path.startswith("/api/user/"):
                 return None
             if path.startswith("/api/status"):
@@ -630,71 +654,143 @@ def init_security(app) -> None:
         # Admin area
         if blueprint == "admin":
             if path in ("/admin", "/admin/"):
-                return {
-                    "Platform.*",
-                    "IAM.*",
-                    "Sec.*",
-                    "Audit.*",
-                    "Cust.*",
-                    "Storage.*",
-                }
+                return _rbac_require(any_of=["Nav.Overview.View"])
             if path.startswith("/admin/users"):
-                return {
-                    "IAM.Users.View",
-                    "IAM.Users.List",
-                    "IAM.Users.*",
-                    "IAM.*",
-                }
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=["Nav.IAM.Users.View", "Users.Manage"]
+                    )
+                return _rbac_require(any_of=["Nav.IAM.Users.View"])
             if path.startswith("/admin/properties"):
-                return {
-                    "Cust.Properties.View",
-                    "Cust.Properties.List",
-                    "Cust.Properties.*",
-                    "Cust.*",
-                }
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=[
+                            "Nav.Cust.Properties.View",
+                            "Properties.Manage",
+                        ]
+                    )
+                return _rbac_require(any_of=["Nav.Cust.Properties.View"])
             if path.startswith("/admin/access-control"):
-                return {"Sec.IPAllowlist.Manage", "Sec.*", "Platform.*"}
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=[
+                            "Nav.NetSec.BlockAllow.View",
+                            "NetSec.BlockAllow.Manage",
+                        ]
+                    )
+                return _rbac_require(any_of=["Nav.NetSec.BlockAllow.View"])
             if path.startswith("/admin/blocklist"):
-                return {"Sec.IPAllowlist.Manage", "Sec.*", "Platform.*"}
+                if path.startswith("/admin/blocklist-distribution"):
+                    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                        return _rbac_require(
+                            all_of=[
+                                "Nav.NetSec.BlocklistDistribution.View",
+                                "NetSec.BlocklistDistribution.Manage",
+                            ]
+                        )
+                    return _rbac_require(
+                        any_of=["Nav.NetSec.BlocklistDistribution.View"]
+                    )
+                if path.startswith("/admin/blocklist-integration"):
+                    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                        return _rbac_require(
+                            all_of=[
+                                "Nav.NetSec.BlocklistIntegration.View",
+                                "NetSec.BlocklistIntegration.Manage",
+                            ]
+                        )
+                    return _rbac_require(
+                        any_of=["Nav.NetSec.BlocklistIntegration.View"]
+                    )
+                if path.startswith("/admin/blocklist-audit"):
+                    return _rbac_require(
+                        any_of=["Nav.Audit.BlocklistAudit.View"]
+                    )
+                return _rbac_require(any_of=["Nav.NetSec.BlockAllow.View"])
             if path.startswith("/admin/services"):
-                return {"Platform.Updates.Manage", "Platform.*"}
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=["Nav.Services.View", "Services.Manage"]
+                    )
+                return _rbac_require(any_of=["Nav.Services.View"])
             if path.startswith("/admin/themes"):
-                return {
-                    "Platform.Settings.Update",
-                    "Platform.Settings.View",
-                    "Platform.*",
-                }
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=["Nav.Themes.View", "Themes.Manage"]
+                    )
+                return _rbac_require(any_of=["Nav.Themes.View"])
             if path.startswith("/admin/git-pull"):
-                return {"Platform.Updates.Manage", "Platform.*"}
+                return _rbac_require(
+                    all_of=["Nav.Services.View", "Services.Manage"]
+                )
             if path.startswith("/admin/storage"):
-                return {"Storage.View", "Storage.*", "Platform.*"}
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=[
+                            "Nav.Storage.Providers.View",
+                            "Storage.Providers.Manage",
+                        ]
+                    )
+                return _rbac_require(any_of=["Nav.Storage.Providers.View"])
             if path.startswith("/admin/audit"):
-                return {"Audit.Logs.View", "Audit.*"}
+                return _rbac_require(any_of=["Nav.Audit.AuditLog.View"])
             if path.startswith("/admin/login-failures"):
-                return {"Audit.Logs.View", "Audit.*"}
-            return {"Platform.*"}
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=[
+                            "Nav.Audit.LoginFailures.View",
+                            "Audit.LoginFailures.Decrypt",
+                        ]
+                    )
+                return _rbac_require(any_of=["Nav.Audit.LoginFailures.View"])
+            return _rbac_require(any_of=["Nav.Overview.View"])
 
         # Camera admin area
         if blueprint == "camera_admin":
-            return {
-                "Devices.List",
-                "Devices.View",
-                "Devices.Update",
-                "Devices.*",
-            }
+            if path.startswith("/admin/cameras/devices") or path.startswith(
+                "/admin/cameras/scan"
+            ):
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=[
+                            "Nav.Feeds.Cameras.View",
+                            "Feeds.Cameras.Manage",
+                        ]
+                    )
+                return _rbac_require(any_of=["Nav.Feeds.Cameras.View"])
+            if path.startswith("/admin/cameras/rtmp"):
+                if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                    return _rbac_require(
+                        all_of=[
+                            "Nav.Feeds.RtmpOutputs.View",
+                            "Feeds.RtmpOutputs.Manage",
+                        ]
+                    )
+                return _rbac_require(any_of=["Nav.Feeds.RtmpOutputs.View"])
+            if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                return _rbac_require(
+                    all_of=[
+                        "Nav.Feeds.CameraUrlTemplates.View",
+                        "Feeds.CameraUrlTemplates.Manage",
+                    ]
+                )
+            return _rbac_require(any_of=["Nav.Feeds.CameraUrlTemplates.View"])
 
         # Property manager portal
         if blueprint == "pm":
-            return {
-                "Cust.Properties.List",
-                "Cust.Properties.View",
-                "Cust.Properties.*",
-                "Cust.Customers.View",
-                "Cust.Customers.List",
-                "Cust.*",
-            }
+            return _rbac_require(any_of=["Nav.Cust.Properties.View"])
 
-        return {"*"}
+        if blueprint == "installer":
+            if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+                return _rbac_require(
+                    all_of=[
+                        "Nav.Installer.Databases.View",
+                        "Installer.Databases.Manage",
+                    ]
+                )
+            return _rbac_require(any_of=["Nav.Installer.Databases.View"])
+
+        return _rbac_require(any_of=["*"])
 
     @app.before_request
     def _enforce_enterprise_rbac():
@@ -728,17 +824,27 @@ def init_security(app) -> None:
                 next_url = url_for("main.index")
             return redirect(url_for("main.login", next=next_url))
 
-        perms = _rbac_permissions_for_request()
-        if not perms:
+        reqd = _rbac_permissions_for_request()
+        if not reqd:
             return None
+
+        any_of, all_of = reqd
 
         # System Administrator has full access.
         if user_has_permission(user, "*"):
             return None
 
-        for perm in perms:
+        for perm in all_of:
+            if not user_has_permission(user, perm):
+                abort(403)
+
+        if not any_of:
+            return None
+
+        for perm in any_of:
             if user_has_permission(user, perm):
                 return None
+
         abort(403)
 
     @app.context_processor
@@ -794,6 +900,9 @@ def init_security(app) -> None:
         active_admin_property = get_admin_active_property()
         main_theme, admin_theme = _load_theme_settings()
 
+        def has_permission(permission_name: str) -> bool:
+            return user_has_permission(global_user, permission_name)
+
         is_property_manager = False
         if global_user is not None:
             if (
@@ -817,6 +926,7 @@ def init_security(app) -> None:
         return {
             "current_user": user,
             "global_csrf_token": ensure_global_csrf_token(),
+            "has_permission": has_permission,
             "is_system_admin": user_has_role(
                 global_user,
                 "System Administrator",

@@ -186,6 +186,90 @@ body {
   color: #38bdf8;
 }
 
+.pv-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.pv-nav-dropdown {
+  position: relative;
+}
+
+.pv-nav-trigger {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(to bottom, rgba(30, 41, 59, 0.92), rgba(2, 6, 23, 0.92));
+  color: #e5e7eb;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.86rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow:
+    0 10px 18px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.pv-nav-trigger:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.pv-nav-dropdown.is-open .pv-nav-trigger {
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.pv-nav-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.55rem);
+  min-width: 250px;
+  padding: 0.55rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: radial-gradient(circle at top, rgba(30, 41, 59, 0.98), rgba(2, 6, 23, 0.96) 65%);
+  box-shadow:
+    0 26px 60px rgba(0, 0, 0, 0.78),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 9999;
+}
+
+.pv-nav-dropdown.is-open .pv-nav-panel {
+  display: block;
+}
+
+.pv-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pv-nav-panel a {
+  margin-left: 0;
+  display: flex;
+  align-items: center;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(to bottom, rgba(51, 65, 85, 0.75), rgba(15, 23, 42, 0.75));
+  box-shadow:
+    0 10px 18px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.pv-nav-panel a:hover {
+  color: #38bdf8;
+  filter: brightness(1.06);
+}
+
 .pv-nav a {
   color: #e5e7eb;
   text-decoration: none;
