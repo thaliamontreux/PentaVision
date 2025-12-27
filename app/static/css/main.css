@@ -178,6 +178,44 @@ body {
   align-items: center;
 }
 
+.pv-active-property-bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.20);
+  background: linear-gradient(90deg, rgba(2, 6, 23, 0.95), rgba(15, 23, 42, 0.95));
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.pv-active-property-left {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pv-active-property-label {
+  font-weight: 800;
+}
+
+.pv-active-property-meta {
+  opacity: 0.7;
+}
+
+.pv-active-property-sep {
+  opacity: 0.7;
+}
+
+.pv-active-property-bar .pv-link-muted {
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.pv-active-property-bar .pv-link-muted:hover {
+  color: rgba(226, 232, 240, 0.98);
+}
+
 .pv-brand {
   font-weight: 600;
   letter-spacing: 0.08em;

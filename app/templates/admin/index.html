@@ -4,11 +4,15 @@
 
 {% block content %}
   <section class="pv-section pv-admin">
-    <h1>Administration</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Administration</h1>
+            <p class="pv-page-subtitle">Administrative shortcuts for users, properties, feeds, recording, storage, security, and services.</p>
+          </div>
+        </div>
         <div class="pv-grid pv-admin-grid">
           {% if has_permission('Nav.Overview.View') %}
             <a href="{{ url_for('admin.index') }}" class="pv-card">
