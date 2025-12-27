@@ -4,17 +4,28 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>
-      {% if prop %}
-        {{ prop.name }}
-      {% else %}
-        Property workspace
-      {% endif %}
-    </h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">
+              {% if prop %}
+                {{ prop.name }}
+              {% else %}
+                Property workspace
+              {% endif %}
+            </h1>
+            <p class="pv-page-subtitle">Zones, camera scopes, access windows, and role overrides.</p>
+          </div>
+          {% if prop %}
+            <div class="pv-page-actions">
+              <a class="pv-button pv-button-small" href="{{ url_for('admin.property_edit', property_id=property_id) }}">Edit property</a>
+              <a class="pv-button pv-button-small" href="{{ url_for('admin.properties_list') }}">Back to properties</a>
+            </div>
+          {% endif %}
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -27,19 +38,6 @@
         {% endif %}
 
         {% if prop %}
-          <div class="pv-card" style="margin-bottom: 1rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem;">
-              <div>
-                <div class="pv-card-title">Property Workspace</div>
-                <div class="pv-card-subtitle">Zones, camera scopes, access windows, and role overrides</div>
-              </div>
-              <div style="display:flex; gap: 0.5rem; flex-wrap: wrap; justify-content:flex-end;">
-                <a class="pv-button pv-button-small" href="{{ url_for('admin.property_edit', property_id=property_id) }}">Edit property</a>
-                <a class="pv-button pv-button-small" href="{{ url_for('admin.properties_list') }}">Back to properties</a>
-              </div>
-            </div>
-          </div>
-
           <div class="pv-card" style="padding: 0.75rem; margin-bottom: 1rem;">
             <div style="display:flex; gap:0.5rem; flex-wrap: wrap;">
               {% set href = url_for('admin.property_workspace', property_id=property_id, tab='zones') %}
@@ -74,29 +72,31 @@
               {% if not zones %}
                 <p style="margin-top: 0.75rem;">No zones yet.</p>
               {% else %}
-                <table class="pv-table" style="margin-top: 0.75rem;">
-                  <thead>
-                    <tr>
-                      <th scope="col">Zone</th>
-                      <th scope="col">Description</th>
-                      <th scope="col">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for z in zones %}
+                <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+                  <table class="pv-table">
+                    <thead>
                       <tr>
-                        <td>{{ z.name }}</td>
-                        <td>{{ z.description or '' }}</td>
-                        <td>
-                          <form method="post" action="{{ url_for('admin.property_zones_delete', property_id=property_id, zone_id=z.id) }}" style="display:inline;" onsubmit="return confirm('Delete this zone? This will remove zone assignments for users.');">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                            <button type="submit" class="pv-button pv-button-small">Delete</button>
-                          </form>
-                        </td>
+                        <th scope="col">Zone</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Actions</th>
                       </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {% for z in zones %}
+                        <tr>
+                          <td>{{ z.name }}</td>
+                          <td>{{ z.description or '' }}</td>
+                          <td>
+                            <form method="post" action="{{ url_for('admin.property_zones_delete', property_id=property_id, zone_id=z.id) }}" style="display:inline;" onsubmit="return confirm('Delete this zone? This will remove zone assignments for users.');">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                              <button type="submit" class="pv-button pv-button-small">Delete</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
               {% endif %}
             </div>
 
@@ -109,37 +109,39 @@
               {% elif not zones %}
                 <p style="margin-top: 0.75rem;">Create at least one zone to assign users.</p>
               {% else %}
-                <table class="pv-table" style="margin-top: 0.75rem;">
-                  <thead>
-                    <tr>
-                      <th scope="col">User</th>
-                      <th scope="col">Authorized zones</th>
-                      <th scope="col">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for u in users %}
-                      {% set selected = zone_memberships.get(u.id, []) %}
+                <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+                  <table class="pv-table">
+                    <thead>
                       <tr>
-                        <td style="white-space:nowrap;">{{ u.email }}</td>
-                        <td>
-                          <form method="post" action="{{ url_for('admin.property_user_zones_update', property_id=property_id, user_id=u.id) }}" style="display:flex; flex-wrap:wrap; gap: 0.5rem; align-items:center;">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                            {% for z in zones %}
-                              <label style="display:inline-flex; align-items:center; gap: 0.35rem; margin:0;">
-                                <input type="checkbox" name="zone_ids" value="{{ z.id }}" {% if z.id in selected %}checked{% endif %} />
-                                <span>{{ z.name }}</span>
-                              </label>
-                            {% endfor %}
-                        </td>
-                        <td>
-                            <button type="submit" class="pv-button pv-button-small">Save</button>
-                          </form>
-                        </td>
+                        <th scope="col">User</th>
+                        <th scope="col">Authorized zones</th>
+                        <th scope="col">Action</th>
                       </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {% for u in users %}
+                        {% set selected = zone_memberships.get(u.id, []) %}
+                        <tr>
+                          <td style="white-space:nowrap;">{{ u.email }}</td>
+                          <td>
+                            <form method="post" action="{{ url_for('admin.property_user_zones_update', property_id=property_id, user_id=u.id) }}" style="display:flex; flex-wrap:wrap; gap: 0.5rem; align-items:center;">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                              {% for z in zones %}
+                                <label style="display:inline-flex; align-items:center; gap: 0.35rem; margin:0;">
+                                  <input type="checkbox" name="zone_ids" value="{{ z.id }}" {% if z.id in selected %}checked{% endif %} />
+                                  <span>{{ z.name }}</span>
+                                </label>
+                              {% endfor %}
+                          </td>
+                          <td>
+                              <button type="submit" class="pv-button pv-button-small">Save</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
               {% endif %}
             </div>
 
@@ -243,7 +245,8 @@
                     <div class="pv-card-title">Apply schedule to groups</div>
                     <div class="pv-card-subtitle">Assign a schedule to a group. This applies windows to all users currently scoped to that group.</div>
 
-                    <table class="pv-table" style="margin-top: 0.75rem;">
+                    <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+                      <table class="pv-table">
                       <thead>
                         <tr>
                           <th scope="col">Group</th>
@@ -285,7 +288,8 @@
                           </tr>
                         {% endfor %}
                       </tbody>
-                    </table>
+                      </table>
+                    </div>
                   </div>
                 {% endif %}
               </div>
@@ -293,7 +297,8 @@
               {% if not users %}
                 <p style="margin-top: 0.75rem;">No users found.</p>
               {% else %}
-                <table class="pv-table" style="margin-top: 0.75rem;">
+                <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+                  <table class="pv-table">
                   <thead>
                     <tr>
                       <th scope="col">User</th>
@@ -384,7 +389,8 @@
                       </tr>
                     {% endfor %}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               {% endif %}
             </div>
 
@@ -398,7 +404,8 @@
               {% elif not users %}
                 <p style="margin-top: 0.75rem;">No users found.</p>
               {% else %}
-                <table class="pv-table" style="margin-top: 0.75rem;">
+                <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+                  <table class="pv-table">
                   <thead>
                     <tr>
                       <th scope="col">User</th>
@@ -429,6 +436,7 @@
                     {% endfor %}
                   </tbody>
                 </table>
+                </div>
               {% endif %}
             </div>
 
@@ -442,7 +450,8 @@
               {% elif not users %}
                 <p style="margin-top: 0.75rem;">No users found.</p>
               {% else %}
-                <table class="pv-table" style="margin-top: 0.75rem;">
+                <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+                  <table class="pv-table">
                   <thead>
                     <tr>
                       <th scope="col">User</th>
@@ -473,6 +482,7 @@
                     {% endfor %}
                   </tbody>
                 </table>
+                </div>
               {% endif %}
             </div>
           {% endif %}

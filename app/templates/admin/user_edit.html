@@ -4,17 +4,22 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>
-      {% if is_edit %}
-        Edit user
-      {% else %}
-        New user
-      {% endif %}
-    </h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">
+              {% if is_edit %}
+                Edit user
+              {% else %}
+                New user
+              {% endif %}
+            </h1>
+            <p class="pv-page-subtitle">Update account details and profile fields.</p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">

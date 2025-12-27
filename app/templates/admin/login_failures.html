@@ -3,23 +3,33 @@
 {% block title %}Login failures · PentaVision{% endblock %}
 
 {% block content %}
-  <section class="pv-section pv-admin">
-    <h1>Login failures</h1>
-
+  <section class="pv-section">
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Login failures</h1>
+            <p class="pv-page-subtitle">Review failed login attempts and decrypt attempted passwords (if authorized).</p>
+          </div>
+        </div>
+
         {% if errors %}
-          <div class="pv-alert pv-alert-error">
-            {% for e in errors %}<div>{{ e }}</div>{% endfor %}
+          <div class="pv-alert pv-alert-error" role="alert">
+            <ul>
+              {% for e in errors %}
+                <li>{{ e }}</li>
+              {% endfor %}
+            </ul>
           </div>
         {% endif %}
 
         <div class="pv-card" style="padding: 1rem;">
-          <div class="pv-card-title" style="margin-bottom: 0.5rem;">Recent attempts</div>
-          <div class="pv-card-subtitle" style="margin-bottom: 0.75rem;">Passwords are encrypted at rest. Click Decrypt to reveal (admin-only).</div>
+          <h2 style="margin-bottom: 0.5rem;">Recent attempts</h2>
+          <p class="pv-card-subtitle" style="margin-bottom: 0.75rem;">Passwords are encrypted at rest. Click Decrypt to reveal (admin-only).</p>
 
-          <div style="overflow:auto;">
+          <div class="pv-table-wrap">
             <table class="pv-table" style="min-width: 980px; width: 100%;">
               <thead>
                 <tr>

@@ -27,7 +27,7 @@
     </div>
 
     {% if channels %}
-      <div style="overflow-x: auto;">
+      <div class="pv-table-wrap">
         <table class="pv-table">
           <thead>
             <tr>
@@ -88,7 +88,7 @@
                   {{ row.last_error or '' }}
                 </td>
                 <td style="white-space: nowrap;">
-                  <a href="{{ url_for('camera_admin.iptv_edit', channel_id=row.id) }}">Edit</a>
+                  <a href="{{ url_for('camera_admin.iptv_edit', channel_id=row.id) }}" class="pv-link-muted">Edit</a>
                 </td>
               </tr>
             {% endfor %}

@@ -4,17 +4,22 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>
-      {% if is_edit %}
-        Edit property
-      {% else %}
-        New property
-      {% endif %}
-    </h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">
+              {% if is_edit %}
+                Edit property
+              {% else %}
+                New property
+              {% endif %}
+            </h1>
+            <p class="pv-page-subtitle">Update address and workspace settings for this property.</p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -146,7 +151,8 @@
             scope. These settings will be used by future per-property RBAC checks.
           </p>
 
-          <table class="pv-table">
+          <div class="pv-table-wrap">
+            <table class="pv-table">
         <thead>
           <tr>
             <th scope="col">User</th>
@@ -231,7 +237,8 @@
             </tr>
           {% endfor %}
         </tbody>
-          </table>
+            </table>
+          </div>
         {% endif %}
 
       </div>

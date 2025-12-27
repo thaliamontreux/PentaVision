@@ -44,7 +44,7 @@
         </div>
 
         {% if patterns %}
-          <div style="overflow-x: auto;">
+          <div class="pv-table-wrap">
             <table class="pv-table">
               <thead>
                 <tr>
@@ -114,14 +114,14 @@
                     </td>
                     <td>{{ 'Yes' if p.is_active else 'No' }}</td>
                     <td style="white-space: nowrap;">
-                      <a href="{{ url_for('camera_admin.edit_pattern', pattern_id=p.id) }}">Edit</a>
+                      <a href="{{ url_for('camera_admin.edit_pattern', pattern_id=p.id) }}" class="pv-link-muted">Edit</a>
                       <form
                         method="post"
                         action="{{ url_for('camera_admin.delete_pattern', pattern_id=p.id) }}"
                         style="display: inline; margin-left: 0.5rem;"
                       >
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <button type="submit" style="background: none; border: none; color: #fca5a5; cursor: pointer;">
+                        <button type="submit" class="pv-link-danger">
                           Delete
                         </button>
                       </form>

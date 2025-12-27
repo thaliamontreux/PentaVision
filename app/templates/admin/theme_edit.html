@@ -4,11 +4,16 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Edit Theme</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Edit Theme</h1>
+            <p class="pv-page-subtitle">Adjust colors and export or apply your changes.</p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">

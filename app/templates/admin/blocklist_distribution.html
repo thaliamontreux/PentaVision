@@ -4,11 +4,16 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Blocklist Distribution</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Blocklist Distribution</h1>
+            <p class="pv-page-subtitle">Manage distribution settings and verify publication health.</p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -37,15 +42,15 @@
         <div class="pv-form-grid" style="grid-template-columns: minmax(0, 1fr); gap: 0.6rem; margin-top: 0.75rem;">
           <div>
             <div style="font-weight: 700;">CSV</div>
-            <div style="margin-top: 0.15rem;"><a href="{{ csv_url }}" target="_blank" rel="noopener">{{ csv_url }}</a></div>
+            <div style="margin-top: 0.15rem;"><a href="{{ csv_url }}" target="_blank" rel="noopener" class="pv-link-muted">{{ csv_url }}</a></div>
           </div>
           <div>
             <div style="font-weight: 700;">Dashboard</div>
-            <div style="margin-top: 0.15rem;"><a href="{{ root_url }}" target="_blank" rel="noopener">{{ root_url }}</a></div>
+            <div style="margin-top: 0.15rem;"><a href="{{ root_url }}" target="_blank" rel="noopener" class="pv-link-muted">{{ root_url }}</a></div>
           </div>
           <div>
             <div style="font-weight: 700;">Health</div>
-            <div style="margin-top: 0.15rem;"><a href="{{ health_url }}" target="_blank" rel="noopener">{{ health_url }}</a></div>
+            <div style="margin-top: 0.15rem;"><a href="{{ health_url }}" target="_blank" rel="noopener" class="pv-link-muted">{{ health_url }}</a></div>
           </div>
         </div>
           </div>

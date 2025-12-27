@@ -18,7 +18,7 @@
     {% endif %}
 
     {% if devices %}
-      <div style="overflow-x: auto;">
+      <div class="pv-table-wrap">
         <table class="pv-table">
           <thead>
             <tr>
@@ -68,7 +68,7 @@
                   {% endif %}
                 </td>
                 <td style="white-space: nowrap;">
-                  <a href="{{ url_for('camera_admin.dlna_media_edit', device_id=d.id) }}">Edit</a>
+                  <a href="{{ url_for('camera_admin.dlna_media_edit', device_id=d.id) }}" class="pv-link-muted">Edit</a>
                 </td>
               </tr>
             {% endfor %}

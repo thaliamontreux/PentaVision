@@ -4,11 +4,16 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Blocklist Integration</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Blocklist Integration</h1>
+            <p class="pv-page-subtitle">Guidance for consuming the blocklist feed and hardening access to port 7080.</p>
+          </div>
+        </div>
 
         <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr); gap: 1.25rem; align-items: flex-start;">
           <div class="pv-card">

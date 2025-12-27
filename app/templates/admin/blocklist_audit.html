@@ -4,11 +4,16 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Blocklist Audit</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Blocklist Audit</h1>
+            <p class="pv-page-subtitle">Review publication events emitted by the blocklist distribution service.</p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -52,26 +57,28 @@
       <p class="pv-card-subtitle">Showing up to {{ limit }} events.</p>
 
       {% if events %}
-        <table class="pv-table" style="margin-top: 0.75rem;">
-          <thead>
-            <tr>
-              <th style="width: 210px;">When</th>
-              <th style="width: 260px;">Type</th>
-              <th style="width: 160px;">IP</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for e in events %}
+        <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+          <table class="pv-table">
+            <thead>
               <tr>
-                <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{{ e.when }}</td>
-                <td><code>{{ e.event_type }}</code></td>
-                <td><code>{{ e.ip or '' }}</code></td>
-                <td style="word-break: break-word;">{{ e.details or '' }}</td>
+                <th style="width: 210px;">When</th>
+                <th style="width: 260px;">Type</th>
+                <th style="width: 160px;">IP</th>
+                <th>Details</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {% for e in events %}
+                <tr>
+                  <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{{ e.when }}</td>
+                  <td><code>{{ e.event_type }}</code></td>
+                  <td><code>{{ e.ip or '' }}</code></td>
+                  <td style="word-break: break-word;">{{ e.details or '' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       {% else %}
         <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No matching events.</p>
       {% endif %}

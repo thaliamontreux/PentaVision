@@ -26,7 +26,7 @@
         </div>
 
         {% if outputs %}
-          <div style="overflow-x: auto;">
+          <div class="pv-table-wrap">
             <table class="pv-table">
               <thead>
                 <tr>
@@ -76,7 +76,7 @@
                       {{ row.last_error or '' }}
                     </td>
                     <td style="white-space: nowrap;">
-                      <a href="{{ url_for('camera_admin.rtmp_edit', output_id=row.id) }}">Edit</a>
+                      <a href="{{ url_for('camera_admin.rtmp_edit', output_id=row.id) }}" class="pv-link-muted">Edit</a>
 
                       {% if row.is_active %}
                         <form
