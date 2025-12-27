@@ -12,8 +12,8 @@
         <div class="pv-grid pv-admin-grid">
           {% if has_permission('Nav.Overview.View') %}
             <a href="{{ url_for('admin.index') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/overview.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/overview.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Overview</h2>
               </div>
               <p class="pv-card-subtitle">Administrative shortcuts for users, properties, feeds, recording, storage, security, and services.</p>
@@ -22,8 +22,8 @@
 
           {% if has_permission('Nav.IAM.Users.View') %}
             <a href="{{ url_for('admin.users_list') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/users.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/users.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Users</h2>
               </div>
               <p class="pv-card-subtitle">Create, edit, and deactivate user accounts. Manage staff roles and access.</p>
@@ -32,8 +32,8 @@
 
           {% if has_permission('Nav.Cust.Properties.View') %}
             <a href="{{ url_for('admin.properties_list') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/properties.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/properties.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Properties</h2>
               </div>
               <p class="pv-card-subtitle">Manage properties and link staff to sites for property access control.</p>
@@ -42,8 +42,8 @@
 
           {% if has_permission('Nav.Feeds.Cameras.View') %}
             <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/cameras.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/cameras.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Cameras</h2>
               </div>
               <p class="pv-card-subtitle">Configure camera devices and property-scoped camera assignments.</p>
@@ -52,8 +52,8 @@
 
           {% if has_permission('Nav.Feeds.CameraUrlTemplates.View') %}
             <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/camera-templates.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/camera-templates.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Camera URL Templates</h2>
               </div>
               <p class="pv-card-subtitle">Maintain URL templates for common camera vendors and models.</p>
@@ -62,8 +62,8 @@
 
           {% if has_permission('Nav.Feeds.RtmpOutputs.View') %}
             <a href="{{ url_for('camera_admin.rtmp_list') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/rtmp-outputs.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/rtmp-outputs.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">RTMP Outputs</h2>
               </div>
               <p class="pv-card-subtitle">Manage RTMP outputs and control remote publishing per camera.</p>
@@ -72,8 +72,8 @@
 
           {% if has_permission('Nav.Recording.Recordings.View') %}
             <a href="{{ url_for('admin.recordings_alias') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/recordings.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/recordings.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Recordings</h2>
               </div>
               <p class="pv-card-subtitle">Review recorded footage and verify retention and storage targets.</p>
@@ -82,8 +82,8 @@
 
           {% if has_permission('Nav.Recording.Schedule.View') %}
             <a href="{{ url_for('admin.recording_settings_alias') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/recording-schedule.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/recording-schedule.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Recording Schedule</h2>
               </div>
               <p class="pv-card-subtitle">Manage recording schedules, storage targets, and recording policies.</p>
@@ -92,8 +92,8 @@
 
           {% if has_permission('Nav.Storage.Providers.View') %}
             <a href="{{ url_for('admin.storage_settings') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/storage-providers.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/storage-providers.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Storage Providers</h2>
               </div>
               <p class="pv-card-subtitle">Manage storage modules and verify active providers for recordings.</p>
@@ -102,8 +102,8 @@
 
           {% if has_permission('Nav.Themes.View') %}
             <a href="{{ url_for('admin.themes') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/themes.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/themes.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Themes</h2>
               </div>
               <p class="pv-card-subtitle">Select a theme for the main site and a separate theme for the admin area.</p>
@@ -112,8 +112,8 @@
 
           {% if has_permission('Nav.NetSec.BlockAllow.View') %}
             <a href="{{ url_for('admin.access_control') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/block-allow.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/block-allow.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Block / Allow</h2>
               </div>
               <p class="pv-card-subtitle">Manage IP exemptions, IP blocks, and country access policies.</p>
@@ -122,8 +122,8 @@
 
           {% if has_permission('Nav.NetSec.BlocklistDistribution.View') %}
             <a href="{{ url_for('admin.blocklist_distribution') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/blocklist-distribution.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/blocklist-distribution.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Blocklist Distribution</h2>
               </div>
               <p class="pv-card-subtitle">Configure external blocklist publication and view distribution health.</p>
@@ -132,8 +132,8 @@
 
           {% if has_permission('Nav.NetSec.BlocklistIntegration.View') %}
             <a href="{{ url_for('admin.blocklist_integration') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/blocklist-integration.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/blocklist-integration.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Blocklist Integration</h2>
               </div>
               <p class="pv-card-subtitle">Configure how blocklist publication is exposed and secured externally.</p>
@@ -142,8 +142,8 @@
 
           {% if has_permission('Nav.Audit.BlocklistAudit.View') %}
             <a href="{{ url_for('admin.blocklist_audit') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/blocklist-audit.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/blocklist-audit.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Blocklist Audit</h2>
               </div>
               <p class="pv-card-subtitle">Review blocklist generation, enforcement actions, and audit entries.</p>
@@ -152,8 +152,8 @@
 
           {% if has_permission('Nav.Services.View') %}
             <a href="{{ url_for('admin.services') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/services.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/services.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Services</h2>
               </div>
               <p class="pv-card-subtitle">Restart allowlisted system services and review basic health states.</p>
@@ -162,8 +162,8 @@
 
           {% if has_permission('Nav.Services.View') and has_permission('Services.Manage') %}
             <a href="#" class="pv-card" id="pvGitPullBtn" data-csrf="{{ csrf_token|default('') }}" data-start-url="{{ git_pull_start_url|default('') }}" role="button">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/github-pull.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/github-pull.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Pull GitHub Update</h2>
               </div>
               <p class="pv-card-subtitle">Run scripts/git_pull.sh on the server and watch output live (read-only).</p>
@@ -172,8 +172,8 @@
 
           {% if has_permission('Nav.Audit.AuditLog.View') %}
             <a href="{{ url_for('admin.audit_alias') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/audit-log.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/audit-log.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Audit Log</h2>
               </div>
               <p class="pv-card-subtitle">Review recent administrative actions and security-related events.</p>
@@ -182,8 +182,8 @@
 
           {% if has_permission('Nav.Audit.LoginFailures.View') %}
             <a href="{{ url_for('admin.login_failures_list') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/login-failures.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/login-failures.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Login Failures</h2>
               </div>
               <p class="pv-card-subtitle">Review failed login attempts and decrypt attempted passwords (if authorized).</p>
@@ -192,8 +192,8 @@
 
           {% if has_permission('Nav.Installer.Databases.View') %}
             <a href="{{ url_for('installer.install') }}" class="pv-card">
+              <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/installer-databases.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
               <div class="pv-admin-tile-head">
-                <img class="pv-admin-tile-icon" src="{{ url_for('static', filename='img/admin-icons/installer-databases.png') }}" alt="" loading="lazy" onerror="this.style.display='none'" />
                 <h2 class="pv-card-title">Installer &amp; Databases</h2>
               </div>
               <p class="pv-card-subtitle">Review or adjust database configuration via the installer (when unlocked).</p>
