@@ -67,7 +67,10 @@
                   ('secondary_bg','Secondary button'),
                   ('secondary_text','Secondary button text'),
                   ('link','Link')
-                ] %}
+                ] + ([
+                  ('admin_tile_link','Admin Tile Link Text'),
+                  ('admin_tile_text','Admin Tile Text')
+                ] if scope == 'admin' else []) %}
 
                 {% for key,label in fields %}
                   <div class="pv-card" style="padding: 0.75rem;">

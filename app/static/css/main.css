@@ -406,6 +406,23 @@ body {
   text-shadow: 0 10px 28px rgba(0, 0, 0, 0.75);
 }
 
+.pv-is-admin .pv-admin-grid .pv-card:link,
+.pv-is-admin .pv-admin-grid .pv-card:visited {
+  color: var(--pv-admin-tile-text, rgba(229, 231, 235, 0.95));
+}
+
+.pv-is-admin .pv-admin-grid .pv-card .pv-card-title,
+.pv-is-admin .pv-admin-grid .pv-card:link .pv-card-title,
+.pv-is-admin .pv-admin-grid .pv-card:visited .pv-card-title {
+  color: var(--pv-admin-tile-link, #22d3ee);
+}
+
+.pv-is-admin .pv-admin-grid .pv-card .pv-card-subtitle,
+.pv-is-admin .pv-admin-grid .pv-card:link .pv-card-subtitle,
+.pv-is-admin .pv-admin-grid .pv-card:visited .pv-card-subtitle {
+  color: var(--pv-admin-tile-text, rgba(229, 231, 235, 0.95));
+}
+
 .pv-admin-grid .pv-card .pv-card-subtitle {
   margin-top: 0.4rem;
 }

@@ -127,9 +127,15 @@ def _theme_css_from_json(scope: str, theme_json: str) -> str:
     secondary_text = _hex_color(colors.get("secondary_text"), "#e5e7eb")
     link = _hex_color(colors.get("link"), "#93c5fd")
 
+    admin_tile_link = _hex_color(colors.get("admin_tile_link"), "#22D3EE")
+    admin_tile_text = _hex_color(colors.get("admin_tile_text"), "#E5E7EB")
+
     prefix = ".pv-is-admin " if scope == "admin" else ""
+    admin_vars = ""
+    if scope == "admin":
+        admin_vars = f";--pv-admin-tile-link:{admin_tile_link};--pv-admin-tile-text:{admin_tile_text}"
     return (
-        f"{prefix}body{{background:{bg};color:{text};}}\n"
+        f"{prefix}body{{background:{bg};color:{text}{admin_vars};}}\n"
         f"{prefix}.pv-section{{background:{surface};border-color:{border};}}\n"
         f"{prefix}.pv-card{{background:{card};border-color:{border};}}\n"
         f"{prefix}.pv-card-subtitle{{color:{muted};}}\n"
@@ -1663,6 +1669,7 @@ def streams_status():
         )
 
     return jsonify({"ok": True, "streams": streams})
+
 
 def _decode_image_from_request(data):
     image_b64 = data.get("image") or ""

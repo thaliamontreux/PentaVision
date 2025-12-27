@@ -170,6 +170,8 @@ def _default_theme_payload(scope: str) -> dict:
             "secondary_bg": "#111827",
             "secondary_text": "#E5E7EB",
             "link": "#93C5FD",
+            "admin_tile_link": "#22D3EE",
+            "admin_tile_text": "#E5E7EB",
         }
     else:
         colors = {
@@ -707,7 +709,7 @@ def theme_edit(scope: str, slug: str):
             else:
                 new_name = str(request.form.get("name") or "").strip() or name_val
                 new_colors: dict[str, str] = {}
-                for key in (
+                keys = [
                     "bg",
                     "text",
                     "surface",
@@ -719,7 +721,11 @@ def theme_edit(scope: str, slug: str):
                     "secondary_bg",
                     "secondary_text",
                     "link",
-                ):
+                ]
+                if scope_norm == "admin":
+                    keys.extend(["admin_tile_link", "admin_tile_text"])
+
+                for key in keys:
                     v = _parse_hex_color(request.form.get(key))
                     if v is None:
                         errors.append(f"Invalid color for {key}.")
@@ -897,7 +903,13 @@ def git_pull_start():
     except Exception:
         pass
 
-    return jsonify({"ok": True, "run_id": run_id, "view_url": url_for("admin.git_pull_view", run_id=run_id)})
+    return jsonify(
+        {
+            "ok": True,
+            "run_id": run_id,
+            "view_url": url_for("admin.git_pull_view", run_id=run_id),
+        }
+    )
 
 
 @bp.get("/git-pull/view/<run_id>")
@@ -975,8 +987,19 @@ def git_pull_poll(run_id: str):
     except Exception:
         offset = 0
 
-    append, new_offset = _read_text_tail(str(meta.get("log_path") or log_path), offset=offset)
-    return jsonify({"ok": True, "run_id": run_id, "running": bool(running), "append": append, "offset": int(new_offset)})
+    append, new_offset = _read_text_tail(
+        str(meta.get("log_path") or log_path),
+        offset=offset,
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "run_id": run_id,
+            "running": bool(running),
+            "append": append,
+            "offset": int(new_offset),
+        }
+    )
 
 
 @bp.get("/recordings")
