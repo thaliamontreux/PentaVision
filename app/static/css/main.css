@@ -454,191 +454,41 @@ body {
   background:
     radial-gradient(circle at top, rgba(30, 41, 59, 0.9), rgba(2, 6, 23, 0.92) 70%),
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0, rgba(255, 255, 255, 0.03) 2px, rgba(0, 0, 0, 0.0) 2px, rgba(0, 0, 0, 0.0) 7px);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  box-shadow:
-    0 22px 46px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.35);
-}
-
-@media (max-width: 980px) {
-  .pv-admin-layout {
-    grid-template-columns: 1fr;
-  }
-  .pv-admin-sidebar {
-    position: static;
-    top: auto;
-    width: 100%;
-    max-width: none;
-    flex: 1 1 auto;
-    max-height: none;
-  }
-}
-
-.pv-main {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 1.5rem 1.5rem 3rem;
-}
-
-.pv-section {
-  background: radial-gradient(circle at top left, #1d4ed8, #020617 55%);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  box-shadow: 0 20px 35px rgba(15, 23, 42, 0.8);
-}
-
-.pv-section h1 {
-  margin-top: 0;
-  margin-bottom: 0.6rem;
-}
-
-.pv-section.pv-admin {
-  background: linear-gradient(135deg, #111827, #020617);
-  padding: 1.15rem 1.15rem 1.05rem;
-}
-
-.pv-section.pv-dashboard {
-  display: flex;
-  flex-direction: column;
-}
-
-.pv-page-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.85rem;
-}
-
-.pv-page-title {
-  margin: 0;
-}
-
-.pv-page-subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.9rem;
-  color: #9ca3af;
-}
-
-.pv-page-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.pv-glass-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.9rem;
-}
-
-.pv-glass-card {
-  position: relative;
-  border-radius: 1rem;
-  padding: 0.95rem;
-  background: rgba(15, 23, 42, 0.45);
   border: 1px solid rgba(148, 163, 184, 0.18);
   box-shadow:
-    0 12px 35px rgba(0, 0, 0, 0.35),
+    0 14px 40px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
-}
-
-.pv-glass-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 1rem;
-  background: radial-gradient(1200px circle at 10% 10%, rgba(56, 189, 248, 0.18), transparent 40%);
-  pointer-events: none;
-  opacity: 0.7;
-}
-
-.pv-glass-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(56, 189, 248, 0.45);
-  box-shadow:
-    0 16px 45px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(56, 189, 248, 0.12),
-    0 0 26px rgba(56, 189, 248, 0.12);
-}
-
-.pv-glass-title {
-  position: relative;
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.pv-glass-actions {
-  position: relative;
-  margin-top: 0.85rem;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.pv-table-wrap {
-  overflow-x: auto;
-  border-radius: 0.75rem;
-  border: 1px solid #111827;
-  background: rgba(2, 6, 23, 0.3);
-}
-
-.pv-empty-state {
-  padding: 0.75rem 0;
-  font-size: 0.92rem;
-  color: #9ca3af;
-}
-
-.pv-inline-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.pv-field-short {
-  max-width: 8rem;
-}
-
-.pv-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.8rem;
-}
-
-.pv-admin-grid {
-  margin-top: 1rem;
-}
-
-.pv-dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr);
-  gap: 1.25rem;
-  margin-top: 1.25rem;
 }
 
 .pv-card {
-  background: rgba(15, 23, 42, 0.9);
+  position: relative;
+  background: rgba(15, 23, 42, 0.45);
   border-radius: 0.75rem;
   padding: 0.85rem 0.95rem;
-  border: 1px solid #111827;
-  display: block;
-  text-decoration: none;
-  color: #e5e7eb;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
+.pv-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0.75rem;
+  background: radial-gradient(900px circle at 10% 10%, rgba(56, 189, 248, 0.14), transparent 42%);
+  pointer-events: none;
+  opacity: 0.65;
+}
+
 .pv-card:hover {
-  border-color: #1d4ed8;
-  background: rgba(15, 23, 42, 0.98);
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(15, 23, 42, 0.55);
   transform: translateY(-1px);
 }
 
