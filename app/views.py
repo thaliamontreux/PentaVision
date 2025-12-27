@@ -10,7 +10,6 @@ import subprocess
 import tempfile
 import time
 import re
-from collections import defaultdict
 
 from flask import (
     Blueprint,
@@ -29,18 +28,6 @@ import requests
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-
-def _get_face_recognition_lib():
-    # face_recognition can call sys.exit() if face_recognition_models is missing.
-    # To avoid killing gunicorn workers during app import, we only import it
-    # inside request handlers.
-    try:
-        import face_recognition  # type: ignore[import]
-
-        return face_recognition, None
-    except (SystemExit, ImportError, Exception) as exc:  # noqa: BLE001
-        return None, exc
-
 from .auth import _authenticate_primary_factor, _verify_totp
 from .db import get_face_engine, get_record_engine, get_user_engine
 from .db import get_property_engine
@@ -55,7 +42,6 @@ from .models import (
     CameraStorageScheduleEntry,
     CameraStoragePolicy,
     CameraUrlPattern,
-    DlnaSettings,
     FaceEmbedding,
     FacePrivacySetting,
     Property,
@@ -90,13 +76,24 @@ from .storage_providers import (
     build_storage_providers,
 )
 from .storage_csal import get_storage_router, StorageError
-from .net_utils import get_ipv4_interfaces
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
 
 bp = Blueprint("main", __name__)
+
+
+def _get_face_recognition_lib():
+    # face_recognition can call sys.exit() if face_recognition_models is missing.
+    # To avoid killing gunicorn workers during app import, we only import it
+    # inside request handlers.
+    try:
+        import face_recognition  # type: ignore[import]
+
+        return face_recognition, None
+    except (SystemExit, ImportError, Exception) as exc:  # noqa: BLE001
+        return None, exc
 
 
 FACE_MATCH_THRESHOLD = 0.6
@@ -560,11 +557,92 @@ def health():
     return jsonify({"status": overall, "databases": db_status})
 
 
+@bp.get("/live-feeds")
+@require_login
+def live_feeds():
+    errors: list[str] = []
+    devices: list[CameraDevice] = []
+    patterns_index: dict[int, CameraUrlPattern] = {}
+
+    user = get_current_user()
+    prop_user = get_current_property_user()
+
+    record_engine = get_record_engine()
+    if record_engine is None:
+        errors.append("Record database is not configured.")
+        return render_template(
+            "live_feeds.html",
+            errors=errors,
+            devices=devices,
+            patterns=patterns_index,
+        )
+
+    property_map = _load_camera_property_map(record_engine)
+    group_map = _load_camera_group_map(record_engine)
+
+    prop_user_group_ids: set[int] | None = None
+    if prop_user is not None and user is None:
+        engine = get_user_engine()
+        if engine is not None:
+            with Session(engine) as db:
+                rows = (
+                    db.query(PropertyGroupMember.group_id)
+                    .filter(
+                        PropertyGroupMember.property_user_id
+                        == int(getattr(prop_user, "id", 0) or 0)
+                    )
+                    .all()
+                )
+            prop_user_group_ids = {int(gid) for (gid,) in rows}
+
+    with Session(record_engine) as session_db:
+        devices = (
+            session_db.query(CameraDevice)
+            .order_by(CameraDevice.name)
+            .all()
+        )
+        pattern_ids = {
+            d.pattern_id for d in devices if getattr(d, "pattern_id", None)
+        }
+        if pattern_ids:
+            patterns = (
+                session_db.query(CameraUrlPattern)
+                .filter(CameraUrlPattern.id.in_(pattern_ids))
+                .all()
+            )
+            patterns_index = {int(p.id): p for p in patterns}
+
+    visible_devices: list[CameraDevice] = []
+    for device in devices:
+        try:
+            device_id = int(getattr(device, "id", 0) or 0)
+        except Exception:  # noqa: BLE001
+            continue
+        if device_id <= 0:
+            continue
+        if not _user_can_access_camera(
+            user,
+            device_id,
+            record_engine=record_engine,
+            property_map=property_map,
+            group_map=group_map,
+            prop_user_group_ids=prop_user_group_ids,
+        ):
+            continue
+        visible_devices.append(device)
+
+    return render_template(
+        "live_feeds.html",
+        errors=errors,
+        devices=visible_devices,
+        patterns=patterns_index,
+    )
+
+
 @bp.get("/")
 @require_login
 def index():
     user = get_current_user()
-    prop_user = get_current_property_user()
     # Reuse the same DB health logic for the dashboard.
     db_status = {}
     for label, getter in (
@@ -595,8 +673,6 @@ def index():
     recording_status: dict[int, str] = {}
     record_engine = get_record_engine()
     camera_property_map: dict[int, int] = {}
-    camera_group_map: dict[int, tuple[int, int]] = {}
-    prop_user_group_ids: set[int] = set()
     if record_engine is not None:
         with Session(record_engine) as session_db:
             CameraPropertyLink.__table__.create(bind=record_engine, checkfirst=True)
@@ -672,6 +748,11 @@ def index():
                 except Exception:  # noqa: BLE001
                     continue
 
+            links = session_db.query(CameraPropertyLink).all()
+            camera_property_map = {
+                int(link.device_id): int(link.property_id) for link in links
+            }
+
         def _as_utc(dt: datetime | None) -> datetime | None:
             if dt is None:
                 return None
@@ -681,29 +762,6 @@ def index():
                 return dt.astimezone(timezone.utc)
             except Exception:  # noqa: BLE001
                 return None
-
-            links = session_db.query(CameraPropertyLink).all()
-            camera_property_map = {
-                int(link.device_id): int(link.property_id) for link in links
-            }
-
-            group_links = session_db.query(CameraGroupLink).all()
-            camera_group_map = {
-                int(link.device_id): (int(link.property_id), int(link.property_group_id))
-                for link in group_links
-            }
-
-        # For property-local users, pre-load group memberships once.
-        if prop_user is not None and user is None:
-            engine = get_user_engine()
-            if engine is not None:
-                with Session(engine) as db:
-                    rows = (
-                        db.query(PropertyGroupMember.group_id)
-                        .filter(PropertyGroupMember.property_user_id == int(prop_user.id))
-                        .all()
-                    )
-                prop_user_group_ids = {int(gid) for (gid,) in rows}
 
         for device_id, last_time in rows:
             if last_time is None:
@@ -1044,8 +1102,6 @@ def profile():
     engine = get_user_engine()
     errors: list[str] = []
     saved = False
-    test_result: dict | None = None
-    test_result: dict | None = None
 
     if engine is None:
         errors.append("User database is not configured.")
@@ -2579,110 +2635,7 @@ def recording_settings():
 
 @bp.route("/dlna", methods=["GET", "POST"])
 def dlna_settings():
-	abort(404)
-	user = get_current_user()
-	if user is None:
-		next_url = request.path or url_for("main.index")
-		return redirect(url_for("main.login", next=next_url))
-	if not user_has_role(user, "System Administrator"):
-		abort(403)
-
-	errors: list[str] = []
-	saved = False
-	record_engine = get_record_engine()
-	if record_engine is None:
-		errors.append("Record database is not configured.")
-
-	if request.method == "POST":
-		if not validate_global_csrf_token(request.form.get("csrf_token")):
-			errors.append("Invalid or missing CSRF token.")
-		action = (request.form.get("action") or "").strip() or "save"
-		interface_name_form = (request.form.get("interface_name") or "").strip()
-		if not errors and record_engine is not None:
-			with Session(record_engine) as session_db:
-				DlnaSettings.__table__.create(bind=record_engine, checkfirst=True)
-				settings_row = (
-					session_db.query(DlnaSettings)
-					.order_by(DlnaSettings.id)
-					.first()
-				)
-				if settings_row is None:
-					settings_row = DlnaSettings(enabled=0)
-					session_db.add(settings_row)
-					session_db.flush()
-				if action == "save":
-					settings_row.interface_name = interface_name_form or None
-				elif action == "start":
-					settings_row.enabled = 1
-				elif action == "stop":
-					settings_row.enabled = 0
-				elif action == "restart":
-					settings_row.enabled = 0
-					session_db.add(settings_row)
-					session_db.commit()
-					settings_row.enabled = 1
-				settings_row.updated_at = datetime.now(timezone.utc)
-				session_db.add(settings_row)
-				session_db.commit()
-				saved = True
-
-	settings = {
-		"enabled": 0,
-		"interface_name": "",
-		"bind_address": "",
-		"network_cidr": "",
-		"last_started_at": None,
-		"last_error": "",
-	}
-	if record_engine is not None:
-		with Session(record_engine) as session_db:
-			DlnaSettings.__table__.create(bind=record_engine, checkfirst=True)
-			row = (
-				session_db.query(DlnaSettings)
-				.order_by(DlnaSettings.id)
-				.first()
-			)
-			if row is not None:
-				settings = {
-					"enabled": int(getattr(row, "enabled", 0) or 0),
-					"interface_name": row.interface_name or "",
-					"bind_address": row.bind_address or "",
-					"network_cidr": row.network_cidr or "",
-					"last_started_at": row.last_started_at,
-					"last_error": row.last_error or "",
-				}
-
-	interfaces = get_ipv4_interfaces()
-	selected_name = settings["interface_name"] or ""
-	if not selected_name and interfaces:
-		selected_name = interfaces[0]["name"]
-	current_interface = None
-	for item in interfaces:
-		if item.get("name") == selected_name:
-			current_interface = item
-			break
-
-	form = {
-		"interface_name": selected_name,
-	}
-
-	dlna_enabled_env = str(current_app.config.get("DLNA_ENABLED", "0") or "0").strip().lower() not in {
-		"0",
-		"false",
-		"no",
-		"",
-	}
-
-	return render_template(
-		"dlna.html",
-		form=form,
-		interfaces=interfaces,
-		current_interface=current_interface,
-		settings=settings,
-		errors=errors,
-		saved=saved,
-		dlna_enabled_env=dlna_enabled_env,
-	)
+    abort(404)
 
 
 @bp.get("/recordings")
@@ -2846,14 +2799,12 @@ def download_camera_recording(recording_id: int):
                     resp.headers["Accept-Ranges"] = "bytes"
                     return resp
 
-                chunk = payload[start : end + 1]
+                chunk = payload[start:end+1]
                 resp = Response(chunk, status=206, mimetype="video/mp4")
                 resp.headers["Content-Range"] = f"bytes {start}-{end}/{size}"
                 resp.headers["Accept-Ranges"] = "bytes"
                 resp.headers["Content-Length"] = str(len(chunk))
-                resp.headers[
-                    "Content-Disposition"
-                ] = f"{disposition}; filename={filename}"
+                resp.headers["Content-Disposition"] = f"{disposition}; filename={filename}"
                 return resp
 
             resp = Response(payload, mimetype="video/mp4")

@@ -609,8 +609,10 @@ def init_security(app) -> None:
         if blueprint == "main":
             if path == "/":
                 return _rbac_require(any_of=["Nav.Overview.View"])
+            if path.startswith("/live-feeds"):
+                return _rbac_require(any_of=["Video.Live.View", "Video.*"])
             if path.startswith("/cameras/"):
-                return _rbac_require(any_of=["Nav.Feeds.Cameras.View"])
+                return _rbac_require(any_of=["Video.Live.View", "Video.*"])
             if path.startswith("/streams/status"):
                 return _rbac_require(any_of=["Nav.Overview.View"])
             if path.startswith("/recordings"):

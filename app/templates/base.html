@@ -78,170 +78,187 @@
         <div class="pv-brand">PentaVision</div>
         <nav class="pv-nav" role="navigation" aria-label="Main navigation">
           {% if current_user %}
-            {% set nav_overview = has_permission('Nav.Overview.View') %}
-            {% set nav_users = has_permission('Nav.IAM.Users.View') %}
-            {% set nav_properties = has_permission('Nav.Cust.Properties.View') %}
-            {% set nav_feeds_cameras = has_permission('Nav.Feeds.Cameras.View') %}
-            {% set nav_feeds_templates = has_permission('Nav.Feeds.CameraUrlTemplates.View') %}
-            {% set nav_feeds_rtmp = has_permission('Nav.Feeds.RtmpOutputs.View') %}
-            {% set nav_recordings = has_permission('Nav.Recording.Recordings.View') %}
-            {% set nav_recording_schedule = has_permission('Nav.Recording.Schedule.View') %}
-            {% set nav_storage_providers = has_permission('Nav.Storage.Providers.View') %}
-            {% set nav_themes = has_permission('Nav.Themes.View') %}
-            {% set nav_netsec_block_allow = has_permission('Nav.NetSec.BlockAllow.View') %}
-            {% set nav_netsec_dist = has_permission('Nav.NetSec.BlocklistDistribution.View') %}
-            {% set nav_netsec_integ = has_permission('Nav.NetSec.BlocklistIntegration.View') %}
-            {% set nav_audit_log = has_permission('Nav.Audit.AuditLog.View') %}
-            {% set nav_audit_blocklist = has_permission('Nav.Audit.BlocklistAudit.View') %}
-            {% set nav_audit_login_failures = has_permission('Nav.Audit.LoginFailures.View') %}
-            {% set nav_services = has_permission('Nav.Services.View') %}
-            {% set nav_installer = has_permission('Nav.Installer.Databases.View') %}
+            {% set is_admin_area = request.path.startswith('/admin') %}
+            {% if is_admin_area %}
+              {% set nav_overview = has_permission('Nav.Overview.View') %}
+              {% set nav_users = has_permission('Nav.IAM.Users.View') %}
+              {% set nav_properties = has_permission('Nav.Cust.Properties.View') %}
+              {% set nav_feeds_cameras = has_permission('Nav.Feeds.Cameras.View') %}
+              {% set nav_feeds_templates = has_permission('Nav.Feeds.CameraUrlTemplates.View') %}
+              {% set nav_feeds_rtmp = has_permission('Nav.Feeds.RtmpOutputs.View') %}
+              {% set nav_recordings = has_permission('Nav.Recording.Recordings.View') %}
+              {% set nav_recording_schedule = has_permission('Nav.Recording.Schedule.View') %}
+              {% set nav_storage_providers = has_permission('Nav.Storage.Providers.View') %}
+              {% set nav_themes = has_permission('Nav.Themes.View') %}
+              {% set nav_netsec_block_allow = has_permission('Nav.NetSec.BlockAllow.View') %}
+              {% set nav_netsec_dist = has_permission('Nav.NetSec.BlocklistDistribution.View') %}
+              {% set nav_netsec_integ = has_permission('Nav.NetSec.BlocklistIntegration.View') %}
+              {% set nav_audit_log = has_permission('Nav.Audit.AuditLog.View') %}
+              {% set nav_audit_blocklist = has_permission('Nav.Audit.BlocklistAudit.View') %}
+              {% set nav_audit_login_failures = has_permission('Nav.Audit.LoginFailures.View') %}
+              {% set nav_services = has_permission('Nav.Services.View') %}
+              {% set nav_installer = has_permission('Nav.Installer.Databases.View') %}
 
-            {% set show_feeds = nav_feeds_cameras or nav_feeds_templates or nav_feeds_rtmp %}
-            {% set show_recording_storage = nav_recordings or nav_recording_schedule or nav_storage_providers %}
-            {% set show_netsec = nav_netsec_block_allow or nav_netsec_dist or nav_netsec_integ %}
-            {% set show_audit = nav_audit_log or nav_audit_blocklist or nav_audit_login_failures %}
+              {% set show_feeds = nav_feeds_cameras or nav_feeds_templates or nav_feeds_rtmp %}
+              {% set show_recording_storage = nav_recordings or nav_recording_schedule or nav_storage_providers %}
+              {% set show_netsec = nav_netsec_block_allow or nav_netsec_dist or nav_netsec_integ %}
+              {% set show_audit = nav_audit_log or nav_audit_blocklist or nav_audit_login_failures %}
 
-            {% if nav_overview %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Overview</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    <a href="{{ url_for('main.index') }}" role="menuitem">Dashboard</a>
+              {% if nav_overview %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Overview</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      <a href="{{ url_for('main.index') }}" role="menuitem">Dashboard</a>
+                      {% if has_permission('Video.Live.View') or has_permission('Video.*') %}
+                        <a href="{{ url_for('main.live_feeds') }}" role="menuitem">Live Feeds</a>
+                      {% endif %}
+                      <a href="{{ url_for('admin.index') }}" role="menuitem">Admin Overview</a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if nav_users %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Users</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    <a href="{{ url_for('admin.users_list') }}" role="menuitem">Users</a>
+              {% if nav_users %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Users</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      <a href="{{ url_for('admin.users_list') }}" role="menuitem">Users</a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if nav_properties %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Properties</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    <a href="{{ url_for('admin.properties_list') }}" role="menuitem">Properties</a>
+              {% if nav_properties %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Properties</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      <a href="{{ url_for('admin.properties_list') }}" role="menuitem">Properties</a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if show_feeds %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">FEEDS IN/OUT</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    {% if nav_feeds_cameras %}
-                      <a href="{{ url_for('camera_admin.list_devices') }}" role="menuitem">Cameras</a>
-                    {% endif %}
-                    {% if nav_feeds_templates %}
-                      <a href="{{ url_for('camera_admin.list_patterns') }}" role="menuitem">Camera URL Templates</a>
-                    {% endif %}
-                    {% if nav_feeds_rtmp %}
-                      <a href="{{ url_for('camera_admin.rtmp_list') }}" role="menuitem">RTMP Outputs</a>
-                    {% endif %}
+              {% if show_feeds %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Video Streaming</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      {% if nav_feeds_cameras %}
+                        <a href="{{ url_for('camera_admin.list_devices') }}" role="menuitem">Cameras</a>
+                      {% endif %}
+                      {% if nav_feeds_templates %}
+                        <a href="{{ url_for('camera_admin.list_patterns') }}" role="menuitem">Camera URL Templates</a>
+                      {% endif %}
+                      {% if nav_feeds_rtmp %}
+                        <a href="{{ url_for('camera_admin.rtmp_list') }}" role="menuitem">RTMP Outputs</a>
+                      {% endif %}
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if show_recording_storage %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Recording &amp; Storage</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    {% if nav_recordings %}
-                      <a href="{{ url_for('main.recordings') }}" role="menuitem">Recordings</a>
-                    {% endif %}
-                    {% if nav_recording_schedule %}
-                      <a href="{{ url_for('main.recording_settings') }}" role="menuitem">Recording Schedule</a>
-                    {% endif %}
-                    {% if nav_storage_providers %}
-                      <a href="{{ url_for('admin.storage_settings') }}" role="menuitem">Storage Providers</a>
-                    {% endif %}
+              {% if show_recording_storage %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Recording &amp; Storage</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      {% if nav_recordings %}
+                        <a href="{{ url_for('main.recordings') }}" role="menuitem">Recordings</a>
+                      {% endif %}
+                      {% if nav_recording_schedule %}
+                        <a href="{{ url_for('main.recording_settings') }}" role="menuitem">Recording Schedule</a>
+                      {% endif %}
+                      {% if nav_storage_providers %}
+                        <a href="{{ url_for('admin.storage_settings') }}" role="menuitem">Storage Providers</a>
+                      {% endif %}
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if nav_themes %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Themes</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    <a href="{{ url_for('admin.themes') }}" role="menuitem">Themes</a>
+              {% if nav_themes %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Themes</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      <a href="{{ url_for('admin.themes') }}" role="menuitem">Themes</a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if show_netsec %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Network Security</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    {% if nav_netsec_block_allow %}
-                      <a href="{{ url_for('admin.access_control') }}" role="menuitem">Block / Allow</a>
-                    {% endif %}
-                    {% if nav_netsec_dist %}
-                      <a href="{{ url_for('admin.blocklist_distribution') }}" role="menuitem">Blocklist Distribution</a>
-                    {% endif %}
-                    {% if nav_netsec_integ %}
-                      <a href="{{ url_for('admin.blocklist_integration') }}" role="menuitem">Blocklist Integration</a>
-                    {% endif %}
+              {% if show_netsec %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Network Security</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      {% if nav_netsec_block_allow %}
+                        <a href="{{ url_for('admin.access_control') }}" role="menuitem">Block / Allow</a>
+                      {% endif %}
+                      {% if nav_netsec_dist %}
+                        <a href="{{ url_for('admin.blocklist_distribution') }}" role="menuitem">Blocklist Distribution</a>
+                      {% endif %}
+                      {% if nav_netsec_integ %}
+                        <a href="{{ url_for('admin.blocklist_integration') }}" role="menuitem">Blocklist Integration</a>
+                      {% endif %}
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if show_audit %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Audit &amp; Security Events</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    {% if nav_audit_log %}
-                      <a href="{{ url_for('main.audit_events') }}" role="menuitem">Audit Log</a>
-                    {% endif %}
-                    {% if nav_audit_blocklist %}
-                      <a href="{{ url_for('admin.blocklist_audit') }}" role="menuitem">Blocklist Audit</a>
-                    {% endif %}
-                    {% if nav_audit_login_failures %}
-                      <a href="{{ url_for('admin.login_failures_list') }}" role="menuitem">Login Failures</a>
-                    {% endif %}
+              {% if show_audit %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Audit &amp; Security Events</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      {% if nav_audit_log %}
+                        <a href="{{ url_for('main.audit_events') }}" role="menuitem">Audit Log</a>
+                      {% endif %}
+                      {% if nav_audit_blocklist %}
+                        <a href="{{ url_for('admin.blocklist_audit') }}" role="menuitem">Blocklist Audit</a>
+                      {% endif %}
+                      {% if nav_audit_login_failures %}
+                        <a href="{{ url_for('admin.login_failures_list') }}" role="menuitem">Login Failures</a>
+                      {% endif %}
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if nav_services %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Services</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    <a href="{{ url_for('admin.services') }}" role="menuitem">Services</a>
+              {% if nav_services %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Services</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      <a href="{{ url_for('admin.services') }}" role="menuitem">Services</a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            {% endif %}
+              {% endif %}
 
-            {% if nav_installer %}
-              <div class="pv-nav-dropdown" data-pv-dropdown>
-                <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Installer &amp; Databases</button>
-                <div class="pv-nav-panel" role="menu">
-                  <div class="pv-nav-section">
-                    <a href="{{ url_for('installer.install') }}" role="menuitem">Installer &amp; Databases</a>
+              {% if nav_installer %}
+                <div class="pv-nav-dropdown" data-pv-dropdown>
+                  <button class="pv-nav-trigger" type="button" aria-haspopup="true" aria-expanded="false">Installer &amp; Databases</button>
+                  <div class="pv-nav-panel" role="menu">
+                    <div class="pv-nav-section">
+                      <a href="{{ url_for('installer.install') }}" role="menuitem">Installer &amp; Databases</a>
+                    </div>
                   </div>
                 </div>
-              </div>
+              {% endif %}
+            {% else %}
+              {% if has_permission('Nav.Overview.View') %}
+                <a href="{{ url_for('main.index') }}" class="pv-nav-trigger">Overview</a>
+              {% endif %}
+              {% if has_permission('Video.Live.View') or has_permission('Video.*') %}
+                <a href="{{ url_for('main.live_feeds') }}" class="pv-nav-trigger">Live Feeds</a>
+              {% endif %}
+              {% if has_permission('Nav.Overview.View') %}
+                <a href="{{ url_for('admin.index') }}" class="pv-nav-trigger">Admin</a>
+              {% endif %}
             {% endif %}
           {% else %}
             <a href="{{ url_for('main.index') }}">Overview</a>
