@@ -339,6 +339,32 @@ body {
   text-decoration: none;
 }
 
+.pv-admin-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.pv-admin-tile-head .pv-card-title {
+  margin: 0;
+}
+
+.pv-admin-tile-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 0.85rem;
+  padding: 0.35rem;
+  object-fit: contain;
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  box-shadow:
+    0 12px 22px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(56, 189, 248, 0.08),
+    0 0 22px rgba(56, 189, 248, 0.10);
+}
+
 .pv-admin-grid .pv-card .pv-card-subtitle {
   margin-top: 0.4rem;
 }
