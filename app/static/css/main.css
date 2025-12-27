@@ -352,18 +352,17 @@ body {
 
 .pv-admin-tile-icon {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  top: 10px;
-  bottom: 10px;
-  width: auto;
-  height: auto;
+  inset: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - 20px);
+  display: block;
   padding: 0;
   border: none;
   background: transparent;
   box-shadow: none;
   border-radius: 1rem;
   object-fit: contain;
+  object-position: center;
   opacity: 1;
   pointer-events: none;
   filter: saturate(1.1) contrast(1.05) drop-shadow(0 18px 34px rgba(0, 0, 0, 0.55));
