@@ -357,10 +357,10 @@ body {
 }
 
 .pv-admin-tile-icon {
-  position: absolute;
-  inset: 5%;
-  width: 90%;
-  height: 90%;
+  position: absolute !important;
+  inset: 5% !important;
+  width: 90% !important;
+  height: 90% !important;
   display: block !important;
   max-width: none;
   max-height: none;
@@ -376,6 +376,14 @@ body {
   pointer-events: none;
   filter: saturate(1.1) contrast(1.05) drop-shadow(0 18px 34px rgba(0, 0, 0, 0.55));
   z-index: 1 !important;
+}
+
+.pv-admin-grid .pv-card > img.pv-admin-tile-icon {
+  position: absolute !important;
+  inset: 5% !important;
+  width: 90% !important;
+  height: 90% !important;
+  display: block !important;
 }
 
 .pv-admin-tile-head {
