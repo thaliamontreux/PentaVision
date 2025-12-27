@@ -1,1 +1,73 @@
-<nav class="pv-admin-sidebar" aria-label="Admin navigation"></nav>
+<nav class="pv-admin-sidebar" aria-label="Admin navigation">
+  {% if has_permission('Nav.Overview.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.index') }}">Overview</a>
+  {% endif %}
+
+  {% if has_permission('Nav.IAM.Users.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.users_list') }}">Users</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Cust.Properties.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.properties_list') }}">Properties</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Feeds.Cameras.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Feeds.CameraUrlTemplates.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.list_patterns') }}">Camera URL Templates</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Feeds.RtmpOutputs.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.rtmp_list') }}">RTMP Outputs</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Recording.Recordings.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.recordings_alias') }}">Recordings</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Recording.Schedule.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.recording_settings_alias') }}">Recording Schedule</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Storage.Providers.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.storage_settings') }}">Storage Providers</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Themes.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.themes') }}">Themes</a>
+  {% endif %}
+
+  {% if has_permission('Nav.NetSec.BlockAllow.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.access_control') }}">Block / Allow</a>
+  {% endif %}
+
+  {% if has_permission('Nav.NetSec.BlocklistDistribution.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.blocklist_distribution') }}">Blocklist Distribution</a>
+  {% endif %}
+
+  {% if has_permission('Nav.NetSec.BlocklistIntegration.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.blocklist_integration') }}">Blocklist Integration</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Audit.BlocklistAudit.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.blocklist_audit') }}">Blocklist Audit</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Audit.AuditLog.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.audit_alias') }}">Audit Log</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Audit.LoginFailures.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.login_failures_list') }}">Login Failures</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Services.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.services') }}">Services</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Installer.Databases.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('installer.install') }}">Installer &amp; Databases</a>
+  {% endif %}
+</nav>
