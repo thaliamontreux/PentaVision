@@ -530,6 +530,60 @@ body {
   flex-wrap: wrap;
 }
 
+.pv-glass-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.pv-glass-card {
+  position: relative;
+  border-radius: 1rem;
+  padding: 0.95rem;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.pv-glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  background: radial-gradient(1200px circle at 10% 10%, rgba(56, 189, 248, 0.18), transparent 40%);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.pv-glass-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow:
+    0 16px 45px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(56, 189, 248, 0.12),
+    0 0 26px rgba(56, 189, 248, 0.12);
+}
+
+.pv-glass-title {
+  position: relative;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.pv-glass-actions {
+  position: relative;
+  margin-top: 0.85rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .pv-table-wrap {
   overflow-x: auto;
   border-radius: 0.75rem;

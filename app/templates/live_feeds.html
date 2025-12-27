@@ -22,34 +22,15 @@
     {% endif %}
 
     {% if devices %}
-      <div class="pv-table-wrap">
-        <table class="pv-table">
-          <thead>
-            <tr>
-              <th>Camera</th>
-              <th>Template</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for d in devices %}
-              {% set pat = patterns.get(d.pattern_id) if patterns else None %}
-              <tr>
-                <td>{{ d.name }}</td>
-                <td>
-                  {% if pat %}
-                    {{ pat.manufacturer }} {{ pat.model_or_note or '' }}
-                  {% else %}
-                    (none)
-                  {% endif %}
-                </td>
-                <td>
-                  <a href="{{ url_for('main.camera_session', device_id=d.id) }}" class="pv-button">Watch</a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="pv-glass-grid">
+        {% for d in devices %}
+          <div class="pv-glass-card">
+            <h2 class="pv-glass-title">{{ d.name }}</h2>
+            <div class="pv-glass-actions">
+              <a href="{{ url_for('main.camera_session', device_id=d.id) }}" class="pv-button-primary">Watch</a>
+            </div>
+          </div>
+        {% endfor %}
       </div>
     {% else %}
       {% if not errors %}
