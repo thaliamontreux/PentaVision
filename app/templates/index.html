@@ -130,10 +130,20 @@
             {% endfor %}
           </div>
         {% else %}
-          <p style="font-size: 0.9rem; color: #9ca3af;">
-            No cameras configured yet. Use the <strong>Cameras</strong> page to add your first
-            device.
-          </p>
+          <div class="pv-empty">
+            <img
+              class="pv-empty-icon"
+              src="{{ url_for('static', filename='img/empty-camera.png') }}"
+              alt=""
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+            <p class="pv-empty-title">No cameras yet</p>
+            <p class="pv-empty-subtitle">Add your first camera to populate the dashboard.</p>
+            <div class="pv-empty-actions">
+              <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-button">Open Cameras</a>
+            </div>
+          </div>
         {% endif %}
       </div>
 

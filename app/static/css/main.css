@@ -731,6 +731,61 @@ body {
   color: #9ca3af;
 }
 
+.pv-empty {
+  display: grid;
+  gap: 0.35rem;
+  align-items: center;
+  justify-items: center;
+  text-align: center;
+  padding: 1.1rem 1.1rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.40),
+    rgba(2, 6, 23, 0.86)
+  );
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.70),
+    0 0 0 1px rgba(56, 189, 248, 0.07),
+    0 0 22px rgba(56, 189, 248, 0.06);
+}
+
+.pv-empty-icon {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  opacity: 0.95;
+  filter: saturate(1.1) contrast(1.05) drop-shadow(0 16px 32px rgba(0, 0, 0, 0.60));
+}
+
+.pv-empty-title {
+  margin: 0;
+  font-weight: 900;
+  font-size: 1.02rem;
+  color: rgba(226, 232, 240, 0.96);
+  letter-spacing: 0.2px;
+}
+
+.pv-empty-subtitle {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: rgba(148, 163, 184, 0.92);
+  max-width: 64ch;
+}
+
+.pv-empty-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+
 .pv-inline-row {
   display: flex;
   gap: 0.5rem;

@@ -74,7 +74,20 @@
               </table>
             </div>
           {% else %}
-            <p class="pv-empty-state">No recordings found.</p>
+            <div class="pv-empty">
+              <img
+                class="pv-empty-icon"
+                src="{{ url_for('static', filename='img/empty-recordings.png') }}"
+                alt=""
+                loading="lazy"
+                onerror="this.style.display='none'"
+              />
+              <p class="pv-empty-title">No recordings found</p>
+              <p class="pv-empty-subtitle">Once recording is enabled and scheduled, captured segments will show up here.</p>
+              <div class="pv-empty-actions">
+                <a href="{{ url_for('main.recording_settings') }}" class="pv-button">Recording Schedule</a>
+              </div>
+            </div>
           {% endif %}
           </div>
         </div>
@@ -146,7 +159,20 @@
           </table>
         </div>
       {% else %}
-        <p class="pv-empty-state">No recordings found.</p>
+        <div class="pv-empty">
+          <img
+            class="pv-empty-icon"
+            src="{{ url_for('static', filename='img/empty-recordings.png') }}"
+            alt=""
+            loading="lazy"
+            onerror="this.style.display='none'"
+          />
+          <p class="pv-empty-title">No recordings found</p>
+          <p class="pv-empty-subtitle">Once recording is enabled and scheduled, captured segments will show up here.</p>
+          <div class="pv-empty-actions">
+            <a href="{{ url_for('main.recording_settings') }}" class="pv-button">Recording Schedule</a>
+          </div>
+        </div>
       {% endif %}
       </div>
     {% endif %}

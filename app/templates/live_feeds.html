@@ -34,7 +34,17 @@
       </div>
     {% else %}
       {% if not errors %}
-        <p class="pv-empty-state">No cameras available for live viewing.</p>
+        <div class="pv-empty">
+          <img
+            class="pv-empty-icon"
+            src="{{ url_for('static', filename='img/empty-live.png') }}"
+            alt=""
+            loading="lazy"
+            onerror="this.style.display='none'"
+          />
+          <p class="pv-empty-title">No live feeds available</p>
+          <p class="pv-empty-subtitle">No cameras are currently available for live viewing.</p>
+        </div>
       {% endif %}
     {% endif %}
   </section>
