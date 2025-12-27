@@ -4,11 +4,16 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Block / Allow</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Access Control</h1>
+            <p class="pv-page-subtitle">Control IP exemptions, blocks, and country-based access policies.</p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -144,33 +149,35 @@
         </form>
 
         {% if ip_allow %}
-          <table class="pv-table" style="margin-top: 0.75rem;">
-            <thead>
-              <tr>
-                <th>CIDR / IP</th>
-                <th>Description</th>
-                <th style="width: 1%; white-space: nowrap;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for entry in ip_allow %}
+          <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+            <table class="pv-table">
+              <thead>
                 <tr>
-                  <td><code>{{ entry.cidr }}</code></td>
-                  <td>{{ entry.description or '\u00a0' }}</td>
-                  <td>
-                    <form method="post" class="pv-inline-form">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                      <input type="hidden" name="action" value="delete_allow" />
-                      <input type="hidden" name="id" value="{{ entry.id }}" />
-                      <button type="submit" class="pv-button-secondary" style="padding: 0.15rem 0.6rem; font-size: 0.8rem;">
-                        Remove
-                      </button>
-                    </form>
-                  </td>
+                  <th>CIDR / IP</th>
+                  <th>Description</th>
+                  <th style="width: 1%; white-space: nowrap;">Actions</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {% for entry in ip_allow %}
+                  <tr>
+                    <td><code>{{ entry.cidr }}</code></td>
+                    <td>{{ entry.description or '\u00a0' }}</td>
+                    <td>
+                      <form method="post" class="pv-inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <input type="hidden" name="action" value="delete_allow" />
+                        <input type="hidden" name="id" value="{{ entry.id }}" />
+                        <button type="submit" class="pv-button pv-button-small">
+                          Remove
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% else %}
           <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No exemptions configured.</p>
         {% endif %}
@@ -192,33 +199,35 @@
         </form>
 
         {% if ip_block %}
-          <table class="pv-table" style="margin-top: 0.75rem;">
-            <thead>
-              <tr>
-                <th>CIDR / IP</th>
-                <th>Description</th>
-                <th style="width: 1%; white-space: nowrap;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for entry in ip_block %}
+          <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+            <table class="pv-table">
+              <thead>
                 <tr>
-                  <td><code>{{ entry.cidr }}</code></td>
-                  <td>{{ entry.description or '\u00a0' }}</td>
-                  <td>
-                    <form method="post" class="pv-inline-form">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                      <input type="hidden" name="action" value="delete_block" />
-                      <input type="hidden" name="id" value="{{ entry.id }}" />
-                      <button type="submit" class="pv-button-secondary" style="padding: 0.15rem 0.6rem; font-size: 0.8rem;">
-                        Remove
-                      </button>
-                    </form>
-                  </td>
+                  <th>CIDR / IP</th>
+                  <th>Description</th>
+                  <th style="width: 1%; white-space: nowrap;">Actions</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {% for entry in ip_block %}
+                  <tr>
+                    <td><code>{{ entry.cidr }}</code></td>
+                    <td>{{ entry.description or '\u00a0' }}</td>
+                    <td>
+                      <form method="post" class="pv-inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <input type="hidden" name="action" value="delete_block" />
+                        <input type="hidden" name="id" value="{{ entry.id }}" />
+                        <button type="submit" class="pv-button pv-button-small">
+                          Remove
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% else %}
           <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No IP or network blocks configured.</p>
         {% endif %}

@@ -10,7 +10,7 @@
         <div class="pv-card">
           <div class="pv-card-header">
             <div>
-              <h1 style="margin-bottom: 0.25rem;">Installed Cameras</h1>
+              <h1 class="pv-page-title">Installed Cameras</h1>
               <p class="pv-card-subtitle">Configure individual cameras using the URL templates defined in the Camera URL Patterns list.</p>
             </div>
             <div class="pv-admin-actions">
@@ -38,7 +38,7 @@
         {% endif %}
 
         {% if devices %}
-          <div style="overflow-x: auto;">
+          <div class="pv-table-wrap">
             <table class="pv-table">
               <thead>
                 <tr>
@@ -99,11 +99,11 @@
                         <span class="pv-badge pv-badge-not_configured">Inactive</span>
                       {% endif %}
                     </td>
-                    <td style="white-space: nowrap;">
+                    <td>
+                      <span class="pv-row-actions">
                       <a
                         href="{{ url_for('camera_admin.rtmp_create') }}?device_id={{ d.id }}"
                         class="pv-link-muted"
-                        style="margin-right: 0.5rem;"
                       >
                         RTMP
                       </a>
@@ -111,13 +111,14 @@
                       <form
                         method="post"
                         action="{{ url_for('camera_admin.delete_device', device_id=d.id) }}"
-                        style="display: inline; margin-left: 0.5rem;"
+                        style="display: inline;"
                       >
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <button type="submit" style="background: none; border: none; color: #fca5a5; cursor: pointer;">
+                        <button type="submit" class="pv-link-danger">
                           Delete
                         </button>
                       </form>
+                      </span>
                     </td>
                   </tr>
                 {% endfor %}
@@ -125,7 +126,7 @@
             </table>
           </div>
         {% else %}
-          <p>No cameras configured yet.</p>
+          <p class="pv-empty-state">No cameras configured yet.</p>
         {% endif %}
         </div>
       </div>

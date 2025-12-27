@@ -4,11 +4,16 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Services</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Services</h1>
+            <p class="pv-page-subtitle">Restart allowlisted system services (System Administrators only).</p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -34,33 +39,35 @@
           <h2>Systemd services</h2>
           <p class="pv-card-subtitle">Restart allowlisted services. Only System Administrators can access this page.</p>
 
-          <table class="pv-table" style="margin-top: 0.75rem;">
-            <thead>
-              <tr>
-                <th>Service</th>
-                <th>Status</th>
-                <th>Enabled</th>
-                <th style="width: 1%; white-space: nowrap;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for s in services %}
+          <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+            <table class="pv-table">
+              <thead>
                 <tr>
-                  <td><code>{{ s.name }}</code></td>
-                  <td>{{ s.active_state }}</td>
-                  <td>{{ s.enabled_state }}</td>
-                  <td>
-                    <form method="post" class="pv-inline-form">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                      <input type="hidden" name="action" value="restart" />
-                      <input type="hidden" name="service" value="{{ s.name }}" />
-                      <button type="submit" class="pv-button-primary" style="padding: 0.15rem 0.6rem; font-size: 0.85rem; white-space: nowrap;">Restart</button>
-                    </form>
-                  </td>
+                  <th>Service</th>
+                  <th>Status</th>
+                  <th>Enabled</th>
+                  <th style="width: 1%; white-space: nowrap;">Actions</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {% for s in services %}
+                  <tr>
+                    <td><code>{{ s.name }}</code></td>
+                    <td>{{ s.active_state }}</td>
+                    <td>{{ s.enabled_state }}</td>
+                    <td>
+                      <form method="post" class="pv-inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <input type="hidden" name="action" value="restart" />
+                        <input type="hidden" name="service" value="{{ s.name }}" />
+                        <button type="submit" class="pv-button-primary" style="padding: 0.15rem 0.6rem; font-size: 0.85rem; white-space: nowrap;">Restart</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
 
       </div>

@@ -4,7 +4,12 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Your profile</h1>
+    <div class="pv-page-header">
+      <div>
+        <h1 class="pv-page-title">Your profile</h1>
+        <p class="pv-page-subtitle">Manage your contact details, notification preferences, and account security.</p>
+      </div>
+    </div>
 
     {% if errors %}
       <div class="pv-alert pv-alert-error" role="alert">
@@ -62,14 +67,15 @@
             type="text"
             placeholder="Enter your pronouns"
             value="{% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}{{ form.pronouns }}{% endif %}"
-            style="margin-top: 0.5rem; display: {% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}block{% else %}none{% endif %};"
+            class="pv-mt-2"
+            style="display: {% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}block{% else %}none{% endif %};"
           />
         </div>
 
         <div class="pv-field-group">
           <label for="primary_phone_national">Primary phone</label>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <select id="primary_phone_country" name="primary_phone_country" style="max-width: 7rem;">
+          <div class="pv-inline-row">
+            <select id="primary_phone_country" name="primary_phone_country" class="pv-field-short">
               <option value="">Code</option>
               <option value="1">+1 (US/Canada)</option>
               <option value="44">+44 (UK)</option>
@@ -127,7 +133,8 @@
             type="text"
             placeholder="e.g. America/Chicago"
             value="{{ form.timezone }}"
-            style="margin-top: 0.5rem; display: none;"
+            class="pv-mt-2"
+            style="display: none;"
           />
           <p class="pv-card-subtitle">
             Choose your IANA time zone (like America/Chicago). If the list doesn't work in your browser, you can type it manually.

@@ -11,7 +11,7 @@
           <div class="pv-card">
             <div class="pv-card-header">
               <div>
-                <h1 style="margin-bottom: 0.25rem;">Recordings</h1>
+                <h1 class="pv-page-title">Recordings</h1>
                 <p class="pv-card-subtitle">Browse captured segments across cameras and storage providers.</p>
               </div>
             </div>
@@ -24,7 +24,7 @@
           {% endif %}
 
           {% if recordings %}
-            <div style="overflow-x: auto;">
+            <div class="pv-table-wrap">
               <table class="pv-table">
                 <thead>
                   <tr>
@@ -53,19 +53,20 @@
                       </td>
                       <td>{{ r.storage_provider }}</td>
                       <td>
-                        <a
-                          href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
-                          class="pv-link-muted"
-                        >
-                          Play
-                        </a>
-                        <span aria-hidden="true"> · </span>
-                        <a
-                          href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
-                          class="pv-link-muted"
-                        >
-                          Download
-                        </a>
+                        <span class="pv-row-actions">
+                          <a
+                            href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
+                            class="pv-link-muted"
+                          >
+                            Play
+                          </a>
+                          <a
+                            href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
+                            class="pv-link-muted"
+                          >
+                            Download
+                          </a>
+                        </span>
                       </td>
                     </tr>
                   {% endfor %}
@@ -73,9 +74,7 @@
               </table>
             </div>
           {% else %}
-            <p style="font-size: 0.9rem; color: #9ca3af;">
-              No recordings found.
-            </p>
+            <p class="pv-empty-state">No recordings found.</p>
           {% endif %}
           </div>
         </div>
@@ -84,7 +83,7 @@
       <div class="pv-card">
         <div class="pv-card-header">
           <div>
-            <h1 style="margin-bottom: 0.25rem;">Recordings</h1>
+            <h1 class="pv-page-title">Recordings</h1>
             <p class="pv-card-subtitle">Browse captured segments across cameras and storage providers.</p>
           </div>
         </div>
@@ -97,7 +96,7 @@
       {% endif %}
 
       {% if recordings %}
-        <div style="overflow-x: auto;">
+        <div class="pv-table-wrap">
           <table class="pv-table">
             <thead>
               <tr>
@@ -126,19 +125,20 @@
                   </td>
                   <td>{{ r.storage_provider }}</td>
                   <td>
-                    <a
-                      href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
-                      class="pv-link-muted"
-                    >
-                      Play
-                    </a>
-                    <span aria-hidden="true"> · </span>
-                    <a
-                      href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
-                      class="pv-link-muted"
-                    >
-                      Download
-                    </a>
+                    <span class="pv-row-actions">
+                      <a
+                        href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
+                        class="pv-link-muted"
+                      >
+                        Play
+                      </a>
+                      <a
+                        href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
+                        class="pv-link-muted"
+                      >
+                        Download
+                      </a>
+                    </span>
                   </td>
                 </tr>
               {% endfor %}
@@ -146,9 +146,7 @@
           </table>
         </div>
       {% else %}
-        <p style="font-size: 0.9rem; color: #9ca3af;">
-          No recordings found.
-        </p>
+        <p class="pv-empty-state">No recordings found.</p>
       {% endif %}
       </div>
     {% endif %}

@@ -4,7 +4,15 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Recording Schedule</h1>
+    <div class="pv-page-header">
+      <div>
+        <h1 class="pv-page-title">Recording Schedule</h1>
+        <p class="pv-page-subtitle">Define when cameras record, where footage is stored, and retention policies.</p>
+      </div>
+      <div class="pv-page-actions">
+        <button type="button" class="pv-button-primary" id="pv-add-storage-schedule">+ Add Storage Schedule</button>
+      </div>
+    </div>
     <div class="pv-admin-topnav">
       {% include 'admin/_nav.html' %}
     </div>
@@ -45,89 +53,89 @@
     </div>
 
     <div class="pv-card" style="margin-bottom: 1.5rem;">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+        <div class="pv-page-header" style="margin-bottom: 0;">
           <div>
-            <h2 style="margin-bottom: 0.15rem;">Storage schedules</h2>
-            <p class="pv-card-subtitle" style="margin-top: 0;">
+            <h2 class="pv-page-title">Storage schedules</h2>
+            <p class="pv-card-subtitle">
               Schedules define camera, storage location(s), retention, mode, and time window. If no time is specified, it records 24 hours.
             </p>
           </div>
-          <button type="button" class="pv-button-primary" id="pv-add-storage-schedule">+ Add Storage Schedule</button>
         </div>
 
         {% if storage_schedules %}
-          <table class="pv-table" style="margin-top: 0.75rem;">
-            <thead>
-              <tr>
-                <th>Camera</th>
-                <th>Storage</th>
-                <th>Retention</th>
-                <th>Mode</th>
-                <th>Window</th>
-                <th style="width: 1%; white-space: nowrap;">Status</th>
-                <th style="width: 1%; white-space: nowrap;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for s in storage_schedules %}
+          <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+            <table class="pv-table">
+              <thead>
                 <tr>
-                  <td>{{ s.camera_name }}</td>
-                  <td style="font-size: 0.85rem;"><code>{{ s.storage_targets or 'Global default' }}</code></td>
-                  <td>{{ s.retention_days if s.retention_days is not none else '\u2013' }}</td>
-                  <td>{{ s.mode }}</td>
-                  <td>
-                    {% if s.mode == 'always' or (not s.start_time and not s.end_time) %}
-                      24 hours
-                    {% else %}
-                      {{ s.start_time or '\u2013' }} to {{ s.end_time or '\u2013' }}
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if s.is_enabled %}
-                      <span style="color: #16a34a;">Enabled</span>
-                    {% else %}
-                      <span style="color: #6b7280;">Disabled</span>
-                    {% endif %}
-                  </td>
-                  <td style="white-space: nowrap;">
-                    <button
-                      type="button"
-                      class="pv-button-secondary pv-ss-edit"
-                      data-entry-id="{{ s.id }}"
-                      data-device-id="{{ s.device_id }}"
-                      data-storage-targets="{{ s.storage_targets }}"
-                      data-retention-days="{{ s.retention_days if s.retention_days is not none else '' }}"
-                      data-mode="{{ s.mode }}"
-                      data-start-time="{{ s.start_time }}"
-                      data-end-time="{{ s.end_time }}"
-                      style="padding: 0.2rem 0.6rem; font-size: 0.8rem;"
-                    >
-                      Edit
-                    </button>
-                    <form method="post" class="pv-inline-form" style="display: inline-flex;">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="toggle_storage_schedule" />
-                      <input type="hidden" name="entry_id" value="{{ s.id }}" />
-                      <input type="hidden" name="enable" value="{% if s.is_enabled %}0{% else %}1{% endif %}" />
-                      <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
-                        {% if s.is_enabled %}Disable{% else %}Enable{% endif %}
-                      </button>
-                    </form>
-                    <form method="post" class="pv-inline-form" style="display: inline-flex;" onsubmit="return confirm('Delete this schedule entry?');">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="delete_storage_schedule" />
-                      <input type="hidden" name="entry_id" value="{{ s.id }}" />
-                      <button type="submit" class="pv-button-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">
-                        Delete
-                      </button>
-                    </form>
-                  </td>
+                  <th>Camera</th>
+                  <th>Storage</th>
+                  <th>Retention</th>
+                  <th>Mode</th>
+                  <th>Window</th>
+                  <th style="width: 1%; white-space: nowrap;">Status</th>
+                  <th style="width: 1%; white-space: nowrap;">Actions</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {% for s in storage_schedules %}
+                  <tr>
+                    <td>{{ s.camera_name }}</td>
+                    <td style="font-size: 0.85rem;"><code>{{ s.storage_targets or 'Global default' }}</code></td>
+                    <td>{{ s.retention_days if s.retention_days is not none else '\u2013' }}</td>
+                    <td>{{ s.mode }}</td>
+                    <td>
+                      {% if s.mode == 'always' or (not s.start_time and not s.end_time) %}
+                        24 hours
+                      {% else %}
+                        {{ s.start_time or '\u2013' }} to {{ s.end_time or '\u2013' }}
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if s.is_enabled %}
+                        <span class="pv-badge pv-badge-ok">Enabled</span>
+                      {% else %}
+                        <span class="pv-badge pv-badge-not_configured">Disabled</span>
+                      {% endif %}
+                    </td>
+                    <td style="white-space: nowrap;">
+                      <button
+                        type="button"
+                        class="pv-button pv-button-small pv-ss-edit"
+                        data-entry-id="{{ s.id }}"
+                        data-device-id="{{ s.device_id }}"
+                        data-storage-targets="{{ s.storage_targets }}"
+                        data-retention-days="{{ s.retention_days if s.retention_days is not none else '' }}"
+                        data-mode="{{ s.mode }}"
+                        data-start-time="{{ s.start_time }}"
+                        data-end-time="{{ s.end_time }}"
+                      >
+                        Edit
+                      </button>
+                      <form method="post" class="pv-inline-form" style="display: inline-flex;">
+                        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                        <input type="hidden" name="action" value="toggle_storage_schedule" />
+                        <input type="hidden" name="entry_id" value="{{ s.id }}" />
+                        <input type="hidden" name="enable" value="{% if s.is_enabled %}0{% else %}1{% endif %}" />
+                        <button type="submit" class="pv-button pv-button-small">
+                          {% if s.is_enabled %}Disable{% else %}Enable{% endif %}
+                        </button>
+                      </form>
+                      <form method="post" class="pv-inline-form" style="display: inline-flex;" onsubmit="return confirm('Delete this schedule entry?');">
+                        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                        <input type="hidden" name="action" value="delete_storage_schedule" />
+                        <input type="hidden" name="entry_id" value="{{ s.id }}" />
+                        <button type="submit" class="pv-button pv-button-small">
+                          Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% else %}
-          <p class="pv-card-subtitle" style="margin-top: 0.75rem;">No storage schedules yet.</p>
+          <p class="pv-empty-state">No storage schedules yet.</p>
         {% endif %}
     </div>
   </section>

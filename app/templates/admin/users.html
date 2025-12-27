@@ -4,11 +4,21 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Users</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Users</h1>
+            <p class="pv-page-subtitle">Create accounts and manage role assignments.</p>
+          </div>
+          <div class="pv-page-actions">
+            <a href="{{ url_for('admin.user_create') }}" class="pv-button pv-button-primary">
+              New user
+            </a>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -20,16 +30,11 @@
           </div>
         {% endif %}
 
-        <div class="pv-admin-actions">
-          <a href="{{ url_for('admin.user_create') }}" class="pv-button pv-button-primary">
-            New user
-          </a>
-        </div>
-
         {% if not users %}
-          <p>No users found in the system.</p>
+          <p class="pv-empty-state">No users found in the system.</p>
         {% else %}
-          <table class="pv-table">
+          <div class="pv-table-wrap">
+            <table class="pv-table">
         <thead>
           <tr>
             <th scope="col">ID</th>
@@ -114,7 +119,8 @@
             </tr>
           {% endfor %}
         </tbody>
-          </table>
+            </table>
+          </div>
         {% endif %}
 
       </div>

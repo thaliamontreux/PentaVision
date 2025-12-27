@@ -4,8 +4,12 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Live Feeds</h1>
-    <p class="pv-card-subtitle">Select a camera to open a live stream session.</p>
+    <div class="pv-page-header">
+      <div>
+        <h1 class="pv-page-title">Live Feeds</h1>
+        <p class="pv-page-subtitle">Select a camera to open a live stream session.</p>
+      </div>
+    </div>
 
     {% if errors %}
       <div class="pv-alert pv-alert-error" role="alert">
@@ -18,7 +22,7 @@
     {% endif %}
 
     {% if devices %}
-      <div style="overflow-x: auto;">
+      <div class="pv-table-wrap">
         <table class="pv-table">
           <thead>
             <tr>
@@ -39,7 +43,7 @@
                     (none)
                   {% endif %}
                 </td>
-                <td style="white-space: nowrap;">
+                <td>
                   <a href="{{ url_for('main.camera_session', device_id=d.id) }}" class="pv-button">Watch</a>
                 </td>
               </tr>
@@ -49,7 +53,7 @@
       </div>
     {% else %}
       {% if not errors %}
-        <p>No cameras available for live viewing.</p>
+        <p class="pv-empty-state">No cameras available for live viewing.</p>
       {% endif %}
     {% endif %}
   </section>

@@ -4,11 +4,21 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>Properties</h1>
-
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
+
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Properties</h1>
+            <p class="pv-page-subtitle">Manage locations, time zones, and the active admin workspace.</p>
+          </div>
+          <div class="pv-page-actions">
+            <a href="{{ url_for('admin.property_create') }}" class="pv-button pv-button-primary">
+              New property
+            </a>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error" role="alert">
@@ -20,16 +30,11 @@
           </div>
         {% endif %}
 
-        <div class="pv-admin-actions">
-          <a href="{{ url_for('admin.property_create') }}" class="pv-button pv-button-primary">
-            New property
-          </a>
-        </div>
-
         {% if not properties %}
-          <p>No properties have been created yet.</p>
+          <p class="pv-empty-state">No properties have been created yet.</p>
         {% else %}
-          <table class="pv-table">
+          <div class="pv-table-wrap">
+            <table class="pv-table">
         <thead>
           <tr>
             <th scope="col">ID</th>
@@ -91,7 +96,8 @@
             </tr>
           {% endfor %}
         </tbody>
-          </table>
+            </table>
+          </div>
         {% endif %}
 
       </div>
