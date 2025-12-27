@@ -358,9 +358,9 @@ body {
 
 .pv-admin-tile-icon {
   position: absolute !important;
-  inset: 5% !important;
-  width: 90% !important;
-  height: 90% !important;
+  inset: 10% !important;
+  width: 80% !important;
+  height: 80% !important;
   display: block !important;
   max-width: none;
   max-height: none;
@@ -380,9 +380,9 @@ body {
 
 .pv-admin-grid .pv-card > img.pv-admin-tile-icon {
   position: absolute !important;
-  inset: 5% !important;
-  width: 90% !important;
-  height: 90% !important;
+  inset: 10% !important;
+  width: 80% !important;
+  height: 80% !important;
   display: block !important;
 }
 
