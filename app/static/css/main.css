@@ -300,6 +300,36 @@ body {
   text-decoration: underline;
 }
 
+.pv-main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 2.5rem;
+}
+
+.pv-section {
+  padding: 1.25rem;
+}
+
+.pv-section.pv-admin {
+  background: linear-gradient(135deg, #111827, #020617);
+  border-radius: 1rem;
+}
+
+.pv-section.pv-dashboard {
+  display: flex;
+  flex-direction: column;
+}
+
+.pv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.pv-admin-grid {
+  margin-top: 1rem;
+}
+
 .pv-admin-layout {
   display: grid;
   grid-template-columns: 1fr;
