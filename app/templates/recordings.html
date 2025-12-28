@@ -93,70 +93,50 @@
         </div>
       </div>
     {% else %}
-      <div class="pv-card">
-        <div class="pv-card-header">
-          <div>
-            <h1 class="pv-page-title">Recordings</h1>
-            <p class="pv-card-subtitle">Browse captured segments across cameras and storage providers.</p>
-          </div>
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">Recordings</h1>
+          <p class="pv-page-subtitle">Browse captured segments across cameras and storage providers.</p>
         </div>
+      </div>
 
       {% if device %}
-        <p class="pv-text-sm pv-mb-3">
-          Filtering by camera: <strong>{{ device.name }}</strong>
-          (<a href="{{ url_for('main.recordings') }}" class="pv-link-muted">clear filter</a>)
-        </p>
+        <div class="pv-filter-bar">
+          <span class="pv-filter-label">Filtering by:</span>
+          <span class="pv-filter-chip">
+            {{ device.name }}
+            <a href="{{ url_for('main.recordings') }}" class="pv-filter-clear" title="Clear filter">×</a>
+          </span>
+        </div>
       {% endif %}
 
       {% if recordings %}
-        <div class="pv-table-wrap">
-          <table class="pv-table">
-            <thead>
-              <tr>
-                <th>Time ({{ current_timezone }})</th>
-                <th>Camera</th>
-                <th>Provider</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in recordings %}
-                <tr>
-                  <td>{{ r.created_at|local_dt }}</td>
-                  <td>
-                    {% set dev = devices_index.get(r.device_id) if devices_index else None %}
-                    {% if dev %}
-                      <a
-                        href="{{ url_for('main.camera_detail', device_id=dev.id) }}"
-                        class="pv-link-muted"
-                      >
-                        {{ dev.name }}
-                      </a>
-                    {% else %}
-                      Unknown
-                    {% endif %}
-                  </td>
-                  <td>{{ r.storage_provider }}</td>
-                  <td>
-                    <span class="pv-row-actions">
-                      <a
-                        href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
-                        class="pv-link-muted"
-                      >
-                        Play
-                      </a>
-                      <a
-                        href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
-                        class="pv-link-muted"
-                      >
-                        Download
-                      </a>
-                    </span>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <div class="pv-recording-grid">
+          {% for r in recordings %}
+            {% set dev = devices_index.get(r.device_id) if devices_index else None %}
+            <div class="pv-recording-card">
+              <div class="pv-recording-thumb">
+                <div class="pv-recording-icon">🎬</div>
+              </div>
+              <div class="pv-recording-body">
+                <div class="pv-recording-meta">
+                  <span class="pv-recording-time">{{ r.created_at|local_dt }}</span>
+                  <span class="pv-recording-provider">{{ r.storage_provider }}</span>
+                </div>
+                <h3 class="pv-recording-camera">
+                  {% if dev %}{{ dev.name }}{% else %}Unknown Camera{% endif %}
+                </h3>
+                <div class="pv-recording-actions">
+                  <a href="{{ url_for('main.recording_detail', recording_id=r.id) }}" class="pv-rec-btn pv-rec-btn-play">
+                    <span class="pv-rec-btn-icon">▶</span> Play
+                  </a>
+                  <a href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}" class="pv-rec-btn">
+                    ↓ Download
+                  </a>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         <div class="pv-empty">
@@ -174,7 +154,6 @@
           </div>
         </div>
       {% endif %}
-      </div>
     {% endif %}
   </section>
 {% endblock %}

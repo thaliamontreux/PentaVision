@@ -10,20 +10,26 @@
         <div class="pv-admin-main">
           <h1>Recording playback</h1>
     {% else %}
-          <h1>Recording playback</h1>
+      <div class="pv-playback-header">
+        <a href="{{ url_for('main.recordings') }}" class="pv-back-link">← Back to Recordings</a>
+        <h1 class="pv-playback-title">Recording Playback</h1>
+        {% if device %}
+          <p class="pv-playback-subtitle">{{ device.name }} · {{ recording.created_at|local_dt if recording else '' }}</p>
+        {% endif %}
+      </div>
     {% endif %}
 
     {% if not recording %}
-      <p class="pv-text-sm pv-text-muted">
-        Recording not found.
-      </p>
-      <p>
-        <a href="{{ url_for('main.recordings') }}" class="pv-link-muted">
-          Back to recordings
-        </a>
-      </p>
+      <div class="pv-empty">
+        <p class="pv-empty-title">Recording not found</p>
+        <p class="pv-empty-subtitle">This recording may have been deleted or is no longer available.</p>
+        <div class="pv-empty-actions">
+          <a href="{{ url_for('main.recordings') }}" class="pv-button">Back to Recordings</a>
+        </div>
+      </div>
     {% else %}
 
+    {% if is_system_admin or is_technician %}
     <p class="pv-card-subtitle pv-mb-4">
       Use the controls below to play the recording and analyze individual frames
       for recognized faces. Overlays are drawn client-side using the same
@@ -89,8 +95,55 @@
       <h2>Face recognition results</h2>
       <pre id="rec-output" class="pv-output-pre" aria-live="polite"></pre>
     </div>
+    {% else %}
+    <div class="pv-player-shell">
+      <div class="pv-player-main">
+        <div class="pv-player-video-wrap">
+          <video
+            id="rec-video"
+            class="pv-player-video"
+            controls
+            autoplay
+          >
+            <source src="{{ url_for('main.download_camera_recording', recording_id=recording.id, transcode=1) }}" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+          <canvas id="rec-overlay" class="pv-video-overlay"></canvas>
+        </div>
+      </div>
+      <div class="pv-player-sidebar">
+        <div class="pv-player-info-card">
+          <h3 class="pv-player-info-title">Recording Info</h3>
+          <div class="pv-player-info-row">
+            <span class="pv-player-info-label">Camera</span>
+            <span class="pv-player-info-value">{% if device %}{{ device.name }}{% else %}Unknown{% endif %}</span>
+          </div>
+          <div class="pv-player-info-row">
+            <span class="pv-player-info-label">Time</span>
+            <span class="pv-player-info-value">{{ recording.created_at|local_dt }}</span>
+          </div>
+          <div class="pv-player-info-row">
+            <span class="pv-player-info-label">Storage</span>
+            <span class="pv-player-info-value">{{ recording.storage_provider }}</span>
+          </div>
+        </div>
+        <div class="pv-player-actions">
+          <a href="{{ url_for('main.download_camera_recording', recording_id=recording.id, download=1) }}" class="pv-player-btn pv-player-btn-download">
+            ↓ Download Recording
+          </a>
+          <button type="button" class="pv-player-btn pv-player-btn-analyze" id="rec-analyze-btn">
+            🔍 Analyze Faces
+          </button>
+        </div>
+        <div class="pv-player-results">
+          <h4 class="pv-player-results-title">Face Recognition</h4>
+          <pre id="rec-output" class="pv-player-output" aria-live="polite">Click "Analyze Faces" to scan the current frame.</pre>
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
-    <canvas id="rec-canvas" style="display: none;"></canvas>
+    <canvas id="rec-canvas" class="pv-hidden"></canvas>
     {% endif %}
 
     {% if is_system_admin or is_technician %}

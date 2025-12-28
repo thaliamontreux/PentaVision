@@ -22,14 +22,29 @@
     {% endif %}
 
     {% if devices %}
-      <div class="pv-glass-grid">
+      <div class="pv-feed-grid">
         {% for d in devices %}
-          <div class="pv-glass-card">
-            <h2 class="pv-glass-title">{{ d.name }}</h2>
-            <div class="pv-glass-actions">
-              <a href="{{ url_for('main.camera_session', device_id=d.id) }}" class="pv-button-primary">Watch</a>
+          <a href="{{ url_for('main.camera_session', device_id=d.id) }}" class="pv-feed-card">
+            <div class="pv-feed-preview">
+              <img
+                src="{{ url_for('main.camera_preview_low_jpeg', device_id=d.id) }}"
+                alt="Preview for {{ d.name }}"
+                class="pv-feed-thumb"
+                loading="lazy"
+                onerror="this.style.opacity='0'"
+              />
+              <div class="pv-feed-overlay">
+                <span class="pv-feed-play">▶</span>
+              </div>
             </div>
-          </div>
+            <div class="pv-feed-info">
+              <h2 class="pv-feed-title">{{ d.name }}</h2>
+              <span class="pv-feed-status pv-feed-status-live">
+                <span class="pv-pulse"></span>
+                Live
+              </span>
+            </div>
+          </a>
         {% endfor %}
       </div>
     {% else %}
