@@ -1239,6 +1239,11 @@ body {
   width: 92vw;
 }
 
+.pv-modal-dialog.pv-modal-dialog-medium {
+  max-width: 760px;
+  width: 92vw;
+}
+
 .pv-modal-header {
   display: flex;
   align-items: flex-start;
@@ -1487,12 +1492,51 @@ body {
   margin-bottom: 0.25rem;
 }
 
+.pv-mr-0 {
+  margin-right: 0 !important;
+}
+
 .pv-prewrap {
   white-space: pre-wrap;
 }
 
 .pv-text-danger {
   color: #fca5a5;
+}
+
+.pv-text-muted {
+  color: #9ca3af;
+}
+
+.pv-opacity-80 {
+  opacity: 0.8;
+}
+
+.pv-ellipsis-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-ellipsis-560 {
+  max-width: 560px;
+}
+
+.pv-ellipsis-520 {
+  max-width: 520px;
+}
+
+.pv-ellipsis-420 {
+  max-width: 420px;
+}
+
+.pv-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin-right: 0.25rem;
 }
 
 .pv-min-h-1 {
@@ -2110,6 +2154,17 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.pv-storage-actions.pv-storage-actions-split {
+  justify-content: space-between;
+  margin-top: 0.9rem;
+}
+
+.pv-storage-actions-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .pv-storage-legacy summary {

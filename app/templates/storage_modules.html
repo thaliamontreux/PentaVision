@@ -6,8 +6,8 @@
   <section class="pv-section pv-storage-shell">
     <div class="pv-storage-header">
       <div>
-        <h1 style="margin: 0;">Storage Modules</h1>
-        <div class="pv-card-subtitle" style="margin-top: 0.35rem;">Manage where your RTSP camera recordings are stored.</div>
+        <h1 class="pv-page-title">Storage Modules</h1>
+        <p class="pv-page-subtitle">Manage where your RTSP camera recordings are stored.</p>
       </div>
       <button type="button" class="pv-storage-add" id="pv-storage-add-btn">+ Add Storage Provider</button>
     </div>
@@ -21,8 +21,6 @@
         </ul>
       </div>
     {% endif %}
-
-    <div id="pv-toast" style="position: fixed; right: 18px; bottom: 18px; z-index: 9999; display: none; max-width: min(520px, calc(100vw - 36px)); padding: 0.8rem 0.95rem; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);"></div>
 
     <div class="pv-storage-grid">
       <aside class="pv-storage-left">
@@ -53,9 +51,9 @@
               </a>
             {% endfor %}
           {% else %}
-            <div class="pv-card" style="margin-top: 0.5rem;">
-              <div class="pv-card-title" style="margin-bottom: 0.25rem;">No storage modules yet</div>
-              <div class="pv-card-subtitle">Click <strong>Add Storage Provider</strong> to create your first module.</div>
+            <div class="pv-empty pv-mt-2">
+              <p class="pv-empty-title">No storage modules yet</p>
+              <p class="pv-empty-subtitle">Click <strong>Add Storage Provider</strong> to create your first module.</p>
             </div>
           {% endif %}
         </div>
@@ -73,20 +71,20 @@
 
           <div class="pv-storage-tabpanel is-active" data-panel="overview">
             {% if selected_module %}
-              <div class="pv-card" style="margin-top: 0.75rem;">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+              <div class="pv-card pv-mt-3">
+                <div class="pv-page-header pv-page-header-tight">
                   <div>
-                    <div class="pv-card-title" style="margin-bottom: 0.15rem;">{{ selected_module.label or selected_module.name }}</div>
+                    <div class="pv-card-title">{{ selected_module.label or selected_module.name }}</div>
                     <div class="pv-card-subtitle">
                       <span class="pv-storage-pill">{{ selected_module.provider_type }}</span>
                       <span class="pv-storage-pill {% if not selected_module.is_enabled %}is-muted{% elif selected_module.status == 'ok' %}is-ok{% else %}is-warn{% endif %}">
                         {% if not selected_module.is_enabled %}Disabled{% elif selected_module.status == 'ok' %}Healthy{% else %}{{ selected_module.status or 'Unknown' }}{% endif %}
                       </span>
-                      <span style="opacity: 0.8;">·</span>
+                      <span class="pv-opacity-80">·</span>
                       <span>Name: <code>{{ selected_module.name }}</code></span>
                     </div>
                   </div>
-                  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <div class="pv-page-actions">
                     <form method="post" class="pv-inline-form pv-module-test-form">
                       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
                       <input type="hidden" name="action" value="module_test" />
@@ -100,7 +98,7 @@
                       <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
                       <input type="hidden" name="enable" value="{% if selected_module.is_enabled %}0{% else %}1{% endif %}" />
                       {% if selected_module.is_enabled and selected_metrics and selected_metrics.active_streams|int > 0 %}
-                        <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: #9ca3af; margin-right: 0.25rem;">
+                        <label class="pv-inline-check">
                           <input type="checkbox" name="force_disable" value="1" />
                           <span>Force disable</span>
                         </label>
@@ -120,7 +118,7 @@
                       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
                       <input type="hidden" name="action" value="module_delete" />
                       <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
-                      <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: #9ca3af; margin-right: 0.25rem;">
+                      <label class="pv-inline-check">
                         <input type="checkbox" name="force_delete" value="1" />
                         <span>Force delete</span>
                       </label>
@@ -163,35 +161,37 @@
                 </div>
               </div>
 
-              <div class="pv-card" style="margin-top: 0.75rem;">
-                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Recent errors</div>
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Recent errors</div>
                 <div class="pv-card-subtitle">Most recent error-level events for this module.</div>
                 {% if recent_error_rows %}
-                  <table class="pv-table" style="margin-top: 0.65rem;">
-                    <thead>
-                      <tr>
-                        <th>Time</th>
-                        <th>Type</th>
-                        <th>Message</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for e in recent_error_rows %}
+                  <div class="pv-table-wrap pv-table-wrap-spaced">
+                    <table class="pv-table">
+                      <thead>
                         <tr>
-                          <td>{{ e.created_at }}</td>
-                          <td><code>{{ e.event_type }}</code></td>
-                          <td style="max-width: 560px; overflow: hidden; text-overflow: ellipsis;">{{ e.message }}</td>
+                          <th>Time</th>
+                          <th>Type</th>
+                          <th>Message</th>
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {% for e in recent_error_rows %}
+                          <tr>
+                            <td>{{ e.created_at }}</td>
+                            <td><code>{{ e.event_type }}</code></td>
+                            <td class="pv-ellipsis-cell pv-ellipsis-560">{{ e.message }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 {% else %}
-                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No recent errors.</div>
+                  <div class="pv-card-subtitle pv-mt-3">No recent errors.</div>
                 {% endif %}
               </div>
             {% else %}
               <div class="pv-storage-empty">
-                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Select a storage module</div>
+                <div class="pv-card-title">Select a storage module</div>
                 <div class="pv-card-subtitle">Choose a provider on the left or add a new one.</div>
               </div>
             {% endif %}
@@ -203,7 +203,7 @@
 
             {% set cfg_readonly = (selected_module and selected_metrics and selected_metrics.active_streams|int > 0) %}
             {% if cfg_readonly %}
-              <div class="pv-alert pv-alert-warn" role="status" style="margin-top: 0.75rem;">
+              <div class="pv-alert pv-alert-warn pv-mt-3" role="status">
                 <p>This module currently has active streams. Configuration is read-only until streams stop.</p>
               </div>
             {% endif %}
@@ -227,7 +227,7 @@
                 <div class="pv-field-group">
                   <label for="module_priority">Priority</label>
                   <input id="module_priority" name="module_priority" type="number" min="0" max="999" step="1" value="{{ edit_module.priority if edit_module and edit_module.priority is not none else 100 }}" {% if cfg_readonly %}disabled{% endif %} />
-                  <div style="margin-top: 0.35rem; font-size: 0.8rem; color: #9ca3af;">Lower number = higher priority. Mode B uses this for primary + failover.</div>
+                  <div class="pv-help">Lower number = higher priority. Mode B uses this for primary + failover.</div>
                 </div>
                 <div class="pv-field-group">
                   <label for="module_provider">Provider</label>
@@ -256,8 +256,8 @@
                       {% endfor %}
                     {% endif %}
                   </select>
-                  <div style="margin-top: 0.4rem; font-size: 0.85rem; color: #9ca3af;">
-                    <label style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                  <div class="pv-mt-1">
+                    <label class="pv-inline-check pv-mr-0">
                       <input type="checkbox" name="module_enabled" value="1" {% if not edit_module or edit_module.is_enabled %}checked{% endif %} {% if cfg_readonly %}disabled{% endif %} />
                       <span>Enabled</span>
                     </label>
@@ -294,66 +294,70 @@
 
           <div class="pv-storage-tabpanel" data-panel="streams">
             {% if not selected_module %}
-              <div class="pv-card" style="margin-top: 0.75rem;">
-                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Streams</div>
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Streams</div>
                 <div class="pv-card-subtitle">Select a storage module to view streams.</div>
               </div>
             {% else %}
-              <div class="pv-card" style="margin-top: 0.75rem;">
-                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Recent recording segments</div>
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Recent recording segments</div>
                 <div class="pv-card-subtitle">Last 25 segments stored under <code>{{ selected_module.name }}</code>.</div>
                 {% if streams_rows %}
-                  <table class="pv-table" style="margin-top: 0.65rem;">
-                    <thead>
-                      <tr>
-                        <th>Created</th>
-                        <th>Device</th>
-                        <th>Key</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for r in streams_rows %}
+                  <div class="pv-table-wrap pv-table-wrap-spaced">
+                    <table class="pv-table">
+                      <thead>
                         <tr>
-                          <td>{{ r.created_at }}</td>
-                          <td><code>{{ r.device_id }}</code></td>
-                          <td style="max-width: 520px; overflow: hidden; text-overflow: ellipsis;"><code>{{ r.storage_key }}</code></td>
+                          <th>Created</th>
+                          <th>Device</th>
+                          <th>Key</th>
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {% for r in streams_rows %}
+                          <tr>
+                            <td>{{ r.created_at }}</td>
+                            <td><code>{{ r.device_id }}</code></td>
+                            <td class="pv-ellipsis-cell pv-ellipsis-520"><code>{{ r.storage_key }}</code></td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 {% else %}
-                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No segments yet for this module.</div>
+                  <div class="pv-card-subtitle pv-mt-3">No segments yet for this module.</div>
                 {% endif %}
               </div>
 
-              <div class="pv-card" style="margin-top: 0.75rem;">
-                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Upload queue</div>
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Upload queue</div>
                 <div class="pv-card-subtitle">Pending or failed uploads targeting <code>{{ selected_module.name }}</code>.</div>
                 {% if upload_rows %}
-                  <table class="pv-table" style="margin-top: 0.65rem;">
-                    <thead>
-                      <tr>
-                        <th>Created</th>
-                        <th>Device</th>
-                        <th>Status</th>
-                        <th>Attempts</th>
-                        <th>Last error</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for u in upload_rows %}
+                  <div class="pv-table-wrap pv-table-wrap-spaced">
+                    <table class="pv-table">
+                      <thead>
                         <tr>
-                          <td>{{ u.created_at }}</td>
-                          <td><code>{{ u.device_id }}</code></td>
-                          <td><code>{{ u.status }}</code></td>
-                          <td>{{ u.attempts }}</td>
-                          <td style="max-width: 420px; overflow: hidden; text-overflow: ellipsis;">{{ u.last_error }}</td>
+                          <th>Created</th>
+                          <th>Device</th>
+                          <th>Status</th>
+                          <th>Attempts</th>
+                          <th>Last error</th>
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {% for u in upload_rows %}
+                          <tr>
+                            <td>{{ u.created_at }}</td>
+                            <td><code>{{ u.device_id }}</code></td>
+                            <td><code>{{ u.status }}</code></td>
+                            <td>{{ u.attempts }}</td>
+                            <td class="pv-ellipsis-cell pv-ellipsis-420">{{ u.last_error }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 {% else %}
-                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No queued uploads for this module.</div>
+                  <div class="pv-card-subtitle pv-mt-3">No queued uploads for this module.</div>
                 {% endif %}
               </div>
             {% endif %}
@@ -361,45 +365,47 @@
 
           <div class="pv-storage-tabpanel" data-panel="logs">
             {% if not selected_module %}
-              <div class="pv-card" style="margin-top: 0.75rem;">
-                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Logs</div>
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Logs</div>
                 <div class="pv-card-subtitle">Select a storage module to view logs.</div>
               </div>
             {% else %}
-              <div class="pv-card" style="margin-top: 0.75rem;">
-                <div class="pv-card-title" style="margin-bottom: 0.25rem;">Module events</div>
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Module events</div>
                 <div class="pv-card-subtitle">Last 50 events for <code>{{ selected_module.name }}</code>.</div>
                 {% if logs_rows %}
-                  <table class="pv-table" style="margin-top: 0.65rem;">
-                    <thead>
-                      <tr>
-                        <th>Time</th>
-                        <th>Level</th>
-                        <th>Type</th>
-                        <th>Message</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for e in logs_rows %}
+                  <div class="pv-table-wrap pv-table-wrap-spaced">
+                    <table class="pv-table">
+                      <thead>
                         <tr>
-                          <td>{{ e.created_at }}</td>
-                          <td><code>{{ e.level }}</code></td>
-                          <td><code>{{ e.event_type }}</code></td>
-                          <td style="max-width: 560px; overflow: hidden; text-overflow: ellipsis;">{{ e.message }}</td>
+                          <th>Time</th>
+                          <th>Level</th>
+                          <th>Type</th>
+                          <th>Message</th>
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {% for e in logs_rows %}
+                          <tr>
+                            <td>{{ e.created_at }}</td>
+                            <td><code>{{ e.level }}</code></td>
+                            <td><code>{{ e.event_type }}</code></td>
+                            <td class="pv-ellipsis-cell pv-ellipsis-560">{{ e.message }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 {% else %}
-                  <div class="pv-card-subtitle" style="margin-top: 0.75rem;">No events recorded yet.</div>
+                  <div class="pv-card-subtitle pv-mt-3">No events recorded yet.</div>
                 {% endif %}
               </div>
             {% endif %}
           </div>
 
           <div class="pv-storage-tabpanel" data-panel="advanced">
-            <div class="pv-card" style="margin-top: 0.75rem;">
-              <div class="pv-card-title" style="margin-bottom: 0.25rem;">Advanced</div>
+            <div class="pv-card pv-mt-3">
+              <div class="pv-card-title">Advanced</div>
               <div class="pv-card-subtitle">Advanced settings will live here.</div>
             </div>
           </div>
@@ -408,23 +414,23 @@
     </div>
 
     <div class="pv-modal" id="pv-storage-wizard" role="dialog" aria-modal="true" aria-labelledby="pv-storage-wizard-title">
-      <div class="pv-modal-dialog" style="max-width: 760px; width: 92vw;">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+      <div class="pv-modal-dialog pv-modal-dialog-medium">
+        <div class="pv-modal-header">
           <div>
-            <div id="pv-storage-wizard-title" class="pv-card-title" style="margin: 0;">Add Storage Provider</div>
-            <div class="pv-card-subtitle" style="margin-top: 0.25rem;">Select a provider, enter credentials, test, then save.</div>
+            <div id="pv-storage-wizard-title" class="pv-card-title">Add Storage Provider</div>
+            <div class="pv-card-subtitle">Select a provider, enter credentials, test, then save.</div>
           </div>
           <button type="button" class="pv-button pv-button-small" id="pv-storage-wizard-close">Close</button>
         </div>
 
-        <div class="pv-storage-wizard-steps" style="margin-top: 0.75rem;">
+        <div class="pv-storage-wizard-steps pv-mt-3">
           <div class="pv-storage-step is-active" data-step="1">1. Provider</div>
           <div class="pv-storage-step" data-step="2">2. Credentials</div>
           <div class="pv-storage-step" data-step="3">3. Test</div>
           <div class="pv-storage-step" data-step="4">4. Save</div>
         </div>
 
-        <form method="post" id="pv-storage-wizard-form" style="margin-top: 0.9rem;">
+        <form method="post" id="pv-storage-wizard-form" class="pv-mt-3">
           <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
           <input type="hidden" name="action" id="pv-storage-wizard-action" value="module_create" />
           <input type="hidden" name="module_test_fingerprint" id="pv-wiz-test-fp" value="" />
@@ -474,15 +480,15 @@
               <div class="pv-field-group">
                 <label for="pv-wiz-priority">Priority</label>
                 <input id="pv-wiz-priority" name="module_priority" type="number" min="0" max="999" step="1" value="100" />
-                <div style="margin-top: 0.35rem; font-size: 0.8rem; color: #9ca3af;">Lower number = higher priority.</div>
+                <div class="pv-help">Lower number = higher priority.</div>
               </div>
-              <div class="pv-field-group" style="grid-column: 1 / -1;">
-                <label style="display: inline-flex; align-items: center; gap: 0.4rem;">
+              <div class="pv-field-group pv-form-full-row">
+                <label class="pv-inline-check pv-mr-0">
                   <input type="checkbox" name="module_enabled" value="1" checked />
                   <span>Enabled</span>
                 </label>
               </div>
-              <div style="grid-column: 1 / -1;">
+              <div class="pv-form-full-row">
                 {% include 'modules/storage/local_fs/wizard.html' %}
                 {% include 'modules/storage/local_drive/wizard.html' %}
                 {% include 'modules/storage/sql_db/wizard.html' %}
@@ -503,25 +509,25 @@
           </div>
 
           <div class="pv-storage-wizard-panel" data-panel-step="3">
-            <div class="pv-card" style="margin-top: 0.25rem;">
-              <div class="pv-card-title" style="margin-bottom: 0.25rem;">Test Connection</div>
+            <div class="pv-card pv-mt-1">
+              <div class="pv-card-title">Test Connection</div>
               <div class="pv-card-subtitle">We will validate credentials and verify the provider is reachable.</div>
             </div>
           </div>
 
           <div class="pv-storage-wizard-panel" data-panel-step="4">
-            <div class="pv-card" style="margin-top: 0.25rem;">
-              <div class="pv-card-title" style="margin-bottom: 0.25rem;">Save</div>
+            <div class="pv-card pv-mt-1">
+              <div class="pv-card-title">Save</div>
               <div class="pv-card-subtitle">Save is only enabled after a successful test.</div>
             </div>
           </div>
 
-          <div class="pv-storage-actions" style="margin-top: 0.9rem; justify-content: space-between;">
-            <div style="display: flex; gap: 0.5rem;">
+          <div class="pv-storage-actions pv-storage-actions-split">
+            <div class="pv-storage-actions-group">
               <button type="button" class="pv-button-secondary" id="pv-wiz-back">Back</button>
               <button type="button" class="pv-button-secondary" id="pv-wiz-next">Next</button>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
+            <div class="pv-storage-actions-group">
               <button type="button" class="pv-button-secondary" id="pv-wiz-test" data-pv-submit-action="module_draft_test">Test</button>
               <button type="submit" class="pv-storage-save" id="pv-wiz-save" data-pv-submit-action="module_create" {% if not module_test_ready %}disabled{% endif %}>Save</button>
             </div>
@@ -581,7 +587,7 @@
       var wizNext = document.getElementById('pv-wiz-next');
       var wizTest = document.getElementById('pv-wiz-test');
       var wizSave = document.getElementById('pv-wiz-save');
-      var toastEl = document.getElementById('pv-toast');
+      var toastEl = document.getElementById('pv-global-toast');
       var wizTestFp = document.getElementById('pv-wiz-test-fp');
       var wizTestOk = document.getElementById('pv-wiz-test-ok');
 
@@ -671,11 +677,13 @@
       function showToast(message, ok) {
         if (!toastEl) return;
         toastEl.textContent = String(message || '');
+        toastEl.classList.remove('is-error', 'is-success');
+        toastEl.classList.add(ok ? 'is-success' : 'is-error');
         toastEl.style.display = 'block';
-        toastEl.style.background = '#86efac';
-        toastEl.style.color = '#111827';
+        toastEl.classList.add('is-showing');
         window.clearTimeout(showToast._t);
         showToast._t = window.setTimeout(function () {
+          toastEl.classList.remove('is-showing');
           toastEl.style.display = 'none';
         }, 10000);
       }
