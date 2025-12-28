@@ -1,66 +1,84 @@
 {% extends "base.html" %}
 
+{% block title %}Property Login · PentaVision{% endblock %}
+
 {% block content %}
-<div class="container" style="max-width: 900px; margin: 0 auto; padding: 24px;">
-  <div style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
-    <h2 style="margin:0;">Property Login</h2>
-    <a class="btn btn-outline-secondary" href="{{ url_for('main.login') }}">Global Login</a>
-  </div>
-
-  {% if errors %}
-    <div class="alert alert-danger" style="margin-top:16px;">
-      <ul style="margin:0; padding-left:18px;">
-        {% for e in errors %}
-          <li>{{ e }}</li>
-        {% endfor %}
-      </ul>
+<div class="pv-property-login-page">
+  <div class="pv-property-login-card">
+    <div class="pv-property-login-header">
+      <div class="pv-property-login-icon">🏢</div>
+      <h1 class="pv-property-login-title">Property Login</h1>
+      <p class="pv-property-login-subtitle">Sign in with your property credentials</p>
     </div>
-  {% endif %}
 
-  <form method="post" action="{{ url_for('main.property_login', next=next) }}" style="margin-top:16px;">
-    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-    <input type="hidden" name="next" value="{{ next }}" />
+    {% if errors %}
+      <div class="pv-alert pv-alert-error pv-mb-4" role="alert">
+        <ul>
+          {% for e in errors %}
+            <li>{{ e }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
 
-    <div class="row" style="margin:0;">
-      <div class="col-12" style="padding:0; display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-        <div>
-          <label class="form-label" for="property_id">Property</label>
-          <select class="form-select" id="property_id" name="property_id" required>
-            <option value="">Select a property</option>
-            {% for p in properties %}
-              <option value="{{ p.id }}" {% if property_id and property_id|int == p.id %}selected{% endif %}>{{ p.name }}</option>
-            {% endfor %}
-          </select>
+    <form method="post" action="{{ url_for('main.property_login', next=next) }}" class="pv-property-login-form">
+      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+      <input type="hidden" name="next" value="{{ next }}" />
+
+      <div class="pv-field-group">
+        <label for="property_id">Property</label>
+        <select id="property_id" name="property_id" required>
+          <option value="">Select a property...</option>
+          {% for p in properties %}
+            <option value="{{ p.id }}" {% if property_id and property_id|int == p.id %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="pv-field-group">
+        <label for="username">Username</label>
+        <input id="username" name="username" value="{{ username }}" autocomplete="username" required placeholder="Enter your username" />
+      </div>
+
+      <div class="pv-property-login-divider">
+        <span>Sign in with</span>
+      </div>
+
+      <div class="pv-property-login-methods">
+        <div class="pv-property-login-method">
+          <div class="pv-property-login-method-header">
+            <span class="pv-property-login-method-icon">🔑</span>
+            <span class="pv-property-login-method-label">Password</span>
+          </div>
+          <div class="pv-field-group">
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter password" />
+          </div>
         </div>
 
-        <div>
-          <label class="form-label" for="username">Username</label>
-          <input class="form-control" id="username" name="username" value="{{ username }}" autocomplete="username" required />
-        </div>
+        <div class="pv-property-login-or">or</div>
 
-        <div style="grid-column: 1 / -1;">
-          <label class="form-label" for="password">Password</label>
-          <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" />
-        </div>
-
-        <div style="grid-column: 1 / -1;">
-          <label class="form-label" for="pin">PIN (optional, 8 digits)</label>
-          <input class="form-control" id="pin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" />
-        </div>
-
-        <div style="grid-column: 1 / -1; color:#666; font-size: 13px;">
-          Use a password or an 8-digit PIN.
+        <div class="pv-property-login-method">
+          <div class="pv-property-login-method-header">
+            <span class="pv-property-login-method-icon">🔢</span>
+            <span class="pv-property-login-method-label">8-Digit PIN</span>
+          </div>
+          <div class="pv-field-group">
+            <input id="pin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" placeholder="12345678" class="pv-pin-input" />
+          </div>
         </div>
       </div>
-    </div>
 
-    <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
-      <button class="btn btn-primary" type="submit">Sign In</button>
-    </div>
-  </form>
+      <button class="pv-property-login-btn" type="submit">
+        Sign In
+      </button>
+    </form>
 
-  <div style="margin-top:18px; color:#666; font-size: 13px;">
-    Property accounts are managed by an administrator per property. If you don't have a property username/password, ask your system administrator.
+    <div class="pv-property-login-footer">
+      <p>Property accounts are managed by your property administrator.</p>
+      <a href="{{ url_for('main.login') }}" class="pv-property-login-link">
+        ← Use Global Login instead
+      </a>
+    </div>
   </div>
 </div>
 {% endblock %}

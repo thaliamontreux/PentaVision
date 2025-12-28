@@ -1924,6 +1924,299 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
+/* ===== Property Login Page ===== */
+.pv-property-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: radial-gradient(circle at top, #0f172a, #020617 65%);
+}
+
+.pv-property-login-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 2rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.95));
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.6),
+    0 0 40px rgba(56, 189, 248, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.pv-property-login-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.pv-property-login-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pv-property-login-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.pv-property-login-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.pv-property-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pv-property-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.5rem 0;
+  color: #64748b;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pv-property-login-divider::before,
+.pv-property-login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.pv-property-login-methods {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 500px) {
+  .pv-property-login-methods {
+    grid-template-columns: 1fr;
+  }
+  .pv-property-login-or {
+    text-align: center;
+  }
+}
+
+.pv-property-login-method {
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.pv-property-login-method-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.pv-property-login-method-icon {
+  font-size: 1rem;
+}
+
+.pv-property-login-method-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.pv-property-login-or {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2rem;
+  font-size: 0.8rem;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.pv-pin-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.25em;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.pv-property-login-btn {
+  width: 100%;
+  padding: 0.85rem 1.5rem;
+  margin-top: 0.5rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.9), rgba(59, 130, 246, 0.9));
+  color: #0f172a;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3);
+  transition: all 200ms ease;
+}
+
+.pv-property-login-btn:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 1), rgba(59, 130, 246, 1));
+  box-shadow: 0 6px 28px rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
+}
+
+.pv-property-login-footer {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  text-align: center;
+}
+
+.pv-property-login-footer p {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.pv-property-login-link {
+  font-size: 0.85rem;
+  color: #7dd3fc;
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.pv-property-login-link:hover {
+  color: #bae6fd;
+}
+
+/* ===== Profile Page ===== */
+.pv-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(139, 92, 246, 0.1));
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.pv-profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.4), rgba(139, 92, 246, 0.4));
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.2);
+}
+
+.pv-profile-info {
+  flex: 1;
+}
+
+.pv-profile-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.pv-profile-email {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.pv-profile-form {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .pv-profile-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pv-profile-card {
+  padding: 1.25rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.pv-profile-card-wide {
+  grid-column: 1 / -1;
+}
+
+.pv-profile-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.pv-profile-card-icon {
+  font-size: 1.25rem;
+}
+
+.pv-profile-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.pv-profile-card-desc {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.pv-profile-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.5rem;
+}
+
+.pv-profile-save-btn {
+  padding: 0.75rem 2rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.9), rgba(59, 130, 246, 0.9));
+  color: #0f172a;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3);
+  transition: all 200ms ease;
+}
+
+.pv-profile-save-btn:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 1), rgba(59, 130, 246, 1));
+  box-shadow: 0 6px 28px rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
+}
+
 .pv-status-list {
   list-style: none;
   padding: 0;

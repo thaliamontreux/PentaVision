@@ -4,15 +4,18 @@
 
 {% block content %}
   <section class="pv-section">
-    <div class="pv-page-header">
-      <div>
-        <h1 class="pv-page-title">Your profile</h1>
-        <p class="pv-page-subtitle">Manage your contact details, notification preferences, and account security.</p>
+    <div class="pv-profile-header">
+      <div class="pv-profile-avatar">
+        {{ (current_user.full_name or current_user.username or 'U')[0]|upper }}
+      </div>
+      <div class="pv-profile-info">
+        <h1 class="pv-profile-name">{{ current_user.full_name or current_user.username }}</h1>
+        <p class="pv-profile-email">{{ current_user.email or '' }}</p>
       </div>
     </div>
 
     {% if errors %}
-      <div class="pv-alert pv-alert-error" role="alert">
+      <div class="pv-alert pv-alert-error pv-mb-4" role="alert">
         <ul>
           {% for error in errors %}
             <li>{{ error }}</li>
@@ -22,16 +25,19 @@
     {% endif %}
 
     {% if saved %}
-      <div class="pv-alert pv-alert-success" role="status">
-        <p>Profile updated.</p>
+      <div class="pv-alert pv-alert-success pv-mb-4" role="status">
+        <p>Profile updated successfully.</p>
       </div>
     {% endif %}
 
-    <form method="post" class="pv-form pv-form-two-column">
+    <form method="post" class="pv-profile-form">
       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
 
-      <div class="pv-card">
-        <h2>Basic information</h2>
+      <div class="pv-profile-card">
+        <div class="pv-profile-card-header">
+          <span class="pv-profile-card-icon">👤</span>
+          <h2 class="pv-profile-card-title">Basic Information</h2>
+        </div>
         <div class="pv-field-group">
           <label for="full_name">Full name</label>
           <input
@@ -160,11 +166,13 @@
         </div>
       </div>
 
-      <div class="pv-card">
-        <h2>Notification settings</h2>
-        <p class="pv-card-subtitle">
-          Choose which security events should trigger notifications for your
-          account.
+      <div class="pv-profile-card">
+        <div class="pv-profile-card-header">
+          <span class="pv-profile-card-icon">🔔</span>
+          <h2 class="pv-profile-card-title">Notification Settings</h2>
+        </div>
+        <p class="pv-profile-card-desc">
+          Choose which security events should trigger notifications for your account.
         </p>
 
         <div class="pv-field-group">
@@ -255,9 +263,12 @@
         </div>
       </div>
 
-      <div class="pv-card">
-        <h2>Security &amp; multi-factor authentication</h2>
-        <p class="pv-card-subtitle">
+      <div class="pv-profile-card pv-profile-card-wide">
+        <div class="pv-profile-card-header">
+          <span class="pv-profile-card-icon">🔐</span>
+          <h2 class="pv-profile-card-title">Security &amp; Multi-Factor Authentication</h2>
+        </div>
+        <p class="pv-profile-card-desc">
           Manage additional sign-in protections for your account. Changes here
           work together with your preferred sign-in method above.
         </p>
@@ -390,8 +401,8 @@
         </div>
       </div>
 
-      <div class="pv-field-group pv-form-full-row pv-mt-3">
-        <button type="submit" class="pv-button-primary">Save changes</button>
+      <div class="pv-profile-actions">
+        <button type="submit" class="pv-profile-save-btn">Save Changes</button>
       </div>
     </form>
   </section>

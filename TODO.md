@@ -26,7 +26,7 @@
 - [x] Auto-detect camera MAC from IP during camera create/edit/scan; persist to RecordDB.
 - [x] Alert on MAC changes (no alert when previous MAC was blank) and run a twice-daily MAC audit in the video worker.
 
-- [ ] Implement persistent ingest service (one RTSP connection per camera) that segments continuously and feeds both dashboard previews and recording uploads (behind `INGEST_ENABLED=1`).
+- [x] Implement persistent ingest service (one RTSP connection per camera) that segments continuously and feeds both dashboard previews and recording uploads (behind `INGEST_ENABLED=1`).
 
 ## Pentastar-web UI rules / polish
 
@@ -63,7 +63,7 @@
 - [x] Backfill legacy properties missing `properties.uid` so tenant DB naming works.
 - [x] Harden tenant DB failures so UI does not crash; show actionable bottom-right toast diagnostics.
 - [x] Add legacy property-user migration into tenant DB (copy from global DB, de-dupe by UID, safe to rerun).
-- [ ] Upgrade `/property-login` to support password or 8-digit PIN login with audit logging + lockout.
+- [x] Upgrade `/property-login` to support password or 8-digit PIN login with audit logging + lockout.
 - [ ] Implement property-scoped roles/permissions UI for property managers.
 
 ## Storage Modules Manager fixes
