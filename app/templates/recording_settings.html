@@ -42,7 +42,7 @@
       </div>
     {% endif %}
 
-    <div class="pv-card" style="margin-bottom: 1.5rem;">
+    <div class="pv-card pv-card-stack">
       <h2>Overview</h2>
       <p class="pv-card-subtitle">
         Current time: {{ current_time_local|local_dt }} ({{ current_timezone }})
@@ -52,8 +52,8 @@
       </p>
     </div>
 
-    <div class="pv-card" style="margin-bottom: 1.5rem;">
-        <div class="pv-page-header" style="margin-bottom: 0;">
+    <div class="pv-card pv-card-stack">
+        <div class="pv-page-header pv-page-header-tight">
           <div>
             <h2 class="pv-page-title">Storage schedules</h2>
             <p class="pv-card-subtitle">
@@ -63,7 +63,7 @@
         </div>
 
         {% if storage_schedules %}
-          <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+          <div class="pv-table-wrap pv-table-wrap-spaced">
             <table class="pv-table">
               <thead>
                 <tr>
@@ -98,36 +98,38 @@
                       {% endif %}
                     </td>
                     <td style="white-space: nowrap;">
-                      <button
-                        type="button"
-                        class="pv-button pv-button-small pv-ss-edit"
-                        data-entry-id="{{ s.id }}"
-                        data-device-id="{{ s.device_id }}"
-                        data-storage-targets="{{ s.storage_targets }}"
-                        data-retention-days="{{ s.retention_days if s.retention_days is not none else '' }}"
-                        data-mode="{{ s.mode }}"
-                        data-start-time="{{ s.start_time }}"
-                        data-end-time="{{ s.end_time }}"
-                      >
-                        Edit
-                      </button>
-                      <form method="post" class="pv-inline-form" style="display: inline-flex;">
-                        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                        <input type="hidden" name="action" value="toggle_storage_schedule" />
-                        <input type="hidden" name="entry_id" value="{{ s.id }}" />
-                        <input type="hidden" name="enable" value="{% if s.is_enabled %}0{% else %}1{% endif %}" />
-                        <button type="submit" class="pv-button pv-button-small">
-                          {% if s.is_enabled %}Disable{% else %}Enable{% endif %}
+                      <span class="pv-row-actions">
+                        <button
+                          type="button"
+                          class="pv-button pv-button-small pv-ss-edit"
+                          data-entry-id="{{ s.id }}"
+                          data-device-id="{{ s.device_id }}"
+                          data-storage-targets="{{ s.storage_targets }}"
+                          data-retention-days="{{ s.retention_days if s.retention_days is not none else '' }}"
+                          data-mode="{{ s.mode }}"
+                          data-start-time="{{ s.start_time }}"
+                          data-end-time="{{ s.end_time }}"
+                        >
+                          Edit
                         </button>
-                      </form>
-                      <form method="post" class="pv-inline-form" style="display: inline-flex;" onsubmit="return confirm('Delete this schedule entry?');">
-                        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                        <input type="hidden" name="action" value="delete_storage_schedule" />
-                        <input type="hidden" name="entry_id" value="{{ s.id }}" />
-                        <button type="submit" class="pv-button pv-button-small">
-                          Delete
-                        </button>
-                      </form>
+                        <form method="post" class="pv-inline-form">
+                          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                          <input type="hidden" name="action" value="toggle_storage_schedule" />
+                          <input type="hidden" name="entry_id" value="{{ s.id }}" />
+                          <input type="hidden" name="enable" value="{% if s.is_enabled %}0{% else %}1{% endif %}" />
+                          <button type="submit" class="pv-button pv-button-small">
+                            {% if s.is_enabled %}Disable{% else %}Enable{% endif %}
+                          </button>
+                        </form>
+                        <form method="post" class="pv-inline-form" onsubmit="return confirm('Delete this schedule entry?');">
+                          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                          <input type="hidden" name="action" value="delete_storage_schedule" />
+                          <input type="hidden" name="entry_id" value="{{ s.id }}" />
+                          <button type="submit" class="pv-button pv-button-small">
+                            Delete
+                          </button>
+                        </form>
+                      </span>
                     </td>
                   </tr>
                 {% endfor %}
@@ -135,7 +137,17 @@
             </table>
           </div>
         {% else %}
-          <p class="pv-empty-state">No storage schedules yet.</p>
+          <div class="pv-empty" style="margin-top: 0.75rem;">
+            <img
+              class="pv-empty-icon"
+              src="{{ url_for('static', filename='img/empty-recordings.png') }}"
+              alt=""
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+            <p class="pv-empty-title">No storage schedules yet</p>
+            <p class="pv-empty-subtitle">Click “Add Storage Schedule” to define where recordings go, retention, and the time window.</p>
+          </div>
         {% endif %}
     </div>
   </section>
@@ -344,47 +356,49 @@
   </script>
 
   <div class="pv-modal" id="pv-storage-schedule-modal" role="dialog" aria-modal="true" aria-labelledby="pv-storage-schedule-title">
-    <div class="pv-modal-dialog" style="max-width: 860px; width: 92vw;">
-      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;">
+    <div class="pv-modal-dialog pv-modal-dialog-wide">
+      <div class="pv-modal-header">
         <div>
-          <div id="pv-storage-schedule-title" class="pv-card-title" style="margin: 0;">Add Storage Schedule</div>
-          <div class="pv-card-subtitle" style="margin-top: 0.2rem;">Create a programmed schedule entry for a camera.</div>
+          <div id="pv-storage-schedule-title" class="pv-card-title">Add Storage Schedule</div>
+          <div class="pv-card-subtitle">Create a programmed schedule entry for a camera.</div>
         </div>
         <button type="button" class="pv-button-secondary" id="pv-storage-schedule-close">Close</button>
       </div>
 
-      <form method="post" style="margin-top: 1rem;">
+      <form method="post" class="pv-modal-form">
         <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
         <input type="hidden" name="action" id="pv-ss-action" value="create_storage_schedule" />
         <input type="hidden" name="entry_id" id="pv-ss-entry-id" value="" />
 
-        <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 1rem; align-items: start;">
-          <div class="pv-card" style="margin: 0;">
+        <div class="pv-dashboard-grid pv-dashboard-grid-ss">
+          <div class="pv-card">
             <h2 style="margin-bottom: 0.5rem;">Camera</h2>
-            <label class="pv-card-subtitle" for="pv-ss-camera" style="display: block; margin-bottom: 0.35rem;">Select camera</label>
-            <select id="pv-ss-camera" name="device_id" style="width: 100%;">
-              <option value="">Select…</option>
-              {% for c in cameras %}
-                <option value="{{ c.id }}">{{ c.name }}</option>
-              {% endfor %}
-            </select>
+            <div class="pv-field-group">
+              <label for="pv-ss-camera" class="pv-card-subtitle">Select camera</label>
+              <select id="pv-ss-camera" name="device_id">
+                <option value="">Select…</option>
+                {% for c in cameras %}
+                  <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
             <div style="margin-top: 0.75rem;">
               <div class="pv-card-subtitle" style="margin-bottom: 0.35rem;">Preview</div>
-              <img id="pv-ss-preview" src="" alt="Camera preview" style="width: 100%; border-radius: 0.65rem; border: 1px solid rgba(148, 163, 184, 0.18); display: none;" />
+              <img id="pv-ss-preview" src="" alt="Camera preview" class="pv-preview-img" />
             </div>
           </div>
 
-          <div class="pv-card" style="margin: 0;">
+          <div class="pv-card">
             <h2 style="margin-bottom: 0.5rem;">Schedule</h2>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-              <div>
-                <label class="pv-card-subtitle" for="pv-ss-retention" style="display: block; margin-bottom: 0.35rem;">Retention (days)</label>
-                <input id="pv-ss-retention" name="retention_days" type="number" min="0" placeholder="e.g. 30" style="width: 100%;" />
+            <div class="pv-form-grid-2">
+              <div class="pv-field-group">
+                <label for="pv-ss-retention" class="pv-card-subtitle">Retention (days)</label>
+                <input id="pv-ss-retention" name="retention_days" type="number" min="0" placeholder="e.g. 30" />
               </div>
-              <div>
-                <label class="pv-card-subtitle" for="pv-ss-mode" style="display: block; margin-bottom: 0.35rem;">Mode</label>
-                <select id="pv-ss-mode" name="mode" style="width: 100%;">
+              <div class="pv-field-group">
+                <label for="pv-ss-mode" class="pv-card-subtitle">Mode</label>
+                <select id="pv-ss-mode" name="mode">
                   <option value="always">Always</option>
                   <option value="scheduled">Scheduled</option>
                   <option value="motion_only">Motion only</option>
@@ -395,10 +409,10 @@
 
             <div id="pv-ss-time-block" style="margin-top: 0.75rem;">
               <div class="pv-card-subtitle" style="margin-bottom: 0.35rem;">Time window</div>
-              <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
-                <input type="time" id="pv-ss-start" name="start_time" style="max-width: 8.5rem;" />
-                <span style="font-size: 0.85rem; color: #9ca3af;">to</span>
-                <input type="time" id="pv-ss-end" name="end_time" style="max-width: 8.5rem;" />
+              <div class="pv-inline-row" style="gap: 0.35rem;">
+                <input type="time" id="pv-ss-start" name="start_time" class="pv-field-time" />
+                <span class="pv-inline-sep">to</span>
+                <input type="time" id="pv-ss-end" name="end_time" class="pv-field-time" />
               </div>
               <p class="pv-card-subtitle" style="margin-top: 0.4rem;">Leave start/end blank to record 24 hours.</p>
             </div>
@@ -408,7 +422,7 @@
               <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
                 {% for m in modules %}
                   {% if m.is_enabled %}
-                    <label style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.55rem; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.18); font-size: 0.8rem; white-space: nowrap;">
+                    <label class="pv-pill-check">
                       <input type="checkbox" name="targets" value="{{ m.name }}" />
                       <span>{{ m.label or m.name }}</span>
                     </label>
@@ -418,7 +432,7 @@
               <p class="pv-card-subtitle" style="margin-top: 0.5rem;">If no modules are selected, the schedule will be created but will not record until targets are selected.</p>
             </div>
 
-            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+            <div class="pv-modal-actions">
               <button type="submit" class="pv-button-secondary" data-pv-ss-action="test_storage_schedule">Test</button>
               <button type="submit" class="pv-button-primary" id="pv-ss-save" data-pv-ss-action="create_storage_schedule">Save</button>
             </div>

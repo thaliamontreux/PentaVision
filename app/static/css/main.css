@@ -364,6 +364,13 @@ body {
   gap: 0.8rem;
 }
 
+.pv-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
 .pv-admin-grid {
   margin-top: 1rem;
 }
@@ -666,6 +673,10 @@ body {
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
+.pv-card-stack {
+  margin-bottom: 1.5rem;
+}
+
 .pv-card::before {
   content: "";
   position: absolute;
@@ -728,6 +739,10 @@ body {
   margin-bottom: 0.85rem;
 }
 
+.pv-page-header.pv-page-header-tight {
+  margin-bottom: 0;
+}
+
 .pv-page-title {
   margin: 0;
 }
@@ -761,6 +776,10 @@ body {
     inset 0 -2px 0 rgba(0, 0, 0, 0.65),
     0 0 0 1px rgba(56, 189, 248, 0.08),
     0 0 22px rgba(56, 189, 248, 0.07);
+}
+
+.pv-table-wrap.pv-table-wrap-spaced {
+  margin-top: 0.75rem;
 }
 
 .pv-empty-state {
@@ -828,6 +847,33 @@ body {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.pv-inline-form {
+  display: inline-flex;
+}
+
+.pv-form-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.pv-field-time {
+  max-width: 8.5rem;
+}
+
+.pv-inline-sep {
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.pv-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
   flex-wrap: wrap;
 }
 
@@ -1186,6 +1232,46 @@ body {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(56, 189, 248, 0.55) rgba(2, 6, 23, 0.55);
+}
+
+.pv-modal-dialog.pv-modal-dialog-wide {
+  max-width: 860px;
+  width: 92vw;
+}
+
+.pv-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pv-modal-form {
+  margin-top: 1rem;
+}
+
+.pv-dashboard-grid.pv-dashboard-grid-ss {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.pv-pill-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.pv-preview-img {
+  width: 100%;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  display: none;
 }
 
 .pv-modal-dialog::-webkit-scrollbar {

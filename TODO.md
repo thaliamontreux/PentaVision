@@ -39,6 +39,20 @@
 - [ ] Admin UX polish global pass (#66): tighten admin spacing and reduce inline styles in admin templates.
   - [x] Tighten admin table density and improve admin narrow-screen behavior (admin main scroll).
   - [x] Add admin action-row utility classes and use them on Users/Properties admin list pages.
+  - [x] Standardize Admin Overview (`/admin`) title/header using `pv-page-header` inside `pv-admin-main`.
+  - [x] Convert `base.html` Active Property bar from inline styles to reusable CSS classes.
+  - [x] Add reusable glassy empty-state component (`.pv-empty`) and wire up new PNG empty-state icons.
+  - [x] Polish Recording Schedule page layout (table actions + modal form alignment).
+
+## Site-wide UI polish
+
+- [ ] Full-site visual polish pass: consistent headers, actions, tables, forms, empty states, and link styling.
+  - [x] Dashboard: upgrade empty state to `.pv-empty` + icon.
+  - [x] Live Feeds: upgrade empty state to `.pv-empty` + icon.
+  - [x] Recordings: upgrade empty state to `.pv-empty` + icon.
+  - [x] Recording Schedule: upgrade empty state to `.pv-empty` + icon.
+  - [ ] Profile: align layout, reduce inline styles, and ensure consistent spacing.
+  - [ ] Storage Modules Manager: match `docs\ui-references\storage-modules-manager-reference.png`.
 
 ## Multi-tenant properties & property users
 
