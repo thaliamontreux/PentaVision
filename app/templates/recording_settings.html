@@ -10,11 +10,9 @@
         <p class="pv-page-subtitle">Define when cameras record, where footage is stored, and retention policies.</p>
       </div>
       <div class="pv-page-actions">
+        <a href="{{ url_for('main.recordings') }}" class="pv-button">← Back to Recordings</a>
         <button type="button" class="pv-button-primary" id="pv-add-storage-schedule">+ Add Storage Schedule</button>
       </div>
-    </div>
-    <div class="pv-admin-topnav">
-      {% include 'admin/_nav.html' %}
     </div>
 
     {% if errors %}
