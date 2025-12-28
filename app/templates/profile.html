@@ -67,8 +67,7 @@
             type="text"
             placeholder="Enter your pronouns"
             value="{% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}{{ form.pronouns }}{% endif %}"
-            class="pv-mt-2"
-            style="display: {% if form.pronouns not in ['', 'she/her', 'he/him', 'they/them'] %}block{% else %}none{% endif %};"
+            class="pv-mt-2{% if form.pronouns in ['', 'she/her', 'he/him', 'they/them'] %} pv-hidden{% endif %}"
           />
         </div>
 
@@ -133,8 +132,7 @@
             type="text"
             placeholder="e.g. America/Chicago"
             value="{{ form.timezone }}"
-            class="pv-mt-2"
-            style="display: none;"
+            class="pv-mt-2 pv-hidden"
           />
           <p class="pv-card-subtitle">
             Choose your IANA time zone (like America/Chicago). If the list doesn't work in your browser, you can type it manually.
@@ -266,7 +264,7 @@
 
         <div class="pv-field-group">
           <strong>Current MFA status</strong>
-          <p class="pv-card-subtitle" style="margin-top: 0.25rem;">
+          <p class="pv-card-subtitle pv-mt-1">
             TOTP: {{ 'Enabled' if mfa_status.totp_enabled else 'Not enabled' }} ·
             Passkeys: {{ mfa_status.passkey_count or 0 }} registered
           </p>
@@ -279,7 +277,7 @@
         />
 
         <div class="pv-field-group">
-          <h3 style="margin-bottom: 0.25rem;">TOTP authenticator app</h3>
+          <h3 class="pv-mb-1">TOTP authenticator app</h3>
           <p class="pv-card-subtitle">
             Use an authenticator app (like Google Authenticator, 1Password, or
             Authy) to generate one-time codes.
@@ -294,47 +292,41 @@
 
           <button
             type="button"
-            class="pv-button"
+            class="pv-button pv-mt-2"
             id="totp-setup-btn"
-            style="margin-top: 0.5rem;"
           >
             Generate TOTP setup
           </button>
 
           <div
             id="totp-setup-output"
-            class="pv-card-subtitle"
-            style="margin-top: 0.5rem; white-space: pre-wrap;"
+            class="pv-card-subtitle pv-prewrap pv-mt-2"
           ></div>
         </div>
 
         <div class="pv-modal" id="totp-setup-modal">
           <div class="pv-modal-dialog">
-            <h2 style="margin-top: 0; margin-bottom: 0.5rem;">Set up TOTP</h2>
+            <h2 class="pv-modal-title">Set up TOTP</h2>
             <div
               id="totp-setup-error"
-              class="pv-card-subtitle"
-              style="color: #fca5a5; min-height: 1.2rem;"
+              class="pv-card-subtitle pv-text-danger pv-min-h-1"
             ></div>
-            <div
-              style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.25rem;"
-            >
-              <div style="flex: 0 0 auto;">
+            <div class="pv-flex-row pv-mt-1">
+              <div class="pv-flex-none">
                 <img
                   id="totp-qr-image"
                   alt="TOTP QR code"
-                  style="width: 180px; height: 180px; border-radius: 0.5rem; background: #020617;"
+                  class="pv-qr-img"
                 />
               </div>
-              <div style="flex: 1 1 0; min-width: 0;">
+              <div class="pv-flex-grow">
                 <div class="pv-field-group">
                   <label for="totp-secret-input">Secret key</label>
-                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <div class="pv-inline-row">
                     <input
                       id="totp-secret-input"
                       type="password"
                       readonly
-                      style="flex: 1;"
                     />
                     <button
                       type="button"
@@ -358,9 +350,7 @@
                 </div>
               </div>
             </div>
-            <div
-              style="margin-top: 0.75rem; display: flex; justify-content: flex-end; gap: 0.5rem;"
-            >
+            <div class="pv-modal-actions">
               <button type="button" class="pv-button" id="totp-setup-close">
                 Close
               </button>
@@ -375,8 +365,8 @@
           </div>
         </div>
 
-        <div class="pv-field-group" style="margin-top: 1rem;">
-          <h3 style="margin-bottom: 0.25rem;">Passkeys (WebAuthn)</h3>
+        <div class="pv-field-group pv-mt-3">
+          <h3 class="pv-mb-1">Passkeys (WebAuthn)</h3>
           <p class="pv-card-subtitle">
             Register a passkey tied to this browser or device. When available,
             passkeys can be used to sign in without typing your password.
@@ -387,22 +377,20 @@
 
           <button
             type="button"
-            class="pv-button"
+            class="pv-button pv-mt-2"
             id="pk-register-btn"
-            style="margin-top: 0.5rem;"
           >
             Register passkey for this device
           </button>
 
           <div
             id="pk-output"
-            class="pv-card-subtitle"
-            style="margin-top: 0.5rem; white-space: pre-wrap;"
+            class="pv-card-subtitle pv-prewrap pv-mt-2"
           ></div>
         </div>
       </div>
 
-      <div class="pv-field-group" style="grid-column: 1 / -1; margin-top: 1rem;">
+      <div class="pv-field-group pv-form-full-row pv-mt-3">
         <button type="submit" class="pv-button-primary">Save changes</button>
       </div>
     </form>
@@ -416,10 +404,10 @@
         pronounsSelect.addEventListener('change', function () {
           var v = pronounsSelect.value || '';
           if (v === 'custom') {
-            pronounsCustom.style.display = 'block';
+            pronounsCustom.classList.remove('pv-hidden');
             pronounsCustom.focus();
           } else {
-            pronounsCustom.style.display = 'none';
+            pronounsCustom.classList.add('pv-hidden');
             pronounsCustom.value = '';
           }
         });
@@ -880,10 +868,10 @@
               }
             } catch (e) {}
           }
-          tzFallback.style.display = 'none';
+          tzFallback.classList.add('pv-hidden');
         } else {
           // Fallback: keep the select with built-in options and show manual textbox.
-          tzFallback.style.display = 'block';
+          tzFallback.classList.remove('pv-hidden');
 
           if (initialTz) {
             try {
@@ -902,7 +890,7 @@
         var form2 = tzSelect.form || tzFallback.form;
         if (form2) {
           form2.addEventListener('submit', function () {
-            var fbVisible = tzFallback.style.display !== 'none';
+            var fbVisible = !tzFallback.classList.contains('pv-hidden');
             var fbValue = String(tzFallback.value || '').trim();
             if (fbVisible && fbValue) {
               try {
@@ -911,7 +899,7 @@
               return;
             }
 
-            if (tzSelect.style.display !== 'none' && tzSelect.value) {
+            if (!fbVisible && tzSelect.value) {
               tzFallback.value = tzSelect.value;
             }
           });

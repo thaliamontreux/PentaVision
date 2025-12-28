@@ -1475,8 +1475,56 @@ body {
   margin-top: 0.5rem;
 }
 
+.pv-mt-1 {
+  margin-top: 0.25rem;
+}
+
+.pv-mt-3 {
+  margin-top: 1rem;
+}
+
+.pv-mb-1 {
+  margin-bottom: 0.25rem;
+}
+
 .pv-prewrap {
   white-space: pre-wrap;
+}
+
+.pv-text-danger {
+  color: #fca5a5;
+}
+
+.pv-min-h-1 {
+  min-height: 1.2rem;
+}
+
+.pv-modal-title {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.pv-flex-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.pv-flex-none {
+  flex: 0 0 auto;
+}
+
+.pv-flex-grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.pv-qr-img {
+  width: 180px;
+  height: 180px;
+  border-radius: 0.5rem;
+  background: #020617;
 }
 
 /* Admin forms: use more horizontal space with a responsive two-column layout. */
