@@ -299,9 +299,31 @@ def property_users(property_id: int):
         abort(403)
 
     errors: list[str] = []
+    prop = None
+    prop_uid = ""
+    rows = []
+
+    # First, get the property and ensure it has a uid
+    engine = get_user_engine()
+    if engine is not None:
+        with Session(engine) as db:
+            prop = db.get(Property, int(property_id))
+            if prop is not None:
+                prop_uid = str(getattr(prop, "uid", "") or "").strip()
+                if not prop_uid:
+                    prop_uid = uuid.uuid4().hex
+                    prop.uid = prop_uid
+                    db.add(prop)
+                    db.commit()
+                db.expunge(prop)
+
+    if prop is None:
+        abort(404)
+
     try:
-        prop, tenant_engine = _get_property_and_tenant_engine(property_id)
-        prop_uid = str(getattr(prop, "uid", "") or "").strip()
+        tenant_engine = get_property_engine(prop_uid)
+        if tenant_engine is None:
+            raise RuntimeError("Tenant engine unavailable")
         with Session(tenant_engine) as db:
             PropertyUser.__table__.create(
                 bind=tenant_engine,
@@ -316,11 +338,6 @@ def property_users(property_id: int):
             )
     except Exception as exc:  # noqa: BLE001
         # Tenant DB might be missing/unreachable/disk-full; show page without crashing.
-        prop_uid = ""
-        try:
-            prop_uid = str(getattr(locals().get("prop", None), "uid", "") or "").strip()
-        except Exception:  # noqa: BLE001
-            prop_uid = ""
         try:
             errors.append(diagnose_property_engine(prop_uid))
         except Exception:  # noqa: BLE001
@@ -333,16 +350,6 @@ def property_users(property_id: int):
                 errors.append(
                     "Tenant database is unavailable or not yet provisioned. Check DB config and disk space, then reload."
                 )
-
-        engine = get_user_engine()
-        prop = None
-        if engine is not None:
-            with Session(engine) as db:
-                prop = db.get(Property, int(property_id))
-                if prop is not None:
-                    db.expunge(prop)
-        if prop is None:
-            abort(404)
         rows = []
 
     return render_template(
