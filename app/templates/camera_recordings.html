@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ device.name if device else 'Camera' }} Recordings · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-section pv-section-full">
+    <div class="pv-cam-rec-header">
+      <div class="pv-cam-rec-title-row">
+        <div class="pv-cam-rec-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="pv-cam-rec-name">{{ device.name if device else 'Unknown Camera' }}</h1>
+          <p class="pv-cam-rec-subtitle">{{ total_count }} recording{{ 's' if total_count != 1 else '' }} available</p>
+        </div>
+      </div>
+    </div>
+
+    <form method="get" class="pv-cam-rec-filters">
+      <div class="pv-cam-rec-filter-group">
+        <label for="date-filter" class="pv-cam-rec-filter-label">Date</label>
+        <select id="date-filter" name="date" class="pv-cam-rec-select">
+          <option value="">All dates</option>
+          {% for d in available_dates %}
+            <option value="{{ d }}" {% if d == selected_date %}selected{% endif %}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="pv-cam-rec-filter-group">
+        <label for="start-hour" class="pv-cam-rec-filter-label">From</label>
+        <select id="start-hour" name="start_hour" class="pv-cam-rec-select pv-cam-rec-select-sm">
+          <option value="">Any</option>
+          {% for h in range(24) %}
+            <option value="{{ h }}" {% if start_hour == h|string %}selected{% endif %}>
+              {{ '%02d:00'|format(h) }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="pv-cam-rec-filter-group">
+        <label for="end-hour" class="pv-cam-rec-filter-label">To</label>
+        <select id="end-hour" name="end_hour" class="pv-cam-rec-select pv-cam-rec-select-sm">
+          <option value="">Any</option>
+          {% for h in range(24) %}
+            <option value="{{ h }}" {% if end_hour == h|string %}selected{% endif %}>
+              {{ '%02d:59'|format(h) }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="pv-cam-rec-filter-group">
+        <label for="sort-order" class="pv-cam-rec-filter-label">Sort</label>
+        <select id="sort-order" name="sort" class="pv-cam-rec-select">
+          <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Newest first</option>
+          <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Oldest first</option>
+        </select>
+      </div>
+
+      <button type="submit" class="pv-cam-rec-filter-btn">Apply</button>
+      {% if selected_date or start_hour or end_hour %}
+        <a href="{{ url_for('main.camera_recordings', device_id=device.id) }}" class="pv-cam-rec-clear-btn">Clear</a>
+      {% endif %}
+    </form>
+
+    {% if recordings %}
+      <div class="pv-cam-rec-list">
+        {% for r in recordings %}
+          <div class="pv-cam-rec-item">
+            <div class="pv-cam-rec-item-time">
+              <span class="pv-cam-rec-item-date">{{ r.created_at.strftime('%Y-%m-%d') }}</span>
+              <span class="pv-cam-rec-item-clock">{{ r.created_at.strftime('%H:%M:%S') }}</span>
+            </div>
+            <div class="pv-cam-rec-item-provider">{{ r.storage_provider }}</div>
+            <div class="pv-cam-rec-item-actions">
+              <a href="{{ url_for('main.recording_detail', recording_id=r.id) }}" class="pv-cam-rec-action-btn pv-cam-rec-action-play" title="Play">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+                Play
+              </a>
+              <a href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}" class="pv-cam-rec-action-btn" title="Download">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                Download
+              </a>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if total_pages > 1 %}
+        <div class="pv-pagination">
+          <span class="pv-pagination-info">
+            Page {{ page }} of {{ total_pages }}
+          </span>
+          <div class="pv-pagination-controls">
+            {% if page > 1 %}
+              <a href="{{ url_for('main.camera_recordings', device_id=device.id, page=1, date=selected_date, start_hour=start_hour, end_hour=end_hour, sort=sort_order) }}" class="pv-pagination-btn" title="First">«</a>
+              <a href="{{ url_for('main.camera_recordings', device_id=device.id, page=page-1, date=selected_date, start_hour=start_hour, end_hour=end_hour, sort=sort_order) }}" class="pv-pagination-btn" title="Previous">‹</a>
+            {% else %}
+              <span class="pv-pagination-btn pv-pagination-disabled">«</span>
+              <span class="pv-pagination-btn pv-pagination-disabled">‹</span>
+            {% endif %}
+
+            {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
+              {% if p == page %}
+                <span class="pv-pagination-btn pv-pagination-current">{{ p }}</span>
+              {% else %}
+                <a href="{{ url_for('main.camera_recordings', device_id=device.id, page=p, date=selected_date, start_hour=start_hour, end_hour=end_hour, sort=sort_order) }}" class="pv-pagination-btn">{{ p }}</a>
+              {% endif %}
+            {% endfor %}
+
+            {% if page < total_pages %}
+              <a href="{{ url_for('main.camera_recordings', device_id=device.id, page=page+1, date=selected_date, start_hour=start_hour, end_hour=end_hour, sort=sort_order) }}" class="pv-pagination-btn" title="Next">›</a>
+              <a href="{{ url_for('main.camera_recordings', device_id=device.id, page=total_pages, date=selected_date, start_hour=start_hour, end_hour=end_hour, sort=sort_order) }}" class="pv-pagination-btn" title="Last">»</a>
+            {% else %}
+              <span class="pv-pagination-btn pv-pagination-disabled">›</span>
+              <span class="pv-pagination-btn pv-pagination-disabled">»</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="pv-empty">
+        <p class="pv-empty-title">No recordings found</p>
+        {% if selected_date or start_hour or end_hour %}
+          <p class="pv-empty-subtitle">Try adjusting your filters or clearing them.</p>
+          <div class="pv-empty-actions">
+            <a href="{{ url_for('main.camera_recordings', device_id=device.id) }}" class="pv-button">Clear Filters</a>
+          </div>
+        {% else %}
+          <p class="pv-empty-subtitle">This camera has no recordings yet.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

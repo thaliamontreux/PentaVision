@@ -2647,6 +2647,54 @@ def dlna_settings():
 
 @bp.get("/recordings")
 def recordings():
+    """Camera-centric recordings overview - shows all cameras with recording counts."""
+    user = get_current_user()
+    if user is None:
+        next_url = request.path or url_for("main.index")
+        return redirect(url_for("main.login", next=next_url))
+
+    record_engine = get_record_engine()
+    cameras_with_counts: list[dict] = []
+
+    if record_engine is not None:
+        with Session(record_engine) as session_db:
+            CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
+            CameraDevice.__table__.create(bind=record_engine, checkfirst=True)
+
+            # Get all cameras with their recording counts
+            from sqlalchemy import func
+
+            results = (
+                session_db.query(
+                    CameraDevice,
+                    func.count(CameraRecording.id).label("recording_count"),
+                )
+                .outerjoin(
+                    CameraRecording, CameraDevice.id == CameraRecording.device_id
+                )
+                .group_by(CameraDevice.id)
+                .order_by(CameraDevice.name)
+                .all()
+            )
+
+            for device, count in results:
+                cameras_with_counts.append(
+                    {
+                        "id": device.id,
+                        "name": device.name,
+                        "recording_count": count,
+                    }
+                )
+
+    return render_template(
+        "recordings.html",
+        cameras=cameras_with_counts,
+    )
+
+
+@bp.get("/recordings/camera/<int:device_id>")
+def camera_recordings(device_id: int):
+    """Per-camera recordings view with date/time filtering and sorting."""
     user = get_current_user()
     if user is None:
         next_url = request.path or url_for("main.index")
@@ -2655,17 +2703,26 @@ def recordings():
     record_engine = get_record_engine()
     if record_engine is None:
         return render_template(
-            "recordings.html",
-            recordings=[],
+            "camera_recordings.html",
             device=None,
-            devices_index={},
+            recordings=[],
+            available_dates=[],
+            selected_date=None,
+            start_hour=None,
+            end_hour=None,
+            sort_order="desc",
             page=1,
             total_pages=1,
             total_count=0,
         )
 
-    device_filter = (request.args.get("device_id") or "").strip()
-    device = None
+    # Get filter parameters
+    selected_date = (request.args.get("date") or "").strip()
+    start_hour = request.args.get("start_hour", "")
+    end_hour = request.args.get("end_hour", "")
+    sort_order = request.args.get("sort", "desc")
+    if sort_order not in ("asc", "desc"):
+        sort_order = "desc"
 
     # Pagination
     per_page = 50
@@ -2676,45 +2733,86 @@ def recordings():
 
     with Session(record_engine) as session_db:
         CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
-        query = session_db.query(CameraRecording)
-        if device_filter:
-            try:
-                device_id = int(device_filter)
-            except ValueError:
-                device_id = None
-            if device_id is not None:
-                query = query.filter(CameraRecording.device_id == device_id)
-                device = session_db.get(CameraDevice, device_id)
+        CameraDevice.__table__.create(bind=record_engine, checkfirst=True)
 
-        # Get total count for pagination
-        total_count = query.count()
-        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        device = session_db.get(CameraDevice, device_id)
+        if device is None:
+            from flask import abort
 
-        # Clamp page to valid range
-        page = min(page, total_pages)
+            abort(404)
 
-        recordings_list = (
-            query.order_by(CameraRecording.created_at.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
+        # Get all available dates for this camera
+        from sqlalchemy import func
+
+        date_results = (
+            session_db.query(func.date(CameraRecording.created_at))
+            .filter(CameraRecording.device_id == device_id)
+            .distinct()
+            .order_by(func.date(CameraRecording.created_at).desc())
             .all()
         )
+        available_dates = [str(d[0]) for d in date_results if d[0]]
 
-        device_ids = {r.device_id for r in recordings_list}
-        devices_index: dict[int, CameraDevice] = {}
-        if device_ids:
-            devices = (
-                session_db.query(CameraDevice)
-                .filter(CameraDevice.id.in_(device_ids))
-                .all()
-            )
-            devices_index = {d.id: d for d in devices}
+        # Build query
+        query = session_db.query(CameraRecording).filter(
+            CameraRecording.device_id == device_id
+        )
+
+        # Apply date filter
+        if selected_date:
+            try:
+                from datetime import datetime
+
+                date_obj = datetime.strptime(selected_date, "%Y-%m-%d").date()
+                query = query.filter(
+                    func.date(CameraRecording.created_at) == date_obj
+                )
+            except ValueError:
+                pass
+
+        # Apply time range filter
+        if start_hour:
+            try:
+                sh = int(start_hour)
+                if 0 <= sh <= 23:
+                    query = query.filter(
+                        func.hour(CameraRecording.created_at) >= sh
+                    )
+            except ValueError:
+                pass
+
+        if end_hour:
+            try:
+                eh = int(end_hour)
+                if 0 <= eh <= 23:
+                    query = query.filter(
+                        func.hour(CameraRecording.created_at) <= eh
+                    )
+            except ValueError:
+                pass
+
+        # Get total count
+        total_count = query.count()
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        page = min(page, total_pages)
+
+        # Apply sorting
+        if sort_order == "asc":
+            query = query.order_by(CameraRecording.created_at.asc())
+        else:
+            query = query.order_by(CameraRecording.created_at.desc())
+
+        recordings_list = query.offset((page - 1) * per_page).limit(per_page).all()
 
     return render_template(
-        "recordings.html",
-        recordings=recordings_list,
+        "camera_recordings.html",
         device=device,
-        devices_index=devices_index,
+        recordings=recordings_list,
+        available_dates=available_dates,
+        selected_date=selected_date,
+        start_hour=start_hour,
+        end_hour=end_hour,
+        sort_order=sort_order,
         page=page,
         total_pages=total_pages,
         total_count=total_count,

@@ -2278,6 +2278,299 @@ body {
   pointer-events: none;
 }
 
+/* ===== Camera Grid (Recordings Overview) ===== */
+.pv-camera-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.pv-camera-tile {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  text-decoration: none;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+
+.pv-camera-tile:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(139, 92, 246, 0.1));
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.pv-camera-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(139, 92, 246, 0.2));
+  color: #7dd3fc;
+  flex-shrink: 0;
+}
+
+.pv-camera-tile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pv-camera-tile-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pv-camera-tile-count {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.pv-camera-tile-arrow {
+  color: #64748b;
+  transition: color 200ms ease, transform 200ms ease;
+}
+
+.pv-camera-tile:hover .pv-camera-tile-arrow {
+  color: #7dd3fc;
+  transform: translate(2px, -2px);
+}
+
+/* ===== Per-Camera Recordings View ===== */
+.pv-section-full {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.pv-cam-rec-header {
+  margin-bottom: 1.5rem;
+}
+
+.pv-cam-rec-title-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.pv-cam-rec-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.3), rgba(139, 92, 246, 0.2));
+  color: #7dd3fc;
+}
+
+.pv-cam-rec-name {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.pv-cam-rec-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.pv-cam-rec-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.pv-cam-rec-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pv-cam-rec-filter-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pv-cam-rec-select {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.pv-cam-rec-select-sm {
+  min-width: 90px;
+}
+
+.pv-cam-rec-select:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.pv-cam-rec-filter-btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.9), rgba(59, 130, 246, 0.9));
+  border: none;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.pv-cam-rec-filter-btn:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 1), rgba(59, 130, 246, 1));
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+}
+
+.pv-cam-rec-clear-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.pv-cam-rec-clear-btn:hover {
+  color: #f1f5f9;
+}
+
+.pv-cam-rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pv-cam-rec-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  transition: all 150ms ease;
+}
+
+.pv-cam-rec-item:hover {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.pv-cam-rec-item-time {
+  display: flex;
+  flex-direction: column;
+  min-width: 100px;
+}
+
+.pv-cam-rec-item-date {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.pv-cam-rec-item-clock {
+  font-size: 0.8rem;
+  color: #7dd3fc;
+  font-family: monospace;
+}
+
+.pv-cam-rec-item-provider {
+  flex: 1;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.pv-cam-rec-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pv-cam-rec-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #94a3b8;
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  text-decoration: none;
+  transition: all 150ms ease;
+}
+
+.pv-cam-rec-action-btn:hover {
+  color: #e2e8f0;
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.pv-cam-rec-action-play {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.2);
+}
+
+.pv-cam-rec-action-play:hover {
+  color: #0f172a;
+  background: rgba(56, 189, 248, 0.9);
+  border-color: transparent;
+}
+
+@media (max-width: 640px) {
+  .pv-cam-rec-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pv-cam-rec-select,
+  .pv-cam-rec-select-sm {
+    min-width: 100%;
+  }
+
+  .pv-cam-rec-item {
+    flex-wrap: wrap;
+  }
+
+  .pv-cam-rec-item-actions {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+}
+
 .pv-status-list {
   list-style: none;
   padding: 0;

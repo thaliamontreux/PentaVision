@@ -12,116 +12,47 @@
             <div class="pv-card-header">
               <div>
                 <h1 class="pv-page-title">Recordings</h1>
-                <p class="pv-card-subtitle">Browse captured segments across cameras and storage providers.</p>
+                <p class="pv-card-subtitle">Select a camera to browse its recordings.</p>
               </div>
             </div>
 
-          {% if device %}
-            <p class="pv-text-sm pv-mb-3">
-              Filtering by camera: <strong>{{ device.name }}</strong>
-              (<a href="{{ url_for('main.recordings') }}" class="pv-link-muted">clear filter</a>)
-            </p>
-          {% endif %}
-
-          {% if recordings %}
-            <div class="pv-table-wrap">
-              <table class="pv-table">
-                <thead>
-                  <tr>
-                    <th>Time ({{ current_timezone }})</th>
-                    <th>Camera</th>
-                    <th>Provider</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for r in recordings %}
-                    <tr>
-                      <td>{{ r.created_at|local_dt }}</td>
-                      <td>
-                        {% set dev = devices_index.get(r.device_id) if devices_index else None %}
-                        {% if dev %}
-                          <a
-                            href="{{ url_for('main.camera_detail', device_id=dev.id) }}"
-                            class="pv-link-muted"
-                          >
-                            {{ dev.name }}
-                          </a>
-                        {% else %}
-                          Unknown
-                        {% endif %}
-                      </td>
-                      <td>{{ r.storage_provider }}</td>
-                      <td>
-                        <span class="pv-row-actions">
-                          <a
-                            href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
-                            class="pv-link-muted"
-                          >
-                            Play
-                          </a>
-                          <a
-                            href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
-                            class="pv-link-muted"
-                          >
-                            Download
-                          </a>
-                        </span>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-
-            {% if total_pages > 1 %}
-              <div class="pv-pagination">
-                <span class="pv-pagination-info">
-                  Page {{ page }} of {{ total_pages }} ({{ total_count }} recordings)
-                </span>
-                <div class="pv-pagination-controls">
-                  {% if page > 1 %}
-                    <a href="{{ url_for('main.recordings', page=1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="First">«</a>
-                    <a href="{{ url_for('main.recordings', page=page-1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Previous">‹</a>
-                  {% else %}
-                    <span class="pv-pagination-btn pv-pagination-disabled">«</span>
-                    <span class="pv-pagination-btn pv-pagination-disabled">‹</span>
-                  {% endif %}
-
-                  {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
-                    {% if p == page %}
-                      <span class="pv-pagination-btn pv-pagination-current">{{ p }}</span>
-                    {% else %}
-                      <a href="{{ url_for('main.recordings', page=p, device_id=device.id if device else '') }}" class="pv-pagination-btn">{{ p }}</a>
-                    {% endif %}
-                  {% endfor %}
-
-                  {% if page < total_pages %}
-                    <a href="{{ url_for('main.recordings', page=page+1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Next">›</a>
-                    <a href="{{ url_for('main.recordings', page=total_pages, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Last">»</a>
-                  {% else %}
-                    <span class="pv-pagination-btn pv-pagination-disabled">›</span>
-                    <span class="pv-pagination-btn pv-pagination-disabled">»</span>
-                  {% endif %}
+            {% if cameras %}
+              <div class="pv-camera-grid">
+                {% for cam in cameras %}
+                  <a
+                    href="{{ url_for('main.camera_recordings', device_id=cam.id) }}"
+                    class="pv-camera-tile"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <div class="pv-camera-tile-icon">
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                      </svg>
+                    </div>
+                    <div class="pv-camera-tile-info">
+                      <h3 class="pv-camera-tile-name">{{ cam.name }}</h3>
+                      <span class="pv-camera-tile-count">
+                        {{ cam.recording_count }} recording{{ 's' if cam.recording_count != 1 else '' }}
+                      </span>
+                    </div>
+                    <div class="pv-camera-tile-arrow">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                      </svg>
+                    </div>
+                  </a>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="pv-empty">
+                <p class="pv-empty-title">No cameras found</p>
+                <p class="pv-empty-subtitle">Add cameras to start recording.</p>
+                <div class="pv-empty-actions">
+                  <a href="{{ url_for('main.cameras') }}" class="pv-button">Manage Cameras</a>
                 </div>
               </div>
             {% endif %}
-          {% else %}
-            <div class="pv-empty">
-              <img
-                class="pv-empty-icon"
-                src="{{ url_for('static', filename='img/empty-recordings.png') }}"
-                alt=""
-                loading="lazy"
-                onerror="this.style.display='none'"
-              />
-              <p class="pv-empty-title">No recordings found</p>
-              <p class="pv-empty-subtitle">Once recording is enabled and scheduled, captured segments will show up here.</p>
-              <div class="pv-empty-actions">
-                <a href="{{ url_for('main.recording_settings') }}" class="pv-button">Recording Schedule</a>
-              </div>
-            </div>
-          {% endif %}
           </div>
         </div>
       </div>
@@ -129,94 +60,44 @@
       <div class="pv-page-header">
         <div>
           <h1 class="pv-page-title">Recordings</h1>
-          <p class="pv-page-subtitle">Browse captured segments across cameras and storage providers.</p>
+          <p class="pv-page-subtitle">Select a camera to browse its recordings.</p>
         </div>
       </div>
 
-      {% if device %}
-        <div class="pv-filter-bar">
-          <span class="pv-filter-label">Filtering by:</span>
-          <span class="pv-filter-chip">
-            {{ device.name }}
-            <a href="{{ url_for('main.recordings') }}" class="pv-filter-clear" title="Clear filter">×</a>
-          </span>
-        </div>
-      {% endif %}
-
-      {% if recordings %}
-        <div class="pv-recording-grid">
-          {% for r in recordings %}
-            {% set dev = devices_index.get(r.device_id) if devices_index else None %}
-            <div class="pv-recording-card">
-              <div class="pv-recording-thumb">
-                <div class="pv-recording-icon">🎬</div>
+      {% if cameras %}
+        <div class="pv-camera-grid">
+          {% for cam in cameras %}
+            <a
+              href="{{ url_for('main.camera_recordings', device_id=cam.id) }}"
+              class="pv-camera-tile"
+              target="_blank"
+              rel="noopener"
+            >
+              <div class="pv-camera-tile-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
               </div>
-              <div class="pv-recording-body">
-                <div class="pv-recording-meta">
-                  <span class="pv-recording-time">{{ r.created_at|local_dt }}</span>
-                  <span class="pv-recording-provider">{{ r.storage_provider }}</span>
-                </div>
-                <h3 class="pv-recording-camera">
-                  {% if dev %}{{ dev.name }}{% else %}Unknown Camera{% endif %}
-                </h3>
-                <div class="pv-recording-actions">
-                  <a href="{{ url_for('main.recording_detail', recording_id=r.id) }}" class="pv-rec-btn pv-rec-btn-play">
-                    <span class="pv-rec-btn-icon">▶</span> Play
-                  </a>
-                  <a href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}" class="pv-rec-btn">
-                    ↓ Download
-                  </a>
-                </div>
+              <div class="pv-camera-tile-info">
+                <h3 class="pv-camera-tile-name">{{ cam.name }}</h3>
+                <span class="pv-camera-tile-count">
+                  {{ cam.recording_count }} recording{{ 's' if cam.recording_count != 1 else '' }}
+                </span>
               </div>
-            </div>
+              <div class="pv-camera-tile-arrow">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                </svg>
+              </div>
+            </a>
           {% endfor %}
         </div>
-
-        {% if total_pages > 1 %}
-          <div class="pv-pagination">
-            <span class="pv-pagination-info">
-              Page {{ page }} of {{ total_pages }} ({{ total_count }} recordings)
-            </span>
-            <div class="pv-pagination-controls">
-              {% if page > 1 %}
-                <a href="{{ url_for('main.recordings', page=1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="First">«</a>
-                <a href="{{ url_for('main.recordings', page=page-1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Previous">‹</a>
-              {% else %}
-                <span class="pv-pagination-btn pv-pagination-disabled">«</span>
-                <span class="pv-pagination-btn pv-pagination-disabled">‹</span>
-              {% endif %}
-
-              {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
-                {% if p == page %}
-                  <span class="pv-pagination-btn pv-pagination-current">{{ p }}</span>
-                {% else %}
-                  <a href="{{ url_for('main.recordings', page=p, device_id=device.id if device else '') }}" class="pv-pagination-btn">{{ p }}</a>
-                {% endif %}
-              {% endfor %}
-
-              {% if page < total_pages %}
-                <a href="{{ url_for('main.recordings', page=page+1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Next">›</a>
-                <a href="{{ url_for('main.recordings', page=total_pages, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Last">»</a>
-              {% else %}
-                <span class="pv-pagination-btn pv-pagination-disabled">›</span>
-                <span class="pv-pagination-btn pv-pagination-disabled">»</span>
-              {% endif %}
-            </div>
-          </div>
-        {% endif %}
       {% else %}
         <div class="pv-empty">
-          <img
-            class="pv-empty-icon"
-            src="{{ url_for('static', filename='img/empty-recordings.png') }}"
-            alt=""
-            loading="lazy"
-            onerror="this.style.display='none'"
-          />
-          <p class="pv-empty-title">No recordings found</p>
-          <p class="pv-empty-subtitle">Once recording is enabled and scheduled, captured segments will show up here.</p>
+          <p class="pv-empty-title">No cameras found</p>
+          <p class="pv-empty-subtitle">Add cameras to start recording.</p>
           <div class="pv-empty-actions">
-            <a href="{{ url_for('main.recording_settings') }}" class="pv-button">Recording Schedule</a>
+            <a href="{{ url_for('main.cameras') }}" class="pv-button">Manage Cameras</a>
           </div>
         </div>
       {% endif %}
