@@ -25,12 +25,12 @@
           </div>
         {% endif %}
 
-        <div class="pv-card" style="padding: 1rem;">
-          <h2 style="margin-bottom: 0.5rem;">Recent attempts</h2>
-          <p class="pv-card-subtitle" style="margin-bottom: 0.75rem;">Passwords are encrypted at rest. Click Decrypt to reveal (admin-only).</p>
+        <div class="pv-card">
+          <h2 class="pv-mb-2">Recent attempts</h2>
+          <p class="pv-card-subtitle pv-mb-3">Passwords are encrypted at rest. Click Decrypt to reveal (admin-only).</p>
 
           <div class="pv-table-wrap">
-            <table class="pv-table" style="min-width: 980px; width: 100%;">
+            <table class="pv-table pv-table-wide">
               <thead>
                 <tr>
                   <th>When</th>
@@ -44,18 +44,18 @@
               <tbody>
                 {% for r in rows %}
                   <tr data-id="{{ r.id }}">
-                    <td style="white-space:nowrap;">{{ r.when|local_dt('%m/%d/%Y %H:%M:%S') }}</td>
-                    <td style="white-space:nowrap;">{{ r.ip or '' }}</td>
+                    <td class="pv-nowrap">{{ r.when|local_dt('%m/%d/%Y %H:%M:%S') }}</td>
+                    <td class="pv-nowrap">{{ r.ip or '' }}</td>
                     <td>{{ r.username or '' }}</td>
-                    <td style="white-space:nowrap;">{{ r.reason or '' }}</td>
+                    <td class="pv-nowrap">{{ r.reason or '' }}</td>
                     <td class="pv-mono" data-pw>••••••••</td>
-                    <td style="white-space:nowrap; text-align:right;">
+                    <td class="pv-nowrap pv-text-right">
                       <button type="button" class="pv-button pv-button-small" data-decrypt>Decrypt</button>
                     </td>
                   </tr>
                 {% endfor %}
                 {% if not rows %}
-                  <tr><td colspan="6" style="opacity:0.7;">No failures recorded.</td></tr>
+                  <tr><td colspan="6" class="pv-opacity-70">No failures recorded.</td></tr>
                 {% endif %}
               </tbody>
             </table>

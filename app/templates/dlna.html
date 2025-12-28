@@ -23,7 +23,7 @@
       </div>
     {% endif %}
 
-    <form method="post" class="pv-form" style="margin-bottom: 1.5rem;">
+    <form method="post" class="pv-form pv-mb-6">
       <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
       <input type="hidden" name="action" value="save" />
 
@@ -75,7 +75,7 @@
         <strong>{% if dlna_enabled_env %}on{% else %}off{% endif %}</strong>.
       </p>
 
-      <div class="pv-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+      <div class="pv-form-grid-2 pv-mb-4">
         <div>
           <div class="pv-field-group">
             <label>Enabled in settings</label>
@@ -119,20 +119,20 @@
         <textarea rows="2" readonly>{{ settings.last_error or 'None' }}</textarea>
       </div>
 
-      <div class="pv-field-group" style="margin-top: 1rem;">
-        <form method="post" style="display: inline-block; margin-right: 0.5rem;">
+      <div class="pv-field-group pv-mt-4">
+        <form method="post" class="pv-inline-form pv-mr-2">
           <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
           <input type="hidden" name="action" value="start" />
           <button type="submit" class="pv-button pv-button-primary">Start</button>
         </form>
 
-        <form method="post" style="display: inline-block; margin-right: 0.5rem;">
+        <form method="post" class="pv-inline-form pv-mr-2">
           <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
           <input type="hidden" name="action" value="stop" />
           <button type="submit" class="pv-button">Stop</button>
         </form>
 
-        <form method="post" style="display: inline-block;">
+        <form method="post" class="pv-inline-form">
           <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
           <input type="hidden" name="action" value="restart" />
           <button type="submit" class="pv-button">Restart</button>

@@ -9,7 +9,7 @@
     data-stage="{{ 'totp' if totp_pending else 'primary' }}"
   >
     {% if errors %}
-      <div class="pv-alert pv-alert-error" role="alert" style="margin-bottom: 0.75rem;">
+      <div class="pv-alert pv-alert-error pv-mb-3" role="alert">
         <ul>
           {% for error in errors %}
             <li>{{ error }}</li>
@@ -19,7 +19,7 @@
     {% endif %}
 
     {% if totp_error %}
-      <div class="pv-alert pv-alert-error" role="alert" style="margin-bottom: 0.5rem;">
+      <div class="pv-alert pv-alert-error pv-mb-2" role="alert">
         {{ totp_error }}
       </div>
     {% endif %}
@@ -54,7 +54,7 @@
           />
         </div>
 
-        <div class="pv-field-group" style="margin-top: 0.35rem;">
+        <div class="pv-field-group pv-mt-1">
           <div class="pv-login-actions">
             <button
               type="button"
@@ -71,7 +71,7 @@
       </form>
     {% else %}
       <h2 class="pv-login-title">Two-factor authentication</h2>
-      <p style="font-size: 0.9rem; color: #e5e7eb; margin-top: 0; margin-bottom: 0.75rem;">
+      <p class="pv-text-sm pv-text-light pv-mt-0 pv-mb-3">
         Enter the 6-digit code from your authenticator app to complete sign-in.
       </p>
 
@@ -95,7 +95,7 @@
           />
         </div>
 
-        <div class="pv-field-group" style="margin-top: 0.35rem;">
+        <div class="pv-field-group pv-mt-1">
           <div class="pv-login-actions">
             <button type="submit" class="pv-login-button">
               Verify

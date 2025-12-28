@@ -39,14 +39,14 @@
           <h2>Systemd services</h2>
           <p class="pv-card-subtitle">Restart allowlisted services. Only System Administrators can access this page.</p>
 
-          <div class="pv-table-wrap" style="margin-top: 0.75rem;">
+          <div class="pv-table-wrap pv-mt-3">
             <table class="pv-table">
               <thead>
                 <tr>
                   <th>Service</th>
                   <th>Status</th>
                   <th>Enabled</th>
-                  <th style="width: 1%; white-space: nowrap;">Actions</th>
+                  <th class="pv-nowrap pv-w-min">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -60,7 +60,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <input type="hidden" name="action" value="restart" />
                         <input type="hidden" name="service" value="{{ s.name }}" />
-                        <button type="submit" class="pv-button-primary" style="padding: 0.15rem 0.6rem; font-size: 0.85rem; white-space: nowrap;">Restart</button>
+                        <button type="submit" class="pv-button-primary pv-button-small">Restart</button>
                       </form>
                     </td>
                   </tr>

@@ -32,11 +32,11 @@
 
 - [x] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.
 - [x] Toast auto-hide: bottom-right messages fade after 10 seconds.
-- [ ] Match Storage Modules UI to `docs\ui-references\storage-modules-manager-reference.png`.
+- [x] Match Storage Modules UI to `docs\ui-references\storage-modules-manager-reference.png`.
 
 ## Admin UX polish
 
-- [ ] Admin UX polish global pass (#66): tighten admin spacing and reduce inline styles in admin templates.
+- [x] Admin UX polish global pass (#66): tighten admin spacing and reduce inline styles in admin templates.
   - [x] Tighten admin table density and improve admin narrow-screen behavior (admin main scroll).
   - [x] Add admin action-row utility classes and use them on Users/Properties admin list pages.
   - [x] Standardize Admin Overview (`/admin`) title/header using `pv-page-header` inside `pv-admin-main`.
@@ -46,13 +46,13 @@
 
 ## Site-wide UI polish
 
-- [ ] Full-site visual polish pass: consistent headers, actions, tables, forms, empty states, and link styling.
+- [x] Full-site visual polish pass: consistent headers, actions, tables, forms, empty states, and link styling.
   - [x] Dashboard: upgrade empty state to `.pv-empty` + icon.
   - [x] Live Feeds: upgrade empty state to `.pv-empty` + icon.
   - [x] Recordings: upgrade empty state to `.pv-empty` + icon.
   - [x] Recording Schedule: upgrade empty state to `.pv-empty` + icon.
   - [x] Profile: align layout, reduce inline styles, and ensure consistent spacing.
-  - [ ] Storage Modules Manager: match `docs\ui-references\storage-modules-manager-reference.png`.
+  - [x] Storage Modules Manager: match `docs\ui-references\storage-modules-manager-reference.png`.
   - [x] Cameras (core + admin): standardize headers/actions, remove inline styles, wrap tables, and upgrade empty states (session, device edit/list/detail, URL patterns, scan, RTMP/IPTV/DLNA pages).
 
 ## Multi-tenant properties & property users

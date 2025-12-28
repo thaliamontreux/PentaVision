@@ -72,15 +72,15 @@
                   <th>Retention</th>
                   <th>Mode</th>
                   <th>Window</th>
-                  <th style="width: 1%; white-space: nowrap;">Status</th>
-                  <th style="width: 1%; white-space: nowrap;">Actions</th>
+                  <th class="pv-nowrap pv-w-min">Status</th>
+                  <th class="pv-nowrap pv-w-min">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {% for s in storage_schedules %}
                   <tr>
                     <td>{{ s.camera_name }}</td>
-                    <td style="font-size: 0.85rem;"><code>{{ s.storage_targets or 'Global default' }}</code></td>
+                    <td class="pv-text-sm"><code>{{ s.storage_targets or 'Global default' }}</code></td>
                     <td>{{ s.retention_days if s.retention_days is not none else '\u2013' }}</td>
                     <td>{{ s.mode }}</td>
                     <td>
@@ -97,7 +97,7 @@
                         <span class="pv-badge pv-badge-not_configured">Disabled</span>
                       {% endif %}
                     </td>
-                    <td style="white-space: nowrap;">
+                    <td class="pv-nowrap">
                       <span class="pv-row-actions">
                         <button
                           type="button"
@@ -137,7 +137,7 @@
             </table>
           </div>
         {% else %}
-          <div class="pv-empty" style="margin-top: 0.75rem;">
+          <div class="pv-empty pv-mt-3">
             <img
               class="pv-empty-icon"
               src="{{ url_for('static', filename='img/empty-recordings.png') }}"
@@ -372,7 +372,7 @@
 
         <div class="pv-dashboard-grid pv-dashboard-grid-ss">
           <div class="pv-card">
-            <h2 style="margin-bottom: 0.5rem;">Camera</h2>
+            <h2 class="pv-mb-2">Camera</h2>
             <div class="pv-field-group">
               <label for="pv-ss-camera" class="pv-card-subtitle">Select camera</label>
               <select id="pv-ss-camera" name="device_id">
@@ -382,14 +382,14 @@
                 {% endfor %}
               </select>
             </div>
-            <div style="margin-top: 0.75rem;">
-              <div class="pv-card-subtitle" style="margin-bottom: 0.35rem;">Preview</div>
+            <div class="pv-mt-3">
+              <div class="pv-card-subtitle pv-mb-1">Preview</div>
               <img id="pv-ss-preview" src="" alt="Camera preview" class="pv-preview-img" />
             </div>
           </div>
 
           <div class="pv-card">
-            <h2 style="margin-bottom: 0.5rem;">Schedule</h2>
+            <h2 class="pv-mb-2">Schedule</h2>
 
             <div class="pv-form-grid-2">
               <div class="pv-field-group">
@@ -407,19 +407,19 @@
               </div>
             </div>
 
-            <div id="pv-ss-time-block" style="margin-top: 0.75rem;">
-              <div class="pv-card-subtitle" style="margin-bottom: 0.35rem;">Time window</div>
-              <div class="pv-inline-row" style="gap: 0.35rem;">
+            <div id="pv-ss-time-block" class="pv-mt-3">
+              <div class="pv-card-subtitle pv-mb-1">Time window</div>
+              <div class="pv-inline-row pv-gap-1">
                 <input type="time" id="pv-ss-start" name="start_time" class="pv-field-time" />
                 <span class="pv-inline-sep">to</span>
                 <input type="time" id="pv-ss-end" name="end_time" class="pv-field-time" />
               </div>
-              <p class="pv-card-subtitle" style="margin-top: 0.4rem;">Leave start/end blank to record 24 hours.</p>
+              <p class="pv-card-subtitle pv-mt-2">Leave start/end blank to record 24 hours.</p>
             </div>
 
-            <div style="margin-top: 0.9rem;">
-              <div class="pv-card-subtitle" style="margin-bottom: 0.35rem;">Storage modules</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+            <div class="pv-mt-4">
+              <div class="pv-card-subtitle pv-mb-1">Storage modules</div>
+              <div class="pv-flex-wrap pv-gap-1">
                 {% for m in modules %}
                   {% if m.is_enabled %}
                     <label class="pv-pill-check">
@@ -429,7 +429,7 @@
                   {% endif %}
                 {% endfor %}
               </div>
-              <p class="pv-card-subtitle" style="margin-top: 0.5rem;">If no modules are selected, the schedule will be created but will not record until targets are selected.</p>
+              <p class="pv-card-subtitle pv-mt-2">If no modules are selected, the schedule will be created but will not record until targets are selected.</p>
             </div>
 
             <div class="pv-modal-actions">

@@ -16,7 +16,7 @@
           {% endif %}
         </p>
       </div>
-      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+      <div class="pv-dashboard-controls">
         <div class="pv-layout-switcher">
           <span>Layout:</span>
           <button type="button" class="pv-layout-button is-active" data-layout="4">4 × 4</button>
@@ -55,9 +55,8 @@
                   <div class="pv-camera-title">{{ d.name }}</div>
                 </div>
                 <div
-                  class="pv-camera-preview pv-dashboard-size-{{ dash_size }}"
+                  class="pv-camera-preview pv-dashboard-size-{{ dash_size }} pv-pos-relative"
                   data-device-id="{{ d.id }}"
-                  style="position: relative;"
                 >
                   <img
                     src="{{ url_for('main.camera_preview_low_jpeg', device_id=d.id) }}"
@@ -66,9 +65,8 @@
                     class="pv-camera-live"
                   />
                   <canvas
-                    class="pv-camera-face-overlay"
+                    class="pv-camera-face-overlay pv-face-overlay-canvas pv-hidden"
                     data-face-overlay="{{ d.id }}"
-                    style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; display: none;"
                   ></canvas>
                 </div>
                 <div class="pv-camera-footer">
