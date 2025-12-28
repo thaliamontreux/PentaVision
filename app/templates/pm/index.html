@@ -1,71 +1,67 @@
 {% extends 'base.html' %}
 
-{% block title %}Properties · PentaVision{% endblock %}
+{% block title %}Property Manager · PentaVision{% endblock %}
 
 {% block content %}
   <section class="pv-section">
-    <div class="pv-card">
-      <div class="pv-card-header">
-        <div>
-          <h1 style="margin-bottom: 0.25rem;">Properties</h1>
-          <p class="pv-card-subtitle">Manage the properties you have access to.</p>
-        </div>
+    <div class="pv-page-header">
+      <div>
+        <h1 class="pv-page-title">Property Manager</h1>
+        <p class="pv-page-subtitle">Manage properties and their local users.</p>
       </div>
-
-      {% if properties and properties|length %}
-        <div class="pv-table-wrap">
-          <table class="pv-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Timezone</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for p in properties %}
-                <tr>
-                  <td style="font-weight: 800;">{{ p.name }}</td>
-                  <td>{{ p.timezone or '' }}</td>
-                  <td style="white-space: nowrap;">
-                    {% if is_system_admin or is_property_admin %}
-                      {% if active_admin_property and active_admin_property.id == p.id %}
-                        <span class="pv-badge">Active</span>
-                      {% else %}
-                        <form
-                          method="post"
-                          action="{{ url_for('pm.pm_property_enter', property_id=p.id) }}"
-                          style="display: inline;"
-                        >
-                          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                          <button type="submit" class="pv-button pv-button-small pv-button-primary">
-                            Enter
-                          </button>
-                        </form>
-                      {% endif %}
-                    {% endif %}
-                    {% if is_system_admin or is_property_admin %}
-                      <form
-                        method="post"
-                        action="{{ url_for('pm.pm_property_provision', property_id=p.id) }}"
-                        style="display: inline; margin-left: 0.35rem;"
-                      >
-                        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                        <button type="submit" class="pv-button pv-button-small">
-                          Provision
-                        </button>
-                      </form>
-                    {% endif %}
-                    <a class="pv-link-muted" href="{{ url_for('pm.property_users', property_id=p.id) }}">Users</a>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+      {% if active_admin_property %}
+        <div class="pv-page-actions">
+          <form method="post" action="{{ url_for('pm.pm_property_context_clear') }}" class="pv-inline-form">
+            <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+            <button type="submit" class="pv-button">Exit Property Context</button>
+          </form>
         </div>
-      {% else %}
-        <div style="color:#9ca3af; font-size: 0.95rem;">No properties assigned.</div>
       {% endif %}
     </div>
+
+    {% if properties and properties|length %}
+      <div class="pv-pm-grid">
+        {% for p in properties %}
+          <div class="pv-pm-card{% if active_admin_property and active_admin_property.id == p.id %} pv-pm-card-active{% endif %}">
+            <div class="pv-pm-card-header">
+              <h2 class="pv-pm-card-title">{{ p.name }}</h2>
+              {% if active_admin_property and active_admin_property.id == p.id %}
+                <span class="pv-pm-badge-active">Active</span>
+              {% endif %}
+            </div>
+            <div class="pv-pm-card-meta">
+              {% if p.city or p.state %}
+                <span class="pv-pm-meta-item">📍 {{ p.city or '' }}{% if p.city and p.state %}, {% endif %}{{ p.state or '' }}</span>
+              {% endif %}
+              {% if p.timezone %}
+                <span class="pv-pm-meta-item">🕐 {{ p.timezone }}</span>
+              {% endif %}
+            </div>
+            <div class="pv-pm-card-actions">
+              <a href="{{ url_for('pm.property_users', property_id=p.id) }}" class="pv-pm-btn pv-pm-btn-primary">
+                👥 Manage Users
+              </a>
+              {% if is_system_admin or is_property_admin %}
+                {% if not (active_admin_property and active_admin_property.id == p.id) %}
+                  <form method="post" action="{{ url_for('pm.pm_property_enter', property_id=p.id) }}" class="pv-inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                    <button type="submit" class="pv-pm-btn">Enter Context</button>
+                  </form>
+                {% endif %}
+                <form method="post" action="{{ url_for('pm.pm_property_provision', property_id=p.id) }}" class="pv-inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                  <button type="submit" class="pv-pm-btn pv-pm-btn-subtle">⚙️ Provision DB</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="pv-empty">
+        <p class="pv-empty-title">No properties assigned</p>
+        <p class="pv-empty-subtitle">You don't have access to any properties yet. Contact an administrator to be assigned to a property.</p>
+      </div>
+    {% endif %}
   </section>
 {% endblock %}

@@ -1,109 +1,115 @@
 {% extends 'base.html' %}
 
-{% block title %}Property Users · PentaVision{% endblock %}
+{% block title %}{{ prop.name }} Users · PentaVision{% endblock %}
 
 {% block content %}
   <section class="pv-section">
-    <div class="pv-card">
-      <div class="pv-card-header">
-        <div>
-          <h1 style="margin-bottom: 0.25rem;">{{ prop.name }} · Users</h1>
-          <p class="pv-card-subtitle">Create and manage property-local users (password and optional 8-digit PIN).</p>
+    <div class="pv-playback-header">
+      <a href="{{ url_for('pm.index') }}" class="pv-back-link">← Back to Properties</a>
+      <h1 class="pv-playback-title">{{ prop.name }}</h1>
+      <p class="pv-playback-subtitle">Manage property-local users with password and optional 8-digit PIN access.</p>
+    </div>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error pv-mb-4" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="pv-pm-users-layout">
+      <div class="pv-pm-create-card">
+        <div class="pv-pm-create-header">
+          <span class="pv-pm-create-icon">➕</span>
+          <h3 class="pv-pm-create-title">Create New User</h3>
         </div>
-        <div class="pv-admin-actions">
+        <form method="post" action="{{ url_for('pm.property_users_create', property_id=prop.id) }}" class="pv-pm-create-form">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+
+          <div class="pv-field-group">
+            <label for="pvPuUsername">Username</label>
+            <input id="pvPuUsername" name="username" autocomplete="username" required />
+          </div>
+
+          <div class="pv-field-group">
+            <label for="pvPuFullName">Full name</label>
+            <input id="pvPuFullName" name="full_name" autocomplete="name" />
+          </div>
+
+          <div class="pv-field-group">
+            <label for="pvPuPassword">Password</label>
+            <input id="pvPuPassword" name="password" type="password" autocomplete="new-password" required />
+          </div>
+
+          <div class="pv-field-group">
+            <label for="pvPuPin">PIN (optional, 8 digits)</label>
+            <input id="pvPuPin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" placeholder="12345678" />
+          </div>
+
+          <button class="pv-pm-btn pv-pm-btn-primary pv-pm-btn-full" type="submit">Create User</button>
+        </form>
+
+        {% if is_system_admin or is_property_admin %}
+          <div class="pv-pm-create-divider"></div>
           <form
             method="post"
             action="{{ url_for('pm.property_users_migrate_legacy', property_id=prop.id) }}"
-            style="display: inline;"
             onsubmit="return confirm('Migrate legacy users from the old/global database into this property tenant DB? This is safe to run multiple times.');"
           >
             <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-            <button type="submit" class="pv-button">
-              Migrate legacy users
+            <button type="submit" class="pv-pm-btn pv-pm-btn-subtle pv-pm-btn-full">
+              📦 Migrate Legacy Users
             </button>
           </form>
-          <a class="pv-button-secondary" href="{{ url_for('pm.index') }}">Back to properties</a>
-        </div>
+        {% endif %}
       </div>
 
-      <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.1rem; align-items: start;">
-        <div class="pv-card" style="padding: 0.85rem;">
-          <div style="font-weight: 900; margin-bottom: 0.35rem;">Create user</div>
-          <form method="post" action="{{ url_for('pm.property_users_create', property_id=prop.id) }}" class="pv-form" style="margin-top: 0;">
-            <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-
-            <div class="pv-field-group">
-              <label for="pvPuUsername">Username</label>
-              <input id="pvPuUsername" name="username" autocomplete="username" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvPuFullName">Full name</label>
-              <input id="pvPuFullName" name="full_name" autocomplete="name" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvPuPassword">Password</label>
-              <input id="pvPuPassword" name="password" type="password" autocomplete="new-password" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvPuPin">PIN (optional, 8 digits)</label>
-              <input id="pvPuPin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" />
-            </div>
-
-            <div class="pv-form-actions">
-              <button class="pv-button-primary" type="submit">Create user</button>
-            </div>
-          </form>
+      <div class="pv-pm-users-list">
+        <div class="pv-pm-users-header">
+          <h3 class="pv-pm-users-title">Property Users</h3>
+          <span class="pv-pm-users-count">{{ rows|length if rows else 0 }} users</span>
         </div>
 
-        <div class="pv-card" style="padding: 0.85rem;">
-          <div style="font-weight: 900; margin-bottom: 0.35rem;">Existing users</div>
-
-          {% if rows and rows|length %}
-            <div class="pv-table-wrap">
-              <table class="pv-table">
-                <thead>
-                  <tr>
-                    <th>Username</th>
-                    <th>UID</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for u in rows %}
-                    <tr>
-                      <td style="font-weight: 800;">
-                        <a class="pv-link-muted" href="{{ url_for('pm.property_user_detail', property_id=prop.id, property_user_uid=(u.uid or '')) }}">{{ u.username }}</a>
-                      </td>
-                      <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 0.9rem; color: #9ca3af;">{{ u.uid or '' }}</td>
-                      <td>{{ u.full_name or '' }}</td>
-                      <td>
-                        {% if u.is_active %}
-                          <span class="pv-badge pv-badge-ok">Active</span>
-                        {% else %}
-                          <span class="pv-badge pv-badge-not_configured">Disabled</span>
-                        {% endif %}
-                      </td>
-                      <td style="white-space: nowrap;">
-                        <a class="pv-button pv-button-small" href="{{ url_for('pm.property_user_detail', property_id=prop.id, property_user_uid=(u.uid or '')) }}">Manage</a>
-                        <form method="post" action="{{ url_for('pm.property_users_toggle_uid', property_id=prop.id, property_user_uid=(u.uid or '')) }}" style="display:inline;">
-                          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                          <button type="submit" class="pv-button pv-button-small">{% if u.is_active %}Disable{% else %}Enable{% endif %}</button>
-                        </form>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% else %}
-            <div style="color:#9ca3af; font-size: 0.95rem;">No property users yet.</div>
-          {% endif %}
-        </div>
+        {% if rows and rows|length %}
+          <div class="pv-pm-user-cards">
+            {% for u in rows %}
+              <div class="pv-pm-user-card{% if not u.is_active %} pv-pm-user-disabled{% endif %}">
+                <div class="pv-pm-user-avatar">
+                  {{ (u.username or 'U')[0]|upper }}
+                </div>
+                <div class="pv-pm-user-info">
+                  <div class="pv-pm-user-name">{{ u.full_name or u.username }}</div>
+                  <div class="pv-pm-user-username">@{{ u.username }}</div>
+                </div>
+                <div class="pv-pm-user-status">
+                  {% if u.is_active %}
+                    <span class="pv-pm-status-active">Active</span>
+                  {% else %}
+                    <span class="pv-pm-status-disabled">Disabled</span>
+                  {% endif %}
+                </div>
+                <div class="pv-pm-user-actions">
+                  <a href="{{ url_for('pm.property_user_detail', property_id=prop.id, property_user_uid=(u.uid or '')) }}" class="pv-pm-action-btn" title="Edit user">✏️</a>
+                  <form method="post" action="{{ url_for('pm.property_users_toggle_uid', property_id=prop.id, property_user_uid=(u.uid or '')) }}" class="pv-inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                    <button type="submit" class="pv-pm-action-btn" title="{% if u.is_active %}Disable{% else %}Enable{% endif %} user">
+                      {% if u.is_active %}🚫{% else %}✅{% endif %}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="pv-pm-users-empty">
+            <span class="pv-pm-users-empty-icon">👥</span>
+            <p>No property users yet</p>
+            <p class="pv-pm-users-empty-hint">Create a user using the form on the left.</p>
+          </div>
+        {% endif %}
       </div>
     </div>
   </section>

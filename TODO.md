@@ -57,8 +57,8 @@
 
 ## Multi-tenant properties & property users
 
-- [ ] Implement Property Manager portal (`/pm`) for global users linked to properties.
-- [ ] Implement property-local user management (create/disable users, set passwords, optional 8-digit PIN).
+- [x] Implement Property Manager portal (`/pm`) for global users linked to properties.
+- [x] Implement property-local user management (create/disable users, set passwords, optional 8-digit PIN).
 - [x] Add per-property tenant DB provisioning & schema verification (create DB if missing, ensure tenant tables/columns/indexes).
 - [x] Backfill legacy properties missing `properties.uid` so tenant DB naming works.
 - [x] Harden tenant DB failures so UI does not crash; show actionable bottom-right toast diagnostics.

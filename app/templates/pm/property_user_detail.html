@@ -1,167 +1,174 @@
 {% extends 'base.html' %}
 
-{% block title %}Property User · PentaVision{% endblock %}
+{% block title %}{{ form.username or 'User' }} · {{ prop.name }} · PentaVision{% endblock %}
 
 {% block content %}
   <section class="pv-section">
-    <div class="pv-card">
-      <div class="pv-card-header">
-        <div>
-          <h1 style="margin-bottom: 0.25rem;">{{ prop.name }} · User</h1>
-          <p class="pv-card-subtitle">Edit the account and profile for this property user.</p>
-        </div>
-        <div class="pv-admin-actions">
-          <a class="pv-button-secondary" href="{{ url_for('pm.property_users', property_id=prop.id) }}">Back to users</a>
-        </div>
+    <div class="pv-playback-header">
+      <a href="{{ url_for('pm.property_users', property_id=prop.id) }}" class="pv-back-link">← Back to {{ prop.name }} Users</a>
+      <h1 class="pv-playback-title">{{ form.full_name or form.username }}</h1>
+      <p class="pv-playback-subtitle">
+        @{{ form.username }} · 
+        <span class="pv-mono pv-text-muted">{{ user_row.uid or '' }}</span>
+      </p>
+    </div>
+
+    {% if errors %}
+      <div class="pv-alert pv-alert-error pv-mb-4" role="alert">
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
       </div>
+    {% endif %}
 
-      {% if errors %}
-        <div class="pv-alert pv-alert-error" role="alert" style="margin: 0.85rem;">
-          <ul>
-            {% for error in errors %}
-              <li>{{ error }}</li>
-            {% endfor %}
-          </ul>
+    {% if saved %}
+      <div class="pv-alert pv-alert-success pv-mb-4" role="status">
+        <p>Changes saved successfully.</p>
+      </div>
+    {% endif %}
+
+    <div class="pv-pm-detail-layout">
+      <div class="pv-pm-detail-card">
+        <div class="pv-pm-detail-header">
+          <span class="pv-pm-detail-icon">🔐</span>
+          <h3 class="pv-pm-detail-title">Account Settings</h3>
         </div>
-      {% endif %}
 
-      {% if saved %}
-        <div class="pv-alert pv-alert-success" role="status" style="margin: 0.85rem;">
-          <p>Saved.</p>
-        </div>
-      {% endif %}
+        <form method="post" class="pv-pm-detail-form">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
 
-      <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.1rem; align-items: start; padding: 0.85rem;">
-        <div class="pv-card" style="padding: 0.85rem;">
-          <div style="font-weight: 900; margin-bottom: 0.35rem;">Account</div>
-
-          <div style="font-size: 0.9rem; color: #9ca3af; margin-bottom: 0.65rem;">
-            UID: <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{{ user_row.uid or '' }}</span>
+          <div class="pv-field-group">
+            <label for="pvPuUsername">Username</label>
+            <input id="pvPuUsername" name="username" value="{{ form.username }}" autocomplete="username" required />
           </div>
 
-          <form method="post" class="pv-form" style="margin-top: 0;">
-            <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+          <div class="pv-field-group">
+            <label for="pvPuFullName">Full name</label>
+            <input id="pvPuFullName" name="full_name" value="{{ form.full_name }}" autocomplete="name" />
+          </div>
 
-            <div class="pv-field-group">
-              <label for="pvPuUsername">Username</label>
-              <input id="pvPuUsername" name="username" value="{{ form.username }}" autocomplete="username" />
-            </div>
+          <div class="pv-field-group">
+            <label for="pvPuPassword">New password</label>
+            <input id="pvPuPassword" name="password" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" />
+          </div>
 
-            <div class="pv-field-group">
-              <label for="pvPuFullName">Full name</label>
-              <input id="pvPuFullName" name="full_name" value="{{ form.full_name }}" autocomplete="name" />
-            </div>
+          <div class="pv-field-group">
+            <label for="pvPuPin">New PIN (8 digits)</label>
+            <input id="pvPuPin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" placeholder="Leave blank to keep current" />
+          </div>
 
-            <div class="pv-field-group">
-              <label for="pvPuPassword">New password (leave blank to keep)</label>
-              <input id="pvPuPassword" name="password" type="password" autocomplete="new-password" />
-            </div>
+          <div class="pv-pm-toggle-row">
+            <label class="pv-pm-toggle">
+              <input type="checkbox" name="is_active" value="1" {% if form.is_active %}checked{% endif %} />
+              <span class="pv-pm-toggle-slider"></span>
+            </label>
+            <span class="pv-pm-toggle-label">Account Active</span>
+          </div>
 
-            <div class="pv-field-group">
-              <label for="pvPuPin">New PIN (optional, 8 digits; leave blank to keep)</label>
-              <input id="pvPuPin" name="pin" inputmode="numeric" pattern="\d{8}" maxlength="8" autocomplete="off" />
-            </div>
+          <button class="pv-pm-btn pv-pm-btn-primary pv-pm-btn-full" type="submit">Save Account</button>
+        </form>
+      </div>
 
-            <div class="pv-field-group">
-              <label>
-                <input type="checkbox" name="is_active" value="1" {% if form.is_active %}checked{% endif %} />
-                Active
-              </label>
-            </div>
-
-            <div class="pv-form-actions">
-              <button class="pv-button-primary" type="submit">Save</button>
-            </div>
-          </form>
+      <div class="pv-pm-detail-card pv-pm-detail-card-wide">
+        <div class="pv-pm-detail-header">
+          <span class="pv-pm-detail-icon">👤</span>
+          <h3 class="pv-pm-detail-title">Profile Information</h3>
         </div>
 
-        <div class="pv-card" style="padding: 0.85rem;">
-          <div style="font-weight: 900; margin-bottom: 0.35rem;">Profile</div>
+        <form method="post" class="pv-pm-profile-form">
+          <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+          <input type="hidden" name="profile_only" value="1" />
 
-          <form method="post" class="pv-form" style="margin-top: 0;">
-            <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-            <input type="hidden" name="profile_only" value="1" />
-
-            <div class="pv-field-group">
-              <label for="pvEmail">Email</label>
-              <input id="pvEmail" name="email" value="{{ profile.email }}" autocomplete="email" />
+          <div class="pv-pm-profile-grid">
+            <div class="pv-pm-profile-section">
+              <h4 class="pv-pm-section-title">Contact</h4>
+              <div class="pv-field-group">
+                <label for="pvEmail">Email</label>
+                <input id="pvEmail" name="email" value="{{ profile.email }}" autocomplete="email" type="email" />
+              </div>
+              <div class="pv-field-group">
+                <label for="pvPhonePrimary">Primary phone</label>
+                <input id="pvPhonePrimary" name="primary_phone" value="{{ profile.primary_phone }}" autocomplete="tel" />
+              </div>
+              <div class="pv-field-group">
+                <label for="pvPhoneSecondary">Secondary phone</label>
+                <input id="pvPhoneSecondary" name="secondary_phone" value="{{ profile.secondary_phone }}" autocomplete="tel" />
+              </div>
             </div>
 
-            <div class="pv-field-group">
-              <label for="pvPhonePrimary">Primary phone</label>
-              <input id="pvPhonePrimary" name="primary_phone" value="{{ profile.primary_phone }}" autocomplete="tel" />
+            <div class="pv-pm-profile-section">
+              <h4 class="pv-pm-section-title">Address</h4>
+              <div class="pv-field-group">
+                <label for="pvUnit">Unit / Suite</label>
+                <input id="pvUnit" name="unit_number" value="{{ profile.unit_number }}" />
+              </div>
+              <div class="pv-field-group">
+                <label for="pvAddr1">Address line 1</label>
+                <input id="pvAddr1" name="address_line1" value="{{ profile.address_line1 }}" autocomplete="address-line1" />
+              </div>
+              <div class="pv-field-group">
+                <label for="pvAddr2">Address line 2</label>
+                <input id="pvAddr2" name="address_line2" value="{{ profile.address_line2 }}" autocomplete="address-line2" />
+              </div>
+              <div class="pv-pm-field-row">
+                <div class="pv-field-group">
+                  <label for="pvCity">City</label>
+                  <input id="pvCity" name="city" value="{{ profile.city }}" autocomplete="address-level2" />
+                </div>
+                <div class="pv-field-group">
+                  <label for="pvState">State</label>
+                  <input id="pvState" name="state" value="{{ profile.state }}" autocomplete="address-level1" />
+                </div>
+              </div>
+              <div class="pv-pm-field-row">
+                <div class="pv-field-group">
+                  <label for="pvPostal">Postal code</label>
+                  <input id="pvPostal" name="postal_code" value="{{ profile.postal_code }}" autocomplete="postal-code" />
+                </div>
+                <div class="pv-field-group">
+                  <label for="pvCountry">Country</label>
+                  <input id="pvCountry" name="country" value="{{ profile.country }}" autocomplete="country-name" />
+                </div>
+              </div>
+              <div class="pv-field-group">
+                <label for="pvResidency">Residency status</label>
+                <select id="pvResidency" name="residency_status">
+                  <option value="">— Select —</option>
+                  <option value="Owner" {% if profile.residency_status == 'Owner' %}selected{% endif %}>Owner</option>
+                  <option value="Tenant" {% if profile.residency_status == 'Tenant' %}selected{% endif %}>Tenant</option>
+                  <option value="Guest" {% if profile.residency_status == 'Guest' %}selected{% endif %}>Guest</option>
+                  <option value="Staff" {% if profile.residency_status == 'Staff' %}selected{% endif %}>Staff</option>
+                  <option value="Contractor" {% if profile.residency_status == 'Contractor' %}selected{% endif %}>Contractor</option>
+                </select>
+              </div>
             </div>
 
-            <div class="pv-field-group">
-              <label for="pvPhoneSecondary">Secondary phone</label>
-              <input id="pvPhoneSecondary" name="secondary_phone" value="{{ profile.secondary_phone }}" autocomplete="tel" />
+            <div class="pv-pm-profile-section">
+              <h4 class="pv-pm-section-title">Emergency Contact</h4>
+              <div class="pv-field-group">
+                <label for="pvEmergencyName">Name</label>
+                <input id="pvEmergencyName" name="emergency_contact_name" value="{{ profile.emergency_contact_name }}" />
+              </div>
+              <div class="pv-field-group">
+                <label for="pvEmergencyPhone">Phone</label>
+                <input id="pvEmergencyPhone" name="emergency_contact_phone" value="{{ profile.emergency_contact_phone }}" />
+              </div>
+              <div class="pv-field-group">
+                <label for="pvEmergencyRel">Relationship</label>
+                <input id="pvEmergencyRel" name="emergency_contact_relation" value="{{ profile.emergency_contact_relation }}" placeholder="e.g., Spouse, Parent" />
+              </div>
             </div>
+          </div>
 
-            <div class="pv-field-group">
-              <label for="pvUnit">Unit / Suite</label>
-              <input id="pvUnit" name="unit_number" value="{{ profile.unit_number }}" />
-            </div>
+          <div class="pv-field-group pv-pm-notes-field">
+            <label for="pvNotes">Notes</label>
+            <textarea id="pvNotes" name="notes" rows="3" placeholder="Additional notes about this user...">{{ profile.notes }}</textarea>
+          </div>
 
-            <div class="pv-field-group">
-              <label for="pvAddr1">Address line 1</label>
-              <input id="pvAddr1" name="address_line1" value="{{ profile.address_line1 }}" autocomplete="address-line1" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvAddr2">Address line 2</label>
-              <input id="pvAddr2" name="address_line2" value="{{ profile.address_line2 }}" autocomplete="address-line2" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvCity">City</label>
-              <input id="pvCity" name="city" value="{{ profile.city }}" autocomplete="address-level2" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvState">State / Province</label>
-              <input id="pvState" name="state" value="{{ profile.state }}" autocomplete="address-level1" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvPostal">Postal code</label>
-              <input id="pvPostal" name="postal_code" value="{{ profile.postal_code }}" autocomplete="postal-code" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvCountry">Country</label>
-              <input id="pvCountry" name="country" value="{{ profile.country }}" autocomplete="country-name" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvResidency">Residency status</label>
-              <input id="pvResidency" name="residency_status" value="{{ profile.residency_status }}" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvEmergencyName">Emergency contact name</label>
-              <input id="pvEmergencyName" name="emergency_contact_name" value="{{ profile.emergency_contact_name }}" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvEmergencyPhone">Emergency contact phone</label>
-              <input id="pvEmergencyPhone" name="emergency_contact_phone" value="{{ profile.emergency_contact_phone }}" />
-            </div>
-
-            <div class="pv-field-group">
-              <label for="pvEmergencyRel">Emergency contact relation</label>
-              <input id="pvEmergencyRel" name="emergency_contact_relation" value="{{ profile.emergency_contact_relation }}" />
-            </div>
-
-            <div class="pv-field-group" style="grid-column: 1 / -1;">
-              <label for="pvNotes">Notes</label>
-              <textarea id="pvNotes" name="notes" rows="4">{{ profile.notes }}</textarea>
-            </div>
-
-            <div class="pv-form-actions">
-              <button class="pv-button-primary" type="submit">Save profile</button>
-            </div>
-          </form>
-        </div>
+          <button class="pv-pm-btn pv-pm-btn-primary" type="submit">Save Profile</button>
+        </form>
       </div>
     </div>
   </section>
