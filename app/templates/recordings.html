@@ -73,6 +73,39 @@
                 </tbody>
               </table>
             </div>
+
+            {% if total_pages > 1 %}
+              <div class="pv-pagination">
+                <span class="pv-pagination-info">
+                  Page {{ page }} of {{ total_pages }} ({{ total_count }} recordings)
+                </span>
+                <div class="pv-pagination-controls">
+                  {% if page > 1 %}
+                    <a href="{{ url_for('main.recordings', page=1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="First">«</a>
+                    <a href="{{ url_for('main.recordings', page=page-1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Previous">‹</a>
+                  {% else %}
+                    <span class="pv-pagination-btn pv-pagination-disabled">«</span>
+                    <span class="pv-pagination-btn pv-pagination-disabled">‹</span>
+                  {% endif %}
+
+                  {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
+                    {% if p == page %}
+                      <span class="pv-pagination-btn pv-pagination-current">{{ p }}</span>
+                    {% else %}
+                      <a href="{{ url_for('main.recordings', page=p, device_id=device.id if device else '') }}" class="pv-pagination-btn">{{ p }}</a>
+                    {% endif %}
+                  {% endfor %}
+
+                  {% if page < total_pages %}
+                    <a href="{{ url_for('main.recordings', page=page+1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Next">›</a>
+                    <a href="{{ url_for('main.recordings', page=total_pages, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Last">»</a>
+                  {% else %}
+                    <span class="pv-pagination-btn pv-pagination-disabled">›</span>
+                    <span class="pv-pagination-btn pv-pagination-disabled">»</span>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
           {% else %}
             <div class="pv-empty">
               <img
@@ -138,6 +171,39 @@
             </div>
           {% endfor %}
         </div>
+
+        {% if total_pages > 1 %}
+          <div class="pv-pagination">
+            <span class="pv-pagination-info">
+              Page {{ page }} of {{ total_pages }} ({{ total_count }} recordings)
+            </span>
+            <div class="pv-pagination-controls">
+              {% if page > 1 %}
+                <a href="{{ url_for('main.recordings', page=1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="First">«</a>
+                <a href="{{ url_for('main.recordings', page=page-1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Previous">‹</a>
+              {% else %}
+                <span class="pv-pagination-btn pv-pagination-disabled">«</span>
+                <span class="pv-pagination-btn pv-pagination-disabled">‹</span>
+              {% endif %}
+
+              {% for p in range([1, page-2]|max, [total_pages, page+2]|min + 1) %}
+                {% if p == page %}
+                  <span class="pv-pagination-btn pv-pagination-current">{{ p }}</span>
+                {% else %}
+                  <a href="{{ url_for('main.recordings', page=p, device_id=device.id if device else '') }}" class="pv-pagination-btn">{{ p }}</a>
+                {% endif %}
+              {% endfor %}
+
+              {% if page < total_pages %}
+                <a href="{{ url_for('main.recordings', page=page+1, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Next">›</a>
+                <a href="{{ url_for('main.recordings', page=total_pages, device_id=device.id if device else '') }}" class="pv-pagination-btn" title="Last">»</a>
+              {% else %}
+                <span class="pv-pagination-btn pv-pagination-disabled">›</span>
+                <span class="pv-pagination-btn pv-pagination-disabled">»</span>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
       {% else %}
         <div class="pv-empty">
           <img

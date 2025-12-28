@@ -2659,10 +2659,20 @@ def recordings():
             recordings=[],
             device=None,
             devices_index={},
+            page=1,
+            total_pages=1,
+            total_count=0,
         )
 
     device_filter = (request.args.get("device_id") or "").strip()
     device = None
+
+    # Pagination
+    per_page = 50
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
 
     with Session(record_engine) as session_db:
         CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
@@ -2676,9 +2686,17 @@ def recordings():
                 query = query.filter(CameraRecording.device_id == device_id)
                 device = session_db.get(CameraDevice, device_id)
 
+        # Get total count for pagination
+        total_count = query.count()
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+
+        # Clamp page to valid range
+        page = min(page, total_pages)
+
         recordings_list = (
             query.order_by(CameraRecording.created_at.desc())
-            .limit(100)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
             .all()
         )
 
@@ -2697,6 +2715,9 @@ def recordings():
         recordings=recordings_list,
         device=device,
         devices_index=devices_index,
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
     )
 
 
