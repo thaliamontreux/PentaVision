@@ -7,7 +7,15 @@
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
-        <h1>RTMP Outputs</h1>
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">RTMP Outputs</h1>
+            <p class="pv-page-subtitle">Manage which cameras are restreamed to RTMP / RTMPS targets.</p>
+          </div>
+          <div class="pv-page-actions">
+            <a class="pv-button-primary" href="{{ url_for('camera_admin.rtmp_create') }}">Add RTMP output</a>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error">
@@ -18,12 +26,6 @@
             </ul>
           </div>
         {% endif %}
-
-        <div style="margin-bottom: 1rem;">
-          <a class="pv-button-primary" href="{{ url_for('camera_admin.rtmp_create') }}">
-            Add RTMP output
-          </a>
-        </div>
 
         {% if outputs %}
           <div class="pv-table-wrap">
@@ -51,18 +53,16 @@
                         (camera {{ row.device_id }})
                       {% endif %}
                     </td>
-                    <td style="max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                      {{ row.target_url }}
-                    </td>
+                    <td class="pv-ellipsis-cell pv-ellipsis-420">{{ row.target_url }}</td>
                     <td>
                       {% if not row.is_active %}
-                        <span style="color: #6b7280;">Stopped</span>
+                        <span class="pv-badge pv-badge-not_configured">Stopped</span>
                       {% elif row.last_error %}
-                        <span style="color: #ef4444;">Error</span>
+                        <span class="pv-badge pv-badge-error">Error</span>
                       {% elif row.last_started_at %}
-                        <span style="color: #16a34a;">Running</span>
+                        <span class="pv-badge pv-badge-ok">Running</span>
                       {% else %}
-                        <span style="color: #6b7280;">Pending</span>
+                        <span class="pv-badge pv-badge-not_configured">Pending</span>
                       {% endif %}
                     </td>
                     <td>
@@ -72,56 +72,48 @@
                         —
                       {% endif %}
                     </td>
-                    <td style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                      {{ row.last_error or '' }}
-                    </td>
-                    <td style="white-space: nowrap;">
-                      <a href="{{ url_for('camera_admin.rtmp_edit', output_id=row.id) }}" class="pv-link-muted">Edit</a>
+                    <td class="pv-ellipsis-cell pv-ellipsis-260">{{ row.last_error or '' }}</td>
+                    <td class="pv-nowrap">
+                      <span class="pv-row-actions">
+                        <a href="{{ url_for('camera_admin.rtmp_edit', output_id=row.id) }}" class="pv-link-muted">Edit</a>
 
-                      {% if row.is_active %}
-                        <form
-                          method="post"
-                          action="{{ url_for('camera_admin.rtmp_stop', output_id=row.id) }}"
-                          style="display: inline; margin-left: 0.5rem;"
-                        >
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                          <button type="submit" style="background: none; border: none; color: #f97316; cursor: pointer;">
-                            Stop
-                          </button>
-                        </form>
-                        <form
-                          method="post"
-                          action="{{ url_for('camera_admin.rtmp_restart', output_id=row.id) }}"
-                          style="display: inline; margin-left: 0.5rem;"
-                        >
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                          <button type="submit" style="background: none; border: none; color: #22c55e; cursor: pointer;">
-                            Restart
-                          </button>
-                        </form>
-                      {% else %}
-                        <form
-                          method="post"
-                          action="{{ url_for('camera_admin.rtmp_start', output_id=row.id) }}"
-                          style="display: inline; margin-left: 0.5rem;"
-                        >
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                          <button type="submit" style="background: none; border: none; color: #22c55e; cursor: pointer;">
-                            Start
-                          </button>
-                        </form>
-                      {% endif %}
+                        {% if row.is_active %}
+                          <form
+                            method="post"
+                            action="{{ url_for('camera_admin.rtmp_stop', output_id=row.id) }}"
+                            class="pv-inline-form"
+                          >
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="pv-link-warn">Stop</button>
+                          </form>
+                          <form
+                            method="post"
+                            action="{{ url_for('camera_admin.rtmp_restart', output_id=row.id) }}"
+                            class="pv-inline-form"
+                          >
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="pv-link-success">Restart</button>
+                          </form>
+                        {% else %}
+                          <form
+                            method="post"
+                            action="{{ url_for('camera_admin.rtmp_start', output_id=row.id) }}"
+                            class="pv-inline-form"
+                          >
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="pv-link-success">Start</button>
+                          </form>
+                        {% endif %}
 
-                      <form
-                        method="post"
-                        action="{{ url_for('camera_admin.rtmp_delete', output_id=row.id) }}"
-                        style="display: inline; margin-left: 0.5rem;"
-                      >
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <button type="submit" style="background: none; border: none; color: #fca5a5; cursor: pointer;">
-                          Delete
-                        </button>
-                      </form>
+                        <form
+                          method="post"
+                          action="{{ url_for('camera_admin.rtmp_delete', output_id=row.id) }}"
+                          class="pv-inline-form"
+                        >
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                          <button type="submit" class="pv-link-danger">Delete</button>
+                        </form>
+                      </span>
                     </td>
                   </tr>
                 {% endfor %}
@@ -129,7 +121,20 @@
             </table>
           </div>
         {% else %}
-          <p>No RTMP outputs configured yet.</p>
+          <div class="pv-empty">
+            <img
+              class="pv-empty-icon"
+              src="{{ url_for('static', filename='img/empty-live.png') }}"
+              alt=""
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+            <p class="pv-empty-title">No RTMP outputs yet</p>
+            <p class="pv-empty-subtitle">Add an RTMP target to restream camera feeds to external platforms.</p>
+            <div class="pv-empty-actions">
+              <a class="pv-button" href="{{ url_for('camera_admin.rtmp_create') }}">Add RTMP output</a>
+            </div>
+          </div>
         {% endif %}
       </div>
     </div>

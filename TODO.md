@@ -51,8 +51,9 @@
   - [x] Live Feeds: upgrade empty state to `.pv-empty` + icon.
   - [x] Recordings: upgrade empty state to `.pv-empty` + icon.
   - [x] Recording Schedule: upgrade empty state to `.pv-empty` + icon.
-  - [ ] Profile: align layout, reduce inline styles, and ensure consistent spacing.
+  - [x] Profile: align layout, reduce inline styles, and ensure consistent spacing.
   - [ ] Storage Modules Manager: match `docs\ui-references\storage-modules-manager-reference.png`.
+  - [x] Cameras (core + admin): standardize headers/actions, remove inline styles, wrap tables, and upgrade empty states (session, device edit/list/detail, URL patterns, scan, RTMP/IPTV/DLNA pages).
 
 ## Multi-tenant properties & property users
 

@@ -7,13 +7,20 @@
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
-        <h1>
-          {% if is_edit %}
-            Edit Camera
-          {% else %}
-            New Camera
-          {% endif %}
-        </h1>
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">
+              {% if is_edit %}
+                Edit Camera
+              {% else %}
+                New Camera
+              {% endif %}
+            </h1>
+          </div>
+          <div class="pv-page-actions">
+            <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-button-secondary">Back to cameras</a>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error">
@@ -27,8 +34,7 @@
 
         <div
           id="camera-client-errors"
-          class="pv-alert pv-alert-error"
-          style="display: none;"
+          class="pv-alert pv-alert-error pv-hidden"
           aria-live="polite"
         >
           <ul id="camera-client-errors-list"></ul>
@@ -72,27 +78,24 @@
         </div>
 
         <div
-          class="pv-field-group"
+          class="pv-field-group pv-hidden"
           id="pattern-params-group"
-          style="display: none;"
         >
           <label>Template parameters</label>
           <div id="pattern-params-fields"></div>
         </div>
 
         <div
-          class="pv-field-group"
+          class="pv-field-group pv-hidden"
           id="stream-select-group"
-          style="display: none;"
         >
           <label for="stream-select">Stream</label>
           <select id="stream-select"></select>
         </div>
 
         <div
-          class="pv-field-group"
+          class="pv-field-group pv-hidden"
           id="channel-select-group"
-          style="display: none;"
         >
           <label for="channel-select">Channel</label>
           <select id="channel-select"></select>
@@ -100,13 +103,12 @@
 
         {% if is_admin %}
           <div
-            class="pv-field-group"
+            class="pv-field-group pv-hidden"
             id="stream-quality-group"
-            style="display: none;"
           >
             <label>Stream quality</label>
             <div>
-              <label id="stream-quality-low-label" style="margin-right: 1rem;">
+              <label id="stream-quality-low-label" class="pv-mr-4">
                 <input
                   type="radio"
                   id="stream-quality-low"
@@ -367,15 +369,13 @@
         <button
           type="button"
           id="test-connection-btn"
-          class="pv-button-secondary"
-          style="margin-left: 0.5rem;"
+          class="pv-button-secondary pv-ml-2"
         >
           Test connection
         </button>
         <span
           id="test-connection-status"
-          class="pv-card-subtitle"
-          style="margin-left: 0.75rem; font-size: 0.85rem;"
+          class="pv-card-subtitle pv-ml-3 pv-text-sm"
         ></span>
       </form>
     {% else %}
@@ -402,7 +402,7 @@
           li.textContent = msg;
           clientList.appendChild(li);
         });
-        clientBox.style.display = errors.length ? 'block' : 'none';
+        clientBox.classList.toggle('pv-hidden', !errors.length);
       }
 
       form.addEventListener('submit', function (ev) {
@@ -539,7 +539,7 @@
         var selected = patternSelect.options[patternSelect.selectedIndex];
         if (!selected) {
           patternParamsFields.innerHTML = '';
-          patternParamsGroup.style.display = 'none';
+          patternParamsGroup.classList.add('pv-hidden');
           return;
         }
         var patternText = selected.getAttribute('data-pattern') || '';
@@ -547,10 +547,10 @@
         requiredParamNames = names.slice();
         patternParamsFields.innerHTML = '';
         if (!names.length) {
-          patternParamsGroup.style.display = 'none';
+          patternParamsGroup.classList.add('pv-hidden');
           return;
         }
-        patternParamsGroup.style.display = 'block';
+        patternParamsGroup.classList.remove('pv-hidden');
         names.forEach(function (name) {
           var fieldId = 'pattern-param-' + name;
           var wrapper = document.createElement('div');
@@ -616,12 +616,12 @@
 
         if (!streamQualityGroup || (!hasLow && !hasHigh)) {
           if (streamQualityGroup) {
-            streamQualityGroup.style.display = 'none';
+            streamQualityGroup.classList.add('pv-hidden');
           }
           return;
         }
 
-        streamQualityGroup.style.display = 'block';
+        streamQualityGroup.classList.remove('pv-hidden');
 
         function setRadioState(radio, label, hasVal, val, isSelected) {
           if (!radio || !label) {
@@ -630,8 +630,7 @@
           radio.disabled = !hasVal;
           radio.checked = false;
           radio.setAttribute('data-stream-value', hasVal ? val : '');
-          label.style.opacity = hasVal ? '1' : '0.5';
-          label.style.cursor = hasVal ? 'pointer' : 'default';
+          label.classList.toggle('pv-label-disabled', !hasVal);
           if (hasVal && isSelected) {
             radio.checked = true;
           }
@@ -648,10 +647,10 @@
         var selected = patternSelect.options[patternSelect.selectedIndex];
         if (!selected) {
           if (streamSelectGroup) {
-            streamSelectGroup.style.display = 'none';
+            streamSelectGroup.classList.add('pv-hidden');
           }
           if (channelSelectGroup) {
-            channelSelectGroup.style.display = 'none';
+            channelSelectGroup.classList.add('pv-hidden');
           }
           if (streamHidden) {
             streamHidden.value = '';
@@ -728,9 +727,9 @@
             chosenStream = streamValues[0];
             streamSelect.value = chosenStream;
           }
-          streamSelectGroup.style.display = 'block';
+          streamSelectGroup.classList.remove('pv-hidden');
         } else if (streamSelectGroup) {
-          streamSelectGroup.style.display = 'none';
+          streamSelectGroup.classList.add('pv-hidden');
         }
 
         if (channelSelect) {
@@ -753,9 +752,9 @@
             chosenChannel = channelValues[0];
             channelSelect.value = chosenChannel;
           }
-          channelSelectGroup.style.display = 'block';
+          channelSelectGroup.classList.remove('pv-hidden');
         } else if (channelSelectGroup) {
-          channelSelectGroup.style.display = 'none';
+          channelSelectGroup.classList.add('pv-hidden');
         }
 
         if (streamHidden) {

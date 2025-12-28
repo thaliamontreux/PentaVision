@@ -4,8 +4,23 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>IPTV Channels</h1>
-    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">IPTV Channels</h1>
+            <p class="pv-page-subtitle">Broadcast camera feeds as MPEG-TS multicast streams for TVs.</p>
+          </div>
+          <div class="pv-page-actions">
+            <a
+              class="pv-button-primary"
+              href="{{ url_for('camera_admin.iptv_edit', channel_id=0) }}"
+            >
+              Add IPTV channel
+            </a>
+          </div>
+        </div>
 
     {% if errors %}
       <div class="pv-alert pv-alert-error">
@@ -16,19 +31,9 @@
         </ul>
       </div>
     {% endif %}
-
-    <div style="margin-bottom: 1rem;">
-      <a
-        class="pv-button-primary"
-        href="{{ url_for('camera_admin.iptv_edit', channel_id=0) }}"
-      >
-        Add IPTV channel
-      </a>
-    </div>
-
-    {% if channels %}
-      <div class="pv-table-wrap">
-        <table class="pv-table">
+        {% if channels %}
+          <div class="pv-table-wrap">
+            <table class="pv-table">
           <thead>
             <tr>
               <th>Camera</th>
@@ -84,19 +89,34 @@
                     —
                   {% endif %}
                 </td>
-                <td style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <td class="pv-ellipsis-cell pv-ellipsis-260">
                   {{ row.last_error or '' }}
                 </td>
-                <td style="white-space: nowrap;">
+                <td class="pv-nowrap">
                   <a href="{{ url_for('camera_admin.iptv_edit', channel_id=row.id) }}" class="pv-link-muted">Edit</a>
                 </td>
               </tr>
             {% endfor %}
           </tbody>
-        </table>
+            </table>
+          </div>
+        {% else %}
+          <div class="pv-empty">
+            <img
+              class="pv-empty-icon"
+              src="{{ url_for('static', filename='img/empty-live.png') }}"
+              alt=""
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+            <p class="pv-empty-title">No IPTV channels yet</p>
+            <p class="pv-empty-subtitle">Add a multicast channel to broadcast a camera feed to TVs.</p>
+            <div class="pv-empty-actions">
+              <a class="pv-button" href="{{ url_for('camera_admin.iptv_edit', channel_id=0) }}">Add IPTV channel</a>
+            </div>
+          </div>
+        {% endif %}
       </div>
-    {% else %}
-      <p>No IPTV channels configured yet.</p>
-    {% endif %}
+    </div>
   </section>
 {% endblock %}

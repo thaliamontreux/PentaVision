@@ -4,12 +4,18 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>{{ device.name }}</h1>
-    <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
-      Detailed view with live stream and recent recordings.
-    </p>
+    <div class="pv-page-header">
+      <div>
+        <h1 class="pv-page-title">{{ device.name }}</h1>
+        <p class="pv-page-subtitle">Detailed view with live stream and recent recordings.</p>
+      </div>
+      <div class="pv-page-actions">
+        <a href="{{ url_for('main.camera_session', device_id=device.id) }}" class="pv-button">Live session</a>
+        <a href="{{ url_for('main.recordings') }}?device_id={{ device.id }}" class="pv-button-secondary">Recordings</a>
+      </div>
+    </div>
 
-    <div class="pv-dashboard-grid" style="grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr);">
+    <div class="pv-dashboard-grid pv-dashboard-grid-device">
       <div class="pv-card">
         <h2>Live view</h2>
         <div class="pv-camera-preview pv-camera-preview-large">
@@ -67,7 +73,7 @@
           </li>
           {% endif %}
         </ul>
-        <p style="margin-top: 1rem; font-size: 0.85rem;">
+        <p class="pv-mt-3 pv-text-sm">
           <a href="{{ url_for('camera_admin.edit_device', device_id=device.id) }}" class="pv-link-muted">
             Configure camera
           </a>
@@ -75,7 +81,7 @@
       </div>
     </div>
 
-    <div class="pv-card" style="margin-top: 1.25rem;">
+    <div class="pv-card pv-mt-3">
       <div class="pv-card-header">
         <div>
           <h2>Recent recordings</h2>
@@ -91,42 +97,53 @@
         </a>
       </div>
       {% if recordings %}
-        <table class="pv-table" style="margin-top: 0.5rem;">
-          <thead>
-            <tr>
-              <th>Time ({{ current_timezone }})</th>
-              <th>Provider</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in recordings %}
+        <div class="pv-table-wrap pv-table-wrap-spaced">
+          <table class="pv-table">
+            <thead>
               <tr>
-                <td>{{ r.created_at|local_dt }}</td>
-                <td>{{ r.storage_provider }}</td>
-                <td>
-                  <a
-                    href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
-                    class="pv-link-muted"
-                  >
-                    Play
-                  </a>
-                  <span aria-hidden="true"> · </span>
-                  <a
-                    href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
-                    class="pv-link-muted"
-                  >
-                    Download
-                  </a>
-                </td>
+                <th>Time ({{ current_timezone }})</th>
+                <th>Provider</th>
+                <th>Actions</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {% for r in recordings %}
+                <tr>
+                  <td>{{ r.created_at|local_dt }}</td>
+                  <td>{{ r.storage_provider }}</td>
+                  <td>
+                    <span class="pv-row-actions">
+                      <a
+                        href="{{ url_for('main.recording_detail', recording_id=r.id) }}"
+                        class="pv-link-muted"
+                      >
+                        Play
+                      </a>
+                      <a
+                        href="{{ url_for('main.download_camera_recording', recording_id=r.id, download=1) }}"
+                        class="pv-link-muted"
+                      >
+                        Download
+                      </a>
+                    </span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       {% else %}
-        <p style="font-size: 0.9rem; color: #9ca3af; margin-top: 0.5rem;">
-          No recordings for this camera yet.
-        </p>
+        <div class="pv-empty pv-mt-3">
+          <img
+            class="pv-empty-icon"
+            src="{{ url_for('static', filename='img/empty-recordings.png') }}"
+            alt=""
+            loading="lazy"
+            onerror="this.style.display='none'"
+          />
+          <p class="pv-empty-title">No recordings yet</p>
+          <p class="pv-empty-subtitle">Once recording is enabled and scheduled, segments will show up here.</p>
+        </div>
       {% endif %}
     </div>
   </section>

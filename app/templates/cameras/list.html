@@ -7,8 +7,32 @@
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
-        <h1>Camera URL Patterns</h1>
-        <p>Manage RTSP URL patterns for different camera manufacturers and models.</p>
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Camera URL Patterns</h1>
+            <p class="pv-page-subtitle">Manage RTSP URL patterns for different camera manufacturers and models.</p>
+          </div>
+          <div class="pv-page-actions">
+            <a class="pv-button-primary" href="{{ url_for('camera_admin.create_pattern') }}">Add camera pattern</a>
+            <form
+              method="post"
+              action="{{ url_for('camera_admin.import_csv') }}"
+              enctype="multipart/form-data"
+              class="pv-inline-row"
+            >
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <label class="pv-text-sm">
+                Import CSV
+                <input type="file" name="file" accept=".csv" required />
+              </label>
+              <label class="pv-inline-check pv-mr-0">
+                <input type="checkbox" name="clear_existing" value="1" />
+                <span>Replace existing</span>
+              </label>
+              <button type="submit" class="pv-button-secondary">Upload</button>
+            </form>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error">
@@ -19,29 +43,6 @@
             </ul>
           </div>
         {% endif %}
-
-        <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-          <a class="pv-button-primary" href="{{ url_for('camera_admin.create_pattern') }}">
-            Add camera pattern
-          </a>
-          <form
-            method="post"
-            action="{{ url_for('camera_admin.import_csv') }}"
-            enctype="multipart/form-data"
-            style="display: inline-flex; align-items: center; gap: 0.5rem;"
-          >
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <label style="font-size: 0.85rem;">
-              Import CSV
-              <input type="file" name="file" accept=".csv" required />
-            </label>
-            <label style="font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.25rem;">
-              <input type="checkbox" name="clear_existing" value="1" />
-              Replace existing
-            </label>
-            <button type="submit" class="pv-button-secondary">Upload</button>
-          </form>
-        </div>
 
         {% if patterns %}
           <div class="pv-table-wrap">
@@ -76,7 +77,7 @@
                     <td>
                       <code>{{ p.rtsp_url_pattern }}</code>
                     </td>
-                    <td style="min-width: 14rem;">
+                    <td class="pv-minw-14rem">
                       {% if p.streams_raw %}
                         <div><strong>Streams:</strong> {{ p.streams_raw }}</div>
                       {% endif %}
@@ -90,7 +91,7 @@
                         </div>
                       {% endif %}
                     </td>
-                    <td style="min-width: 14rem;">
+                    <td class="pv-minw-14rem">
                       {% if p.default_port is not none %}
                         <div><strong>Port:</strong> {{ p.default_port }}</div>
                       {% endif %}
@@ -107,24 +108,26 @@
                         <div>Digest auth supported</div>
                       {% endif %}
                       {% if p.manual_url %}
-                        <div style="max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <div class="pv-ellipsis-cell pv-ellipsis-320">
                           <code>{{ p.manual_url }}</code>
                         </div>
                       {% endif %}
                     </td>
                     <td>{{ 'Yes' if p.is_active else 'No' }}</td>
-                    <td style="white-space: nowrap;">
-                      <a href="{{ url_for('camera_admin.edit_pattern', pattern_id=p.id) }}" class="pv-link-muted">Edit</a>
-                      <form
-                        method="post"
-                        action="{{ url_for('camera_admin.delete_pattern', pattern_id=p.id) }}"
-                        style="display: inline; margin-left: 0.5rem;"
-                      >
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <button type="submit" class="pv-link-danger">
-                          Delete
-                        </button>
-                      </form>
+                    <td class="pv-nowrap">
+                      <span class="pv-row-actions">
+                        <a href="{{ url_for('camera_admin.edit_pattern', pattern_id=p.id) }}" class="pv-link-muted">Edit</a>
+                        <form
+                          method="post"
+                          action="{{ url_for('camera_admin.delete_pattern', pattern_id=p.id) }}"
+                          class="pv-inline-form"
+                        >
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                          <button type="submit" class="pv-link-danger">
+                            Delete
+                          </button>
+                        </form>
+                      </span>
                     </td>
                   </tr>
                 {% endfor %}
@@ -132,7 +135,20 @@
             </table>
           </div>
         {% else %}
-          <p>No camera URL patterns found.</p>
+          <div class="pv-empty">
+            <img
+              class="pv-empty-icon"
+              src="{{ url_for('static', filename='img/empty-camera.png') }}"
+              alt=""
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+            <p class="pv-empty-title">No camera URL patterns found</p>
+            <p class="pv-empty-subtitle">Add a template to auto-build RTSP URLs for your camera models.</p>
+            <div class="pv-empty-actions">
+              <a class="pv-button" href="{{ url_for('camera_admin.create_pattern') }}">Add camera pattern</a>
+            </div>
+          </div>
         {% endif %}
       </div>
     </div>

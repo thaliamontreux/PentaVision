@@ -7,11 +7,15 @@
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
-        <h1>Scan for Network Cameras</h1>
-        <p class="pv-card-subtitle" style="margin-bottom: 1rem;">
-          Enter a network to scan for RTSP-compatible cameras. Discovered cameras will be
-          added automatically with generic names (CAM1, CAM2, ...).
-        </p>
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Scan for Network Cameras</h1>
+            <p class="pv-page-subtitle">
+              Enter a network to scan for RTSP-compatible cameras. Discovered cameras will be
+              added automatically with generic names (CAM1, CAM2, ...).
+            </p>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error">
@@ -65,7 +69,7 @@
           value="{{ form.extra_ports }}"
           placeholder="8554, 8555"
         />
-        <p style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">
+        <p class="pv-text-xs pv-text-muted pv-mt-1">
           Default RTSP ports 554 and 8554 are always scanned.
         </p>
       </div>
@@ -74,16 +78,15 @@
       <button
         type="button"
         id="cancel-scan-btn"
-        class="pv-button-secondary"
-        style="margin-left: 0.5rem; display: none;"
+        class="pv-button-secondary pv-ml-2 pv-hidden"
       >
         Cancel scan
       </button>
         </form>
 
-        <div style="margin-top: 1.5rem;">
+        <div class="pv-mt-3">
           <h2>Scan progress</h2>
-          <div class="pv-table-wrap" style="margin-top: 0.5rem;">
+          <div class="pv-table-wrap pv-table-wrap-spaced">
             <table class="pv-table">
               <thead>
                 <tr>
@@ -98,12 +101,11 @@
           </div>
           <div
             id="scan-summary"
-            class="pv-alert pv-alert-success"
-            style="display: none; margin-top: 0.75rem;"
+            class="pv-alert pv-alert-success pv-hidden pv-mt-3"
           ></div>
         </div>
 
-        <div id="scan-results" style="margin-top: 1.25rem;"></div>
+        <div id="scan-results" class="pv-mt-3"></div>
 
         <script>
     (function () {
@@ -173,10 +175,10 @@
           var status = ev2.status || 'running';
           if (status === 'success') {
             resultTd.textContent = '\u2713';
-            resultTd.style.color = '#16a34a';
+            resultTd.className = 'pv-text-success';
           } else if (status === 'failed') {
             resultTd.textContent = '\u2717';
-            resultTd.style.color = '#dc2626';
+            resultTd.className = 'pv-text-danger';
           } else {
             resultTd.textContent = '...';
           }
@@ -190,7 +192,7 @@
             clearInterval(pollTimer);
             pollTimer = null;
           }
-          summaryEl.style.display = 'block';
+          summaryEl.classList.remove('pv-hidden');
           var parts = [];
           if (job.status === 'completed') {
             if (job.results && job.results.length) {
@@ -231,11 +233,11 @@
           }
           if (cancelButton) {
             cancelButton.disabled = true;
-            cancelButton.style.display = 'none';
+            cancelButton.classList.add('pv-hidden');
           }
           currentJobId = null;
         } else if (job.status === 'cancelling') {
-          summaryEl.style.display = 'block';
+          summaryEl.classList.remove('pv-hidden');
           if (!summaryEl.innerHTML && !summaryEl.textContent) {
             summaryEl.textContent = 'Cancelling scan...';
           }
@@ -266,7 +268,7 @@
 
       form.addEventListener('submit', function (ev) {
         ev.preventDefault();
-        summaryEl.style.display = 'none';
+        summaryEl.classList.add('pv-hidden');
         summaryEl.textContent = '';
         summaryEl.innerHTML = '';
         progressBody.innerHTML = '';
@@ -280,7 +282,7 @@
           startButton.disabled = true;
         }
         if (cancelButton) {
-          cancelButton.style.display = 'inline-block';
+          cancelButton.classList.remove('pv-hidden');
           cancelButton.disabled = false;
         }
 
@@ -316,7 +318,7 @@
             pollTimer = setInterval(pollStatus, 1000);
           })
           .catch(function (err) {
-            summaryEl.style.display = 'block';
+            summaryEl.classList.remove('pv-hidden');
             summaryEl.textContent = err.message || 'Unable to start scan.';
           });
       });
@@ -349,7 +351,7 @@
               return resp.json();
             })
             .then(function () {
-              summaryEl.style.display = 'block';
+              summaryEl.classList.remove('pv-hidden');
               if (!summaryEl.innerHTML && !summaryEl.textContent) {
                 summaryEl.textContent = 'Cancelling scan...';
               }

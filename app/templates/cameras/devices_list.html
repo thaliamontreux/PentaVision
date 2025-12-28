@@ -7,25 +7,22 @@
     <div class="pv-admin-layout">
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
-        <div class="pv-card">
-          <div class="pv-card-header">
-            <div>
-              <h1 class="pv-page-title">Installed Cameras</h1>
-              <p class="pv-card-subtitle">Configure individual cameras using the URL templates defined in the Camera URL Patterns list.</p>
-            </div>
-            <div class="pv-admin-actions">
-              <a class="pv-button-primary" href="{{ url_for('camera_admin.create_device') }}">
-                Add camera
-              </a>
-              <a
-                class="pv-button-secondary"
-                href="{{ url_for('camera_admin.scan') }}"
-                onclick="window.open(this.href, 'pvScan', 'width=960,height=720,resizable=yes,scrollbars=yes'); return false;"
-              >
-                Scan network
-              </a>
-            </div>
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">Installed Cameras</h1>
+            <p class="pv-page-subtitle">Configure individual cameras using the URL templates defined in the Camera URL Patterns list.</p>
           </div>
+          <div class="pv-page-actions">
+            <a class="pv-button-primary" href="{{ url_for('camera_admin.create_device') }}">Add camera</a>
+            <a
+              class="pv-button-secondary"
+              href="{{ url_for('camera_admin.scan') }}"
+              onclick="window.open(this.href, 'pvScan', 'width=960,height=720,resizable=yes,scrollbars=yes'); return false;"
+            >
+              Scan network
+            </a>
+          </div>
+        </div>
 
         {% if errors %}
           <div class="pv-alert pv-alert-error">
@@ -111,7 +108,7 @@
                       <form
                         method="post"
                         action="{{ url_for('camera_admin.delete_device', device_id=d.id) }}"
-                        style="display: inline;"
+                        class="pv-inline-form"
                       >
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <button type="submit" class="pv-link-danger">
@@ -126,9 +123,21 @@
             </table>
           </div>
         {% else %}
-          <p class="pv-empty-state">No cameras configured yet.</p>
+          <div class="pv-empty">
+            <img
+              class="pv-empty-icon"
+              src="{{ url_for('static', filename='img/empty-camera.png') }}"
+              alt=""
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+            <p class="pv-empty-title">No cameras configured yet</p>
+            <p class="pv-empty-subtitle">Add a camera to enable live viewing and recording.</p>
+            <div class="pv-empty-actions">
+              <a class="pv-button" href="{{ url_for('camera_admin.create_device') }}">Add camera</a>
+            </div>
+          </div>
         {% endif %}
-        </div>
       </div>
     </div>
   </section>

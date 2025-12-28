@@ -4,8 +4,18 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>DLNA Media</h1>
-    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">DLNA Media</h1>
+            <p class="pv-page-subtitle">Configure whether a camera is exposed as a near-live DLNA media item.</p>
+          </div>
+          <div class="pv-page-actions">
+            <a href="{{ url_for('camera_admin.dlna_media_list') }}" class="pv-button-secondary">Back</a>
+          </div>
+        </div>
 
     {% if errors %}
       <div class="pv-alert pv-alert-error">
@@ -18,7 +28,20 @@
     {% endif %}
 
     {% if not device %}
-      <p>Camera device not found.</p>
+      <div class="pv-empty">
+        <img
+          class="pv-empty-icon"
+          src="{{ url_for('static', filename='img/empty-camera.png') }}"
+          alt=""
+          loading="lazy"
+          onerror="this.style.display='none'"
+        />
+        <p class="pv-empty-title">Camera device not found</p>
+        <p class="pv-empty-subtitle">Return to the DLNA Media list to pick an installed camera.</p>
+        <div class="pv-empty-actions">
+          <a href="{{ url_for('camera_admin.dlna_media_list') }}" class="pv-button">Back to DLNA Media</a>
+        </div>
+      </div>
     {% else %}
       <form method="post" class="pv-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
@@ -54,14 +77,16 @@
             </p>
           </div>
 
-          <button type="submit" class="pv-button pv-button-primary">
+          <button type="submit" class="pv-button-primary">
             Save
           </button>
-          <a href="{{ url_for('camera_admin.dlna_media_list') }}" class="pv-button" style="margin-left: 0.5rem;">
+          <a href="{{ url_for('camera_admin.dlna_media_list') }}" class="pv-button-secondary pv-ml-2">
             Cancel
           </a>
         </div>
       </form>
     {% endif %}
+      </div>
+    </div>
   </section>
 {% endblock %}

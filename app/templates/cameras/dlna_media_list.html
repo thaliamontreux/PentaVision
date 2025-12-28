@@ -4,8 +4,15 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>DLNA Media</h1>
-    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">DLNA Media</h1>
+            <p class="pv-page-subtitle">Expose cameras as near-live DLNA media items.</p>
+          </div>
+        </div>
 
     {% if errors %}
       <div class="pv-alert pv-alert-error">
@@ -17,9 +24,9 @@
       </div>
     {% endif %}
 
-    {% if devices %}
-      <div class="pv-table-wrap">
-        <table class="pv-table">
+        {% if devices %}
+          <div class="pv-table-wrap">
+            <table class="pv-table">
           <thead>
             <tr>
               <th>Camera</th>
@@ -60,23 +67,38 @@
                     —
                   {% endif %}
                 </td>
-                <td style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <td class="pv-ellipsis-cell pv-ellipsis-260">
                   {% if media and media.last_error %}
                     {{ media.last_error }}
                   {% else %}
                     None
                   {% endif %}
                 </td>
-                <td style="white-space: nowrap;">
+                <td class="pv-nowrap">
                   <a href="{{ url_for('camera_admin.dlna_media_edit', device_id=d.id) }}" class="pv-link-muted">Edit</a>
                 </td>
               </tr>
             {% endfor %}
           </tbody>
-        </table>
+            </table>
+          </div>
+        {% else %}
+          <div class="pv-empty">
+            <img
+              class="pv-empty-icon"
+              src="{{ url_for('static', filename='img/empty-camera.png') }}"
+              alt=""
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+            <p class="pv-empty-title">No cameras configured yet</p>
+            <p class="pv-empty-subtitle">Add cameras first, then enable DLNA per camera.</p>
+            <div class="pv-empty-actions">
+              <a class="pv-button" href="{{ url_for('camera_admin.create_device') }}">Add camera</a>
+            </div>
+          </div>
+        {% endif %}
       </div>
-    {% else %}
-      <p>No cameras configured yet.</p>
-    {% endif %}
+    </div>
   </section>
 {% endblock %}

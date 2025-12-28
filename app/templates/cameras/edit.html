@@ -4,15 +4,24 @@
 
 {% block content %}
   <section class="pv-section">
-    <h1>
-      {% if is_edit %}
-        Edit Camera URL Pattern
-      {% else %}
-        New Camera URL Pattern
-      {% endif %}
-    </h1>
-
-    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-layout">
+      {% include 'admin/_nav.html' %}
+      <div class="pv-admin-main">
+        <div class="pv-page-header">
+          <div>
+            <h1 class="pv-page-title">
+              {% if is_edit %}
+                Edit Camera URL Pattern
+              {% else %}
+                New Camera URL Pattern
+              {% endif %}
+            </h1>
+            <p class="pv-page-subtitle">Define templates that auto-build camera URLs based on model and OUI/MAC prefixes.</p>
+          </div>
+          <div class="pv-page-actions">
+            <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-button-secondary">Back</a>
+          </div>
+        </div>
 
     {% if errors %}
       <div class="pv-alert pv-alert-error">
@@ -118,7 +127,7 @@
           <textarea
             id="oui_regex_lines"
             rows="4"
-            style="width: 100%; resize: vertical;"
+            class="pv-resize-vertical"
           ></textarea>
           <input
             id="oui_regex"
@@ -213,7 +222,7 @@
             When enabled and the camera has a username/password configured, they
             will be embedded into the RTSP URL as <code>username:password@</code>.
           </p>
-          <label style="margin-top: 0.25rem; display: block;">
+          <label class="pv-block pv-mt-1 pv-text-sm">
             <input
               type="checkbox"
               name="digest_auth_supported"
@@ -226,8 +235,8 @@
 
         <div class="pv-field-group">
           <label for="default_username">Default credentials</label>
-          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-            <div style="flex: 1 1 10rem;">
+          <div class="pv-flex-row">
+            <div class="pv-flex-1-10rem">
               <input
                 id="default_username"
                 name="default_username"
@@ -236,7 +245,7 @@
                 value="{{ form.default_username }}"
               />
             </div>
-            <div style="flex: 1 1 10rem;">
+            <div class="pv-flex-1-10rem">
               <input
                 id="default_password"
                 name="default_password"
@@ -277,6 +286,7 @@
             Create pattern
           {% endif %}
         </button>
+        <a href="{{ url_for('camera_admin.list_patterns') }}" class="pv-button-secondary pv-ml-2">Cancel</a>
         <script>
           (function () {
             var form = document.querySelector('.pv-form');
@@ -321,5 +331,7 @@
     {% else %}
       <p>Nothing to edit.</p>
     {% endif %}
+      </div>
+    </div>
   </section>
 {% endblock %}
