@@ -2834,26 +2834,64 @@ def recording_detail(recording_id: int):
             "recording_detail.html",
             recording=None,
             device=None,
+            next_recording_id=None,
+            prev_recording_id=None,
+            autoplay=False,
         ), 500
+
+    # Get autoplay preference from query string
+    autoplay = (request.args.get("autoplay") or "").lower() in ("1", "true", "on")
 
     with Session(record_engine) as session_db:
         CameraRecording.__table__.create(bind=record_engine, checkfirst=True)
         recording = session_db.get(CameraRecording, recording_id)
         device = None
-        if recording is not None and recording.device_id is not None:
-            device = session_db.get(CameraDevice, recording.device_id)
+        next_recording_id = None
+        prev_recording_id = None
+
+        if recording is not None:
+            if recording.device_id is not None:
+                device = session_db.get(CameraDevice, recording.device_id)
+
+            # Find next recording (same camera, created after this one, oldest first)
+            next_rec = (
+                session_db.query(CameraRecording)
+                .filter(CameraRecording.device_id == recording.device_id)
+                .filter(CameraRecording.created_at > recording.created_at)
+                .order_by(CameraRecording.created_at.asc())
+                .first()
+            )
+            if next_rec:
+                next_recording_id = next_rec.id
+
+            # Find previous recording (same camera, created before this one, newest first)
+            prev_rec = (
+                session_db.query(CameraRecording)
+                .filter(CameraRecording.device_id == recording.device_id)
+                .filter(CameraRecording.created_at < recording.created_at)
+                .order_by(CameraRecording.created_at.desc())
+                .first()
+            )
+            if prev_rec:
+                prev_recording_id = prev_rec.id
 
     if recording is None:
         return render_template(
             "recording_detail.html",
             recording=None,
             device=None,
+            next_recording_id=None,
+            prev_recording_id=None,
+            autoplay=False,
         ), 404
 
     return render_template(
         "recording_detail.html",
         recording=recording,
         device=device,
+        next_recording_id=next_recording_id,
+        prev_recording_id=prev_recording_id,
+        autoplay=autoplay,
     )
 
 

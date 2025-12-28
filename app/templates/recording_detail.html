@@ -110,6 +110,38 @@
           </video>
           <canvas id="rec-overlay" class="pv-video-overlay"></canvas>
         </div>
+        <div class="pv-player-controls">
+          <div class="pv-player-nav">
+            {% if prev_recording_id %}
+              <a href="{{ url_for('main.recording_detail', recording_id=prev_recording_id, autoplay=1) }}" class="pv-player-nav-btn" title="Previous recording">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                Previous
+              </a>
+            {% else %}
+              <span class="pv-player-nav-btn pv-player-nav-disabled">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                Previous
+              </span>
+            {% endif %}
+
+            <label class="pv-player-autoplay-toggle">
+              <input type="checkbox" id="autoplay-toggle" {% if autoplay %}checked{% endif %}>
+              <span class="pv-player-autoplay-label">Auto-play next</span>
+            </label>
+
+            {% if next_recording_id %}
+              <a href="{{ url_for('main.recording_detail', recording_id=next_recording_id, autoplay=1) }}" class="pv-player-nav-btn" id="next-btn" title="Next recording">
+                Next
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              </a>
+            {% else %}
+              <span class="pv-player-nav-btn pv-player-nav-disabled">
+                Next
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              </span>
+            {% endif %}
+          </div>
+        </div>
       </div>
       <div class="pv-player-sidebar">
         <div class="pv-player-info-card">
@@ -159,6 +191,36 @@
       var canvas = document.getElementById('rec-canvas');
       var outputEl = document.getElementById('rec-output');
       var analyzeBtn = document.getElementById('rec-analyze-btn');
+      var autoplayToggle = document.getElementById('autoplay-toggle');
+      var nextBtn = document.getElementById('next-btn');
+
+      // Auto-play next recording when current ends
+      if (video && autoplayToggle && nextBtn) {
+        video.addEventListener('ended', function () {
+          if (autoplayToggle.checked) {
+            // Navigate to next recording with autoplay enabled
+            window.location.href = nextBtn.href;
+          }
+        });
+      }
+
+      // Persist autoplay preference in localStorage
+      if (autoplayToggle) {
+        var savedAutoplay = localStorage.getItem('pv_recording_autoplay');
+        if (savedAutoplay === 'true') {
+          autoplayToggle.checked = true;
+        } else if (savedAutoplay === 'false') {
+          autoplayToggle.checked = false;
+        }
+        // If URL has autoplay=1, override
+        if (window.location.search.indexOf('autoplay=1') !== -1) {
+          autoplayToggle.checked = true;
+        }
+
+        autoplayToggle.addEventListener('change', function () {
+          localStorage.setItem('pv_recording_autoplay', autoplayToggle.checked ? 'true' : 'false');
+        });
+      }
 
       function setOutput(value) {
         if (!outputEl) return;
