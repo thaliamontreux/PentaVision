@@ -4,6 +4,7 @@ import io
 import hashlib
 import json
 import os
+import shutil
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -36,6 +37,22 @@ from .storage_csal import StorageError, get_storage_router
 
 
 def storage_settings_page():
+    def _format_bytes(value: int | None) -> str:
+        if value is None:
+            return "n/a"
+        try:
+            v = float(value)
+        except Exception:
+            return "n/a"
+        units = ["B", "KB", "MB", "GB", "TB", "PB"]
+        idx = 0
+        while v >= 1024.0 and idx < len(units) - 1:
+            v /= 1024.0
+            idx += 1
+        if idx >= 3:
+            return f"{v:.1f} {units[idx]}"
+        return f"{v:.0f} {units[idx]}"
+
     user = get_current_user()
     if user is None:
         next_url = request.path or url_for("main.index")
@@ -365,11 +382,26 @@ def storage_settings_page():
                                     }
 
                             if _wants_json():
+                                ok_val = (
+                                    bool(module_test_result.get("ok"))
+                                    if isinstance(module_test_result, dict)
+                                    else False
+                                )
+                                name_val = (
+                                    str(module_test_result.get("module_name") or "")
+                                    if isinstance(module_test_result, dict)
+                                    else ""
+                                )
+                                msg_val = (
+                                    str(module_test_result.get("message") or "")
+                                    if isinstance(module_test_result, dict)
+                                    else ""
+                                )
                                 return jsonify(
                                     {
-                                        "ok": bool(module_test_result.get("ok")) if isinstance(module_test_result, dict) else False,
-                                        "module_name": str(module_test_result.get("module_name") or "") if isinstance(module_test_result, dict) else "",
-                                        "message": str(module_test_result.get("message") or "") if isinstance(module_test_result, dict) else "",
+                                        "ok": ok_val,
+                                        "module_name": name_val,
+                                        "message": msg_val,
                                     }
                                 )
 
@@ -548,11 +580,26 @@ def storage_settings_page():
                                         pass
 
                             if _wants_json():
+                                ok_val = (
+                                    bool(module_test_result.get("ok"))
+                                    if isinstance(module_test_result, dict)
+                                    else False
+                                )
+                                name_val = (
+                                    str(module_test_result.get("module_name") or "")
+                                    if isinstance(module_test_result, dict)
+                                    else name
+                                )
+                                msg_val = (
+                                    str(module_test_result.get("message") or "")
+                                    if isinstance(module_test_result, dict)
+                                    else ""
+                                )
                                 return jsonify(
                                     {
-                                        "ok": bool(module_test_result.get("ok")) if isinstance(module_test_result, dict) else False,
-                                        "module_name": str(module_test_result.get("module_name") or "") if isinstance(module_test_result, dict) else name,
-                                        "message": str(module_test_result.get("message") or "") if isinstance(module_test_result, dict) else "",
+                                        "ok": ok_val,
+                                        "module_name": name_val,
+                                        "message": msg_val,
                                         "module_test_ready": bool(module_test_ready),
                                         "wizard_step": int(wizard_step or 3),
                                         "fingerprint": str(fp or ""),
@@ -797,9 +844,13 @@ def storage_settings_page():
                                         .scalar()
                                         or 0
                                     )
-                                    if (int(active_streams) > 0 or int(any_segments) > 0) and force_delete != "1":
+                                    if (
+                                        int(active_streams) > 0
+                                        or int(any_segments) > 0
+                                    ) and force_delete != "1":
                                         errors.append(
-                                            "This module has existing recordings or active streams. Tick 'Force delete' and submit again to confirm."
+                                            "This module has existing recordings or active streams. "
+                                            "Tick 'Force delete' and submit again to confirm."
                                         )
                                         module = None
 
@@ -834,7 +885,10 @@ def storage_settings_page():
                                         )
                                         if int(active_streams) > 0 and force_disable != "1":
                                             errors.append(
-                                                "This module has active streams. Tick 'Force disable' and submit again to confirm."
+                                                (
+                                                    "This module has active streams. "
+                                                    "Tick 'Force disable' and submit again to confirm."
+                                                )
                                             )
                                             module = None
                                 if module is not None:
@@ -880,11 +934,26 @@ def storage_settings_page():
                                     }
 
                             if _wants_json():
+                                ok_val = (
+                                    bool(module_test_result.get("ok"))
+                                    if isinstance(module_test_result, dict)
+                                    else False
+                                )
+                                name_val = (
+                                    str(module_test_result.get("module_name") or "")
+                                    if isinstance(module_test_result, dict)
+                                    else ""
+                                )
+                                msg_val = (
+                                    str(module_test_result.get("message") or "")
+                                    if isinstance(module_test_result, dict)
+                                    else ""
+                                )
                                 return jsonify(
                                     {
-                                        "ok": bool(module_test_result.get("ok")) if isinstance(module_test_result, dict) else False,
-                                        "module_name": str(module_test_result.get("module_name") or "") if isinstance(module_test_result, dict) else "",
-                                        "message": str(module_test_result.get("message") or "") if isinstance(module_test_result, dict) else "",
+                                        "ok": ok_val,
+                                        "module_name": name_val,
+                                        "message": msg_val,
                                     }
                                 )
 
@@ -1246,6 +1315,31 @@ def storage_settings_page():
             )
             writes_15m = int(recent_ok[0] or 0) if recent_ok else 0
             bytes_15m = int(recent_ok[1] or 0) if recent_ok else 0
+            bytes_15m_text = _format_bytes(bytes_15m)
+
+            stored_total_bytes = 0
+            stored_total_text = "0 B"
+            try:
+                stored_total_bytes = int(
+                    (
+                        session_db.query(
+                            func.coalesce(
+                                func.sum(StorageModuleWriteStat.bytes_written),
+                                0,
+                            )
+                        )
+                        .filter(
+                            StorageModuleWriteStat.module_name
+                            == selected_module_name,
+                            StorageModuleWriteStat.ok == 1,
+                        )
+                        .scalar()
+                    )
+                    or 0
+                )
+            except Exception:
+                stored_total_bytes = 0
+            stored_total_text = _format_bytes(stored_total_bytes)
 
             recent_error_rows = (
                 session_db.query(StorageModuleEvent)
@@ -1265,9 +1359,47 @@ def storage_settings_page():
                 .all()
             )
 
+            usage_total_bytes: int | None = None
+            usage_used_bytes: int | None = None
+            usage_pct: int | None = None
+            usage_used_text = "n/a"
+            usage_total_text = "n/a"
+            try:
+                provider_type = str(getattr(edit_module, "provider_type", "") or "").strip().lower()
+            except Exception:
+                provider_type = ""
+
+            if provider_type in {"local_fs", "local_drive"}:
+                cfg = edit_module_config if isinstance(edit_module_config, dict) else {}
+                base_dir = (
+                    str(cfg.get("base_dir") or "").strip()
+                    or str(cfg.get("local_drive_path") or "").strip()
+                    or current_app.config.get("LOCAL_STORAGE_PATH")
+                    or current_app.config.get("RECORDING_BASE_DIR")
+                    or os.path.join(current_app.instance_path, "recordings")
+                )
+                if base_dir:
+                    try:
+                        du = shutil.disk_usage(base_dir)
+                        usage_total_bytes = int(getattr(du, "total", 0) or 0) or None
+                        usage_used_bytes = int(getattr(du, "used", 0) or 0) or None
+                        if usage_total_bytes:
+                            usage_pct = int(round((float(usage_used_bytes or 0) / float(usage_total_bytes)) * 100.0))
+                        usage_used_text = _format_bytes(usage_used_bytes)
+                        usage_total_text = _format_bytes(usage_total_bytes)
+                    except Exception:
+                        pass
+
             selected_metrics = {
                 "last_write_text": last_write_text,
                 "active_streams": int(active_streams),
+                "usage_total_bytes": usage_total_bytes,
+                "usage_used_bytes": usage_used_bytes,
+                "usage_pct": usage_pct,
+                "usage_used_text": usage_used_text,
+                "usage_total_text": usage_total_text,
+                "stored_total_bytes": stored_total_bytes,
+                "stored_total_text": stored_total_text,
                 "last_ok_text": (
                     str(last_ok_row.created_at)
                     if (
@@ -1290,6 +1422,7 @@ def storage_settings_page():
                 ),
                 "writes_15m": writes_15m,
                 "bytes_15m": bytes_15m,
+                "bytes_15m_text": bytes_15m_text,
             }
 
             streams_rows = (

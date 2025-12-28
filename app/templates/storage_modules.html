@@ -7,7 +7,7 @@
     <div class="pv-storage-header">
       <div>
         <h1 class="pv-page-title">Storage Modules</h1>
-        <p class="pv-page-subtitle">Manage where your RTSP camera recordings are stored.</p>
+        <p class="pv-page-subtitle">Manage where your RTMP streams are stored.</p>
       </div>
       <button type="button" class="pv-storage-add" id="pv-storage-add-btn">+ Add Storage Provider</button>
     </div>
@@ -43,9 +43,9 @@
                   <div class="pv-storage-provider-title">{{ m.label or m.name }}</div>
                   <div class="pv-storage-provider-sub">
                     <span class="pv-storage-dot {% if not m.is_enabled %}is-muted{% elif m.status == 'ok' %}is-ok{% else %}is-warn{% endif %}"></span>
-                    <span class="pv-storage-pill">{{ m.provider_type }}</span>
-                    <span class="pv-storage-pill">P{{ m.priority if m.priority is not none else 100 }}</span>
-                    {% if not m.is_enabled %}<span class="pv-storage-pill is-muted">Disabled</span>{% endif %}
+                    <span class="pv-storage-provider-state">
+                      {% if m.is_enabled %}Active{% else %}Inactive{% endif %}
+                    </span>
                   </div>
                 </div>
               </a>
@@ -71,93 +71,81 @@
 
           <div class="pv-storage-tabpanel is-active" data-panel="overview">
             {% if selected_module %}
-              <div class="pv-card pv-mt-3">
-                <div class="pv-page-header pv-page-header-tight">
-                  <div>
-                    <div class="pv-card-title">{{ selected_module.label or selected_module.name }}</div>
-                    <div class="pv-card-subtitle">
-                      <span class="pv-storage-pill">{{ selected_module.provider_type }}</span>
-                      <span class="pv-storage-pill {% if not selected_module.is_enabled %}is-muted{% elif selected_module.status == 'ok' %}is-ok{% else %}is-warn{% endif %}">
-                        {% if not selected_module.is_enabled %}Disabled{% elif selected_module.status == 'ok' %}Healthy{% else %}{{ selected_module.status or 'Unknown' }}{% endif %}
-                      </span>
-                      <span class="pv-opacity-80">·</span>
-                      <span>Name: <code>{{ selected_module.name }}</code></span>
+              {% set storage_health = ( 'Disabled' if not selected_module.is_enabled else ('Healthy' if selected_module.status == 'ok' else (selected_module.status or 'Unknown')) ) %}
+
+              <div class="pv-storage-overview-layout">
+                <div class="pv-storage-overview-card">
+                  <div class="pv-storage-overview-card-title">Health</div>
+                  <div class="pv-storage-overview-healthline">
+                    <span class="pv-storage-dot {% if not selected_module.is_enabled %}is-muted{% elif selected_module.status == 'ok' %}is-ok{% else %}is-warn{% endif %}"></span>
+                    <span>{{ storage_health }}</span>
+                  </div>
+                  {% set usage_pct = (selected_metrics.usage_pct if selected_metrics and selected_metrics.usage_pct is not none else None) %}
+                  {% set stored_total = (selected_metrics.stored_total_text if selected_metrics and selected_metrics.stored_total_text else 'n/a') %}
+                  <div class="pv-storage-overview-usage">
+                    {% if usage_pct is not none %}
+                      {{ usage_pct }}% Usage
+                    {% elif stored_total != 'n/a' %}
+                      {{ stored_total }} Stored
+                    {% else %}
+                      Usage n/a
+                    {% endif %}
+                  </div>
+                  <div class="pv-storage-overview-stats">
+                    <div class="pv-storage-overview-stat">
+                      {% if usage_pct is not none %}Used{% else %}Stored (lifetime){% endif %}
+                      <strong>
+                        {% if usage_pct is not none %}
+                          {{ selected_metrics.usage_used_text if selected_metrics else 'n/a' }}
+                        {% else %}
+                          {{ stored_total }}
+                        {% endif %}
+                      </strong>
+                    </div>
+                    <div class="pv-storage-overview-stat">
+                      {% if usage_pct is not none %}Total{% else %}Written (15m){% endif %}
+                      <strong>
+                        {% if usage_pct is not none %}
+                          {{ selected_metrics.usage_total_text if selected_metrics else 'n/a' }}
+                        {% else %}
+                          {{ selected_metrics.bytes_15m_text if selected_metrics else '0 B' }}
+                        {% endif %}
+                      </strong>
+                    </div>
+                    <div class="pv-storage-overview-stat">
+                      Last write
+                      <strong>{{ selected_metrics.last_write_text if selected_metrics else 'n/a' }}</strong>
+                    </div>
+                    <div class="pv-storage-overview-stat">
+                      Active streams
+                      <strong>{{ selected_metrics.active_streams if selected_metrics else 0 }}</strong>
                     </div>
                   </div>
-                  <div class="pv-page-actions">
-                    <form method="post" class="pv-inline-form pv-module-test-form">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="module_test" />
-                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
-                      <button type="submit" class="pv-button-secondary">Test</button>
-                    </form>
+                </div>
 
-                    <form method="post" class="pv-inline-form">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="module_toggle" />
-                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
-                      <input type="hidden" name="enable" value="{% if selected_module.is_enabled %}0{% else %}1{% endif %}" />
-                      {% if selected_module.is_enabled and selected_metrics and selected_metrics.active_streams|int > 0 %}
-                        <label class="pv-inline-check">
-                          <input type="checkbox" name="force_disable" value="1" />
-                          <span>Force disable</span>
-                        </label>
-                      {% endif %}
-                      <button type="submit" class="pv-button-secondary">{% if selected_module.is_enabled %}Disable{% else %}Enable{% endif %}</button>
-                    </form>
-
-                    <form method="post" class="pv-inline-form" onsubmit="return confirm('Clone this module? The clone will be created disabled.');">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="module_clone" />
-                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
-                      <input type="hidden" name="clone_name" value="{{ selected_module.name }}-copy" />
-                      <button type="submit" class="pv-button-secondary">Clone</button>
-                    </form>
-
-                    <form method="post" class="pv-inline-form" onsubmit="return confirm('Delete this module? This cannot be undone.');">
-                      <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
-                      <input type="hidden" name="action" value="module_delete" />
-                      <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
-                      <label class="pv-inline-check">
-                        <input type="checkbox" name="force_delete" value="1" />
-                        <span>Force delete</span>
-                      </label>
-                      <button type="submit" class="pv-button-secondary">Delete</button>
-                    </form>
+                <div class="pv-storage-overview-card">
+                  <div class="pv-storage-overview-card-title">Configuration</div>
+                  <div class="pv-storage-overview-form">
+                    <div class="pv-field-group">
+                      <label>Provider</label>
+                      <select disabled>
+                        <option>{{ selected_module.provider_type }}</option>
+                      </select>
+                    </div>
+                    <div class="pv-field-group">
+                      <label>Credentials</label>
+                      <input type="text" value="" placeholder="Configured in Configuration tab" disabled />
+                    </div>
+                    <div class="pv-storage-overview-actions">
+                      <form method="post" class="pv-inline-form pv-module-test-form">
+                        <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                        <input type="hidden" name="action" value="module_test" />
+                        <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                        <button type="submit" class="pv-button-secondary">Test Connection</button>
+                      </form>
+                      <button type="button" class="pv-storage-save" disabled>Save</button>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              <div class="pv-storage-overview-grid">
-                <div class="pv-storage-metric">
-                  <div class="pv-storage-metric-title">Health</div>
-                  <div class="pv-storage-metric-value">{% if not selected_module.is_enabled %}Disabled{% elif selected_module.status == 'ok' %}Healthy{% else %}{{ selected_module.status or 'Unknown' }}{% endif %}</div>
-                  <div class="pv-storage-metric-sub">{{ selected_module.status_message or 'No recent status.' }}</div>
-                </div>
-                <div class="pv-storage-metric">
-                  <div class="pv-storage-metric-title">Last write</div>
-                  <div class="pv-storage-metric-value">{{ selected_metrics.last_write_text if selected_metrics else 'n/a' }}</div>
-                  <div class="pv-storage-metric-sub">Provider: <code>{{ selected_module.name }}</code></div>
-                </div>
-                <div class="pv-storage-metric">
-                  <div class="pv-storage-metric-title">Active streams</div>
-                  <div class="pv-storage-metric-value">{{ selected_metrics.active_streams if selected_metrics else 0 }}</div>
-                  <div class="pv-storage-metric-sub">Based on recent segments.</div>
-                </div>
-                <div class="pv-storage-metric">
-                  <div class="pv-storage-metric-title">Last successful write</div>
-                  <div class="pv-storage-metric-value">{{ selected_metrics.last_ok_text if selected_metrics else 'n/a' }}</div>
-                  <div class="pv-storage-metric-sub">From write stats.</div>
-                </div>
-                <div class="pv-storage-metric">
-                  <div class="pv-storage-metric-title">Last error</div>
-                  <div class="pv-storage-metric-value">{{ selected_metrics.last_error_text if selected_metrics else 'n/a' }}</div>
-                  <div class="pv-storage-metric-sub">{{ selected_metrics.last_error_message if selected_metrics and selected_metrics.last_error_message else 'No recent errors.' }}</div>
-                </div>
-                <div class="pv-storage-metric">
-                  <div class="pv-storage-metric-title">Write volume (15m)</div>
-                  <div class="pv-storage-metric-value">{{ selected_metrics.writes_15m if selected_metrics else 0 }}</div>
-                  <div class="pv-storage-metric-sub">Bytes: {{ selected_metrics.bytes_15m if selected_metrics else 0 }}</div>
                 </div>
               </div>
 
@@ -404,10 +392,53 @@
           </div>
 
           <div class="pv-storage-tabpanel" data-panel="advanced">
-            <div class="pv-card pv-mt-3">
-              <div class="pv-card-title">Advanced</div>
-              <div class="pv-card-subtitle">Advanced settings will live here.</div>
-            </div>
+            {% if selected_module %}
+              {% set adv_readonly = (selected_module and selected_metrics and selected_metrics.active_streams|int > 0) %}
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Module Actions</div>
+                <div class="pv-card-subtitle">Operational controls for this provider.</div>
+
+                <div class="pv-mt-2">
+                  <form method="post" class="pv-inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                    <input type="hidden" name="action" value="module_toggle" />
+                    <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                    <input type="hidden" name="enable" value="{% if selected_module.is_enabled %}0{% else %}1{% endif %}" />
+                    {% if selected_module.is_enabled and adv_readonly %}
+                      <label class="pv-inline-check">
+                        <input type="checkbox" name="force_disable" value="1" />
+                        <span>Force disable</span>
+                      </label>
+                    {% endif %}
+                    <button type="submit" class="pv-button-secondary">{% if selected_module.is_enabled %}Disable{% else %}Enable{% endif %}</button>
+                  </form>
+
+                  <form method="post" class="pv-inline-form" onsubmit="return confirm('Clone this module? The clone will be created disabled.');">
+                    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                    <input type="hidden" name="action" value="module_clone" />
+                    <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                    <input type="hidden" name="clone_name" value="{{ selected_module.name }}-copy" />
+                    <button type="submit" class="pv-button-secondary">Clone</button>
+                  </form>
+
+                  <form method="post" class="pv-inline-form" onsubmit="return confirm('Delete this module? This cannot be undone.');">
+                    <input type="hidden" name="csrf_token" value="{{ global_csrf_token }}" />
+                    <input type="hidden" name="action" value="module_delete" />
+                    <input type="hidden" name="module_id" value="{{ selected_module.id }}" />
+                    <label class="pv-inline-check">
+                      <input type="checkbox" name="force_delete" value="1" />
+                      <span>Force delete</span>
+                    </label>
+                    <button type="submit" class="pv-button-secondary">Delete</button>
+                  </form>
+                </div>
+              </div>
+            {% else %}
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Advanced</div>
+                <div class="pv-card-subtitle">Select a module to view advanced actions.</div>
+              </div>
+            {% endif %}
           </div>
         </div>
       </section>

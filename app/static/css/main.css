@@ -1986,6 +1986,9 @@ body {
 .pv-storage-shell {
   background: radial-gradient(circle at top left, rgba(29, 78, 216, 0.55), rgba(2, 6, 23, 1) 55%);
   border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 1.35rem;
+  padding: 1.35rem 1.35rem 1rem;
+  overflow: hidden;
   box-shadow:
     0 28px 60px rgba(0, 0, 0, 0.75),
     0 0 0 1px rgba(250, 250, 250, 0.06);
@@ -2028,23 +2031,34 @@ body {
 
 .pv-storage-grid {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 1.25rem;
   align-items: stretch;
+}
+
+.pv-storage-left-inner,
+.pv-storage-panel {
+  backdrop-filter: blur(12px);
 }
 
 .pv-storage-left-inner {
   max-height: calc(100vh - 320px);
   overflow: auto;
-  padding-right: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 1.25rem;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow:
+    0 22px 50px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .pv-storage-left-controls {
   position: sticky;
   top: 0;
   z-index: 3;
-  padding: 0.25rem 0.25rem 0.75rem;
-  background: linear-gradient(180deg, rgba(2, 6, 23, 0.85), rgba(2, 6, 23, 0.0));
+  padding: 0.2rem 0.2rem 0.6rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.0));
   backdrop-filter: blur(10px);
 }
 
@@ -2073,17 +2087,17 @@ body {
   display: flex;
   gap: 0.85rem;
   align-items: center;
-  padding: 0.75rem 0.85rem;
+  padding: 0.9rem 0.95rem;
   border-radius: 1rem;
   text-decoration: none;
   color: inherit;
-  background: rgba(15, 23, 42, 0.78);
+  background: rgba(2, 6, 23, 0.35);
   border: 1px solid rgba(148, 163, 184, 0.18);
   box-shadow:
     0 16px 35px rgba(0, 0, 0, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
 }
 
 .pv-storage-provider:hover {
@@ -2101,8 +2115,8 @@ body {
 }
 
 .pv-storage-provider-icon {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 0.9rem;
   background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.45), rgba(2, 6, 23, 0.85));
   border: 1px solid rgba(56, 189, 248, 0.22);
@@ -2132,6 +2146,11 @@ body {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+}
+
+.pv-storage-provider-state {
+  font-size: 0.85rem;
+  color: #cbd5f5;
 }
 
 .pv-storage-pill {
@@ -2194,38 +2213,39 @@ body {
 
 .pv-storage-tabs {
   display: flex;
-  gap: 0.25rem;
+  gap: 1.25rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  padding-bottom: 0.5rem;
+  padding: 0.1rem 0.25rem 0.6rem;
   position: sticky;
   top: 0;
   z-index: 2;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.68));
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.62));
   backdrop-filter: blur(10px);
-  border-radius: 1rem;
+  border-radius: 0.85rem;
 }
 
 .pv-storage-tab {
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.75rem;
-  border: 1px solid transparent;
+  padding: 0.6rem 0.1rem;
+  border-radius: 0;
+  border: none;
   background: transparent;
   color: #cbd5f5;
   cursor: pointer;
   font-size: 0.9rem;
+  font-weight: 550;
+  border-bottom: 2px solid transparent;
   transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
 }
 
 .pv-storage-tab:hover {
   color: #e5e7eb;
-  background: rgba(56, 189, 248, 0.08);
+  background: transparent;
   transform: translateY(-1px);
 }
 
 .pv-storage-tab.is-active {
   color: #e0f2fe;
-  border-color: rgba(56, 189, 248, 0.28);
-  background: rgba(56, 189, 248, 0.12);
+  border-bottom-color: rgba(56, 189, 248, 0.85);
 }
 
 .pv-storage-tabpanel {
@@ -2237,9 +2257,87 @@ body {
   display: block;
 }
 
+.pv-storage-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+  align-items: start;
+}
+
+.pv-storage-overview-card {
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 1rem;
+  padding: 1rem 1.05rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.pv-storage-overview-card-title {
+  font-size: 0.95rem;
+  font-weight: 650;
+  margin: 0;
+}
+
+.pv-storage-overview-healthline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.95rem;
+}
+
+.pv-storage-overview-usage {
+  margin-top: 0.75rem;
+  font-size: 2.0rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.pv-storage-overview-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  margin-top: 0.85rem;
+}
+
+.pv-storage-overview-stat {
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.pv-storage-overview-stat strong {
+  display: block;
+  margin-top: 0.2rem;
+  color: #e5e7eb;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.pv-storage-overview-form {
+  margin-top: 0.9rem;
+}
+
+.pv-storage-overview-actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+}
+
+.pv-storage-overview-actions .pv-button-secondary,
+.pv-storage-overview-actions .pv-storage-save {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .pv-storage-overview-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .pv-storage-overview-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
