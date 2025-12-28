@@ -267,6 +267,40 @@
         </p>
       </div>
 
+      <h2>Property tenant databases (optional)</h2>
+      <p style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1rem;">
+        Multi-tenant property databases allow each property to have its own isolated database
+        for property-local users. If left blank, the User DB connection will be used.
+      </p>
+      <div class="pv-field-group">
+        <label for="property_db_app_url">App connection URL</label>
+        <input
+          id="property_db_app_url"
+          name="property_db_app_url"
+          type="text"
+          value="{{ form.property_db_app_url }}"
+          placeholder="mysql+pymysql://app_user:pass@host:3306/placeholder"
+        />
+        <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">
+          Connection URL for app-level access to tenant databases. The database name is
+          replaced per-property (e.g., <code>pv_prop_abc123</code>).
+        </p>
+      </div>
+      <div class="pv-field-group">
+        <label for="property_db_admin_url">Admin connection URL (for auto-provisioning)</label>
+        <input
+          id="property_db_admin_url"
+          name="property_db_admin_url"
+          type="text"
+          value="{{ form.property_db_admin_url }}"
+          placeholder="mysql+pymysql://admin_user:pass@host:3306/mysql"
+        />
+        <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">
+          Admin URL with CREATE DATABASE privileges. Required for automatic tenant database
+          provisioning. If not set, tenant databases must be created manually.
+        </p>
+      </div>
+
       <button type="submit" class="pv-button-primary">Save configuration</button>
       {% if saved and not errors %}
         <p style="margin-top: 0.75rem; font-size: 0.9rem;">

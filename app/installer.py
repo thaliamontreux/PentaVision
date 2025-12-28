@@ -78,6 +78,9 @@ def _load_form_defaults() -> Dict[str, str]:
         "record_db_password": "",
         "record_db_name": "records",
         "record_db_url": cfg.get("RECORD_DB_URL", ""),
+        # Property tenant DB defaults (optional)
+        "property_db_app_url": cfg.get("PROPERTY_DB_APP_URL_BASE", ""),
+        "property_db_admin_url": cfg.get("PROPERTY_DB_ADMIN_URL", ""),
     }
 
     def _apply_from_url(prefix: str, url_key: str, default_db: str) -> None:
@@ -352,6 +355,14 @@ def install():
                 request.form.get(f"{prefix}_db_url") or ""
             ).strip()
 
+        # Property tenant DB fields (optional)
+        form["property_db_app_url"] = (
+            request.form.get("property_db_app_url") or ""
+        ).strip()
+        form["property_db_admin_url"] = (
+            request.form.get("property_db_admin_url") or ""
+        ).strip()
+
         # Build SQLAlchemy URLs from structured fields.
         user_db_url = _build_db_url_from_form(form, "user", "User", errors)
         face_db_url = _build_db_url_from_form(form, "face", "Face", errors)
@@ -378,24 +389,22 @@ def install():
 
                 secret = secrets.token_urlsafe(32)
 
-            _write_env(
-                {
-                    "APP_SECRET_KEY": secret,
-                    "USER_DB_URL": form["user_db_url"],
-                    "FACE_DB_URL": form["face_db_url"],
-                    "RECORD_DB_URL": form["record_db_url"],
-                }
-            )
+            env_vars = {
+                "APP_SECRET_KEY": secret,
+                "USER_DB_URL": form["user_db_url"],
+                "FACE_DB_URL": form["face_db_url"],
+                "RECORD_DB_URL": form["record_db_url"],
+            }
+            # Only write property DB vars if provided
+            if form["property_db_app_url"]:
+                env_vars["PROPERTY_DB_APP_URL_BASE"] = form["property_db_app_url"]
+            if form["property_db_admin_url"]:
+                env_vars["PROPERTY_DB_ADMIN_URL"] = form["property_db_admin_url"]
+
+            _write_env(env_vars)
 
             # Refresh process environment and Flask config for this run
-            os.environ.update(
-                {
-                    "APP_SECRET_KEY": secret,
-                    "USER_DB_URL": form["user_db_url"],
-                    "FACE_DB_URL": form["face_db_url"],
-                    "RECORD_DB_URL": form["record_db_url"],
-                }
-            )
+            os.environ.update(env_vars)
             current_app.config.from_mapping(load_config())
 
             _init_databases(errors)
