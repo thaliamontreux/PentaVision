@@ -74,13 +74,28 @@ def _normalize_property_db_name(property_uid: str) -> str:
     return f"{prefix}{raw}"
 
 
+def _get_property_db_url_base() -> str:
+    """Return the base URL for property tenant databases.
+
+    Falls back to USER_DB_URL if PROPERTY_DB_APP_URL_BASE is not set.
+    """
+    app_url_base = str(current_app.config.get("PROPERTY_DB_APP_URL_BASE") or "").strip()
+    if app_url_base:
+        return app_url_base
+    # Fallback: derive from USER_DB_URL (same server, different database)
+    user_db_url = str(current_app.config.get("USER_DB_URL") or "").strip()
+    if user_db_url:
+        return user_db_url
+    return ""
+
+
 def get_property_engine(property_uid: str) -> Optional[Engine]:
     """Return an engine for the per-property tenant DB.
 
     This will attempt to CREATE DATABASE when configured to do so.
     """
 
-    app_url_base = str(current_app.config.get("PROPERTY_DB_APP_URL_BASE") or "").strip()
+    app_url_base = _get_property_db_url_base()
     if not app_url_base:
         return None
 
@@ -197,11 +212,11 @@ def diagnose_property_engine(property_uid: str) -> str:
     This is used by UI routes to show actionable toasts instead of crashing.
     """
 
-    app_url_base = str(
-        current_app.config.get("PROPERTY_DB_APP_URL_BASE") or ""
-    ).strip()
+    app_url_base = _get_property_db_url_base()
     if not app_url_base:
-        return "Tenant DB is not configured: PROPERTY_DB_APP_URL_BASE is missing."
+        return (
+            "Tenant DB is not configured: set PROPERTY_DB_APP_URL_BASE or USER_DB_URL."
+        )
 
     uid_norm = str(property_uid or "").strip().lower()
     if not uid_norm:

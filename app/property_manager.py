@@ -236,6 +236,21 @@ def index():
             except Exception:  # noqa: BLE001
                 pass
 
+            # Backfill missing UIDs on access
+            try:
+                missing_uid = (
+                    db.query(Property)
+                    .filter(Property.uid == None)  # noqa: E711
+                    .all()
+                )
+                if missing_uid:
+                    for prop in missing_uid:
+                        prop.uid = uuid.uuid4().hex
+                        db.add(prop)
+                    db.commit()
+            except Exception:  # noqa: BLE001
+                pass
+
             can_list_all = False
             if user is not None:
                 can_list_all = bool(
