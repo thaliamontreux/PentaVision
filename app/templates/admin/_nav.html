@@ -39,6 +39,10 @@
     <a class="pv-admin-navbtn" href="{{ url_for('admin.themes') }}">Themes</a>
   {% endif %}
 
+  {% if has_permission('Admin.RBAC.*') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.rbac_management') }}">RBAC</a>
+  {% endif %}
+
   {% if has_permission('Nav.NetSec.BlockAllow.View') %}
     <a class="pv-admin-navbtn" href="{{ url_for('admin.access_control') }}">Block / Allow</a>
   {% endif %}
