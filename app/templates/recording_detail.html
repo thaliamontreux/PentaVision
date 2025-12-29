@@ -44,11 +44,44 @@
             id="rec-video"
             class="pv-video-player"
             controls
+            autoplay
           >
             <source src="{{ url_for('main.download_camera_recording', recording_id=recording.id) }}" type="video/mp4" />
             Your browser does not support the video tag.
           </video>
           <canvas id="rec-overlay" class="pv-video-overlay"></canvas>
+        </div>
+        <div class="pv-player-controls pv-mt-3">
+          <div class="pv-player-nav">
+            {% if prev_recording_id %}
+              <a href="{{ url_for('main.recording_detail', recording_id=prev_recording_id, autoplay=1) }}" class="pv-player-nav-btn" title="Previous recording">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                Previous
+              </a>
+            {% else %}
+              <span class="pv-player-nav-btn pv-player-nav-disabled">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                Previous
+              </span>
+            {% endif %}
+
+            <label class="pv-player-autoplay-toggle">
+              <input type="checkbox" id="autoplay-toggle" {% if autoplay %}checked{% endif %}>
+              <span class="pv-player-autoplay-label">Auto-play next</span>
+            </label>
+
+            {% if next_recording_id %}
+              <a href="{{ url_for('main.recording_detail', recording_id=next_recording_id, autoplay=1) }}" class="pv-player-nav-btn" id="next-btn" title="Next recording">
+                Next
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              </a>
+            {% else %}
+              <span class="pv-player-nav-btn pv-player-nav-disabled">
+                Next
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              </span>
+            {% endif %}
+          </div>
         </div>
         <button
           type="button"
