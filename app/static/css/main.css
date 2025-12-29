@@ -2737,6 +2737,116 @@ body {
   display: none;
 }
 
+/* ===== Property Roles Management ===== */
+.pv-role-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.pv-role-card {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.pv-role-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.pv-role-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.pv-role-card-description {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.pv-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pv-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  transition: background 150ms ease;
+}
+
+.pv-checkbox-label:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.pv-checkbox-label input[type="checkbox"] {
+  margin-top: 0.125rem;
+  flex-shrink: 0;
+}
+
+/* ===== RBAC Management ===== */
+.pv-rbac-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.pv-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.pv-permission-card {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.pv-permission-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.pv-permission-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #7dd3fc;
+  font-family: 'Courier New', monospace;
+}
+
+.pv-permission-description {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.pv-permission-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .pv-status-list {
   list-style: none;
   padding: 0;

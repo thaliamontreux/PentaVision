@@ -15,7 +15,9 @@ from .models import (
     Property,
     PropertyUser,
     PropertyUserProfile,
+    Role,
     UserProperty,
+    UserRole,
     create_property_schema,
 )
 from .security import (
@@ -872,3 +874,186 @@ def property_users_toggle(property_id: int, property_user_id: int):
         ),
     )
     return redirect(url_for("pm.property_users", property_id=property_id))
+
+
+@bp.get("/properties/<int:property_id>/roles")
+def property_roles(property_id: int):
+    """Manage property-scoped roles and role assignments for property users."""
+    user = get_current_user()
+    ctx_id = _admin_context_property_id()
+    if ctx_id and int(property_id) != int(ctx_id):
+        return redirect(url_for("pm.property_roles", property_id=int(ctx_id)))
+    if not _user_can_manage_property(user, property_id):
+        abort(403)
+
+    errors: list[str] = []
+    prop = None
+    prop_uid = ""
+    property_users = []
+    all_roles = []
+    user_roles_map = {}
+
+    # Get property
+    engine = get_user_engine()
+    if engine is not None:
+        with Session(engine) as db:
+            prop = db.get(Property, int(property_id))
+            if prop is not None:
+                prop_uid = str(getattr(prop, "uid", "") or "").strip()
+                if not prop_uid:
+                    prop_uid = uuid.uuid4().hex
+                    prop.uid = prop_uid
+                    db.add(prop)
+                    db.commit()
+                db.expunge(prop)
+
+            # Get all available roles
+            all_roles = db.query(Role).order_by(Role.name).all()
+
+    if prop is None:
+        abort(404)
+
+    # Get property users and their role assignments
+    try:
+        tenant_engine = get_property_engine(prop_uid)
+        if tenant_engine is None:
+            raise RuntimeError("Tenant engine unavailable")
+        
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
+            property_users = (
+                db.query(PropertyUser)
+                .filter(PropertyUser.property_id == int(property_id))
+                .order_by(PropertyUser.username)
+                .all()
+            )
+
+        # Get role assignments for each property user
+        if engine is not None:
+            with Session(engine) as db:
+                for pu in property_users:
+                    user_roles = (
+                        db.query(UserRole)
+                        .filter(
+                            UserRole.user_id == int(pu.id),
+                            UserRole.property_id == int(property_id)
+                        )
+                        .all()
+                    )
+                    user_roles_map[pu.id] = [ur.role_id for ur in user_roles]
+
+    except Exception as exc:  # noqa: BLE001
+        try:
+            errors.append(diagnose_property_engine(prop_uid))
+        except Exception:  # noqa: BLE001
+            errors.append(f"Tenant database error: {exc}")
+        property_users = []
+
+    return render_template(
+        "pm/property_roles.html",
+        prop=prop,
+        property_users=property_users,
+        all_roles=all_roles,
+        user_roles_map=user_roles_map,
+        errors=errors,
+    )
+
+
+@bp.post("/properties/<int:property_id>/users/<string:property_user_uid>/roles")
+def property_user_roles_update(property_id: int, property_user_uid: str):
+    """Update role assignments for a property user."""
+    user = get_current_user()
+    ctx_id = _admin_context_property_id()
+    if ctx_id and int(property_id) != int(ctx_id):
+        return redirect(url_for("pm.property_roles", property_id=int(ctx_id)))
+    if not _user_can_manage_property(user, property_id):
+        abort(403)
+
+    if not validate_global_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    uid_norm = (property_user_uid or "").strip().lower()
+    if re.fullmatch(r"[a-f0-9]{32}", uid_norm) is None:
+        abort(404)
+
+    selected_role_ids = request.form.getlist("role_ids")
+    role_ids: set[int] = set()
+    for raw in selected_role_ids:
+        try:
+            role_ids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    prop_uid = ""
+    property_user_id = None
+    try:
+        # Get property and property user
+        engine = get_user_engine()
+        if engine is None:
+            abort(500)
+
+        with Session(engine) as db:
+            prop = db.get(Property, int(property_id))
+            if prop is None:
+                abort(404)
+            prop_uid = str(getattr(prop, "uid", "") or "").strip()
+
+        tenant_engine = get_property_engine(prop_uid)
+        if tenant_engine is None:
+            raise RuntimeError("Tenant engine unavailable")
+
+        with Session(tenant_engine) as db:
+            PropertyUser.__table__.create(bind=tenant_engine, checkfirst=True)
+            pu = (
+                db.query(PropertyUser)
+                .filter(
+                    PropertyUser.property_id == int(property_id),
+                    PropertyUser.uid == uid_norm,
+                )
+                .first()
+            )
+            if pu is None:
+                abort(404)
+            property_user_id = pu.id
+
+        # Update role assignments in global DB
+        with Session(engine) as db:
+            # Validate role IDs exist
+            valid_role_ids = {
+                int(rid) for (rid,) in db.query(Role.id).all()
+            }
+            role_ids = {rid for rid in role_ids if rid in valid_role_ids}
+
+            # Remove existing property-scoped roles for this user
+            db.query(UserRole).filter(
+                UserRole.user_id == int(property_user_id),
+                UserRole.property_id == int(property_id),
+            ).delete(synchronize_session=False)
+
+            # Add new role assignments
+            for rid in sorted(role_ids):
+                db.add(
+                    UserRole(
+                        user_id=int(property_user_id),
+                        role_id=rid,
+                        property_id=int(property_id),
+                    )
+                )
+            db.commit()
+
+        flash(f"Updated roles for user {uid_norm}", "success")
+        actor = get_current_user()
+        log_event(
+            "PROPERTY_USER_ROLES_UPDATE",
+            user_id=actor.id if actor else None,
+            details=(
+                f"property_id={property_id}, property_user_uid={uid_norm}, "
+                f"roles={sorted(role_ids)}"
+            ),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _flash_tenant_error(prop_uid, exc)
+
+    return redirect(url_for("pm.property_roles", property_id=property_id))

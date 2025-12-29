@@ -4,10 +4,17 @@
 
 {% block content %}
   <section class="pv-section">
-    <div class="pv-playback-header">
-      <a href="{{ url_for('pm.index') }}" class="pv-back-link">← Back to Properties</a>
-      <h1 class="pv-playback-title">{{ prop.name }}</h1>
-      <p class="pv-playback-subtitle">Manage property-local users with password and optional 8-digit PIN access.</p>
+    <div class="pv-page-header">
+      <div>
+        <a href="{{ url_for('pm.index') }}" class="pv-back-link">← Back to Properties</a>
+        <h1 class="pv-page-title">{{ prop.name }} Users</h1>
+        <p class="pv-page-subtitle">Manage property-local users with password and optional 8-digit PIN access.</p>
+      </div>
+      <div class="pv-page-actions">
+        <a href="{{ url_for('pm.property_roles', property_id=prop.id) }}" class="pv-button pv-button-primary">
+          Manage Roles
+        </a>
+      </div>
     </div>
 
     {% if errors %}

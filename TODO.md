@@ -64,14 +64,14 @@
 - [x] Harden tenant DB failures so UI does not crash; show actionable bottom-right toast diagnostics.
 - [x] Add legacy property-user migration into tenant DB (copy from global DB, de-dupe by UID, safe to rerun).
 - [x] Upgrade `/property-login` to support password or 8-digit PIN login with audit logging + lockout.
-- [ ] Implement property-scoped roles/permissions UI for property managers.
+- [x] Implement property-scoped roles/permissions UI for property managers.
 
 ## Storage Modules Manager fixes
 
 - [x] Make existing-module Test on `/storage?edit_module=...` run via AJAX (no page reload) and show toast results.
 - [x] Persist Test -> Save proof reliably for both wizard and edit flows.
 - [x] On app startup, run a test write for enabled storage modules and record it in `storage_module_write_stats`.
-- [ ] Ensure Health/Last write/Last OK/Last error panels reflect `StorageModuleWriteStat` + `StorageModuleHealthCheck` correctly.
+- [x] Ensure Health/Last write/Last OK/Last error panels reflect `StorageModuleWriteStat` + `StorageModuleHealthCheck` correctly.
 - [x] Fix Local Drive Path provider: ensure `base_dir` persists and displays on edit.
 - [x] Make Configuration tab "Test Connection" run via AJAX without page refresh/resetting entered values.
 - [x] Toast auto-hide: bottom-right messages fade after 10 seconds.
@@ -100,7 +100,7 @@
   - [x] Enforce enterprise RBAC globally via app-wide permission gate (remove legacy role-only blockers).
   - [x] Implement RBAC-driven hover nav: full admin hover menu renders only under `/admin`, while non-admin pages show only Overview / Live Feeds / Admin.
   - [x] Add `/live-feeds` page (gated by `Video.Live.View`) that lists cameras available for live viewing.
-  - [ ] Add admin UI to manage roles, permissions, and role assignments (beyond the current limited role toggles).
+  - [x] Add admin UI to manage roles, permissions, and role assignments (beyond the current limited role toggles).
   - [x] Wire startup/installer flow to apply RBAC seed automatically and keep it in sync.
   - [ ] Smoke-test enterprise RBAC enforcement end-to-end (login, dashboard, cameras, recordings, admin, diagnostics).
 

@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}RBAC Management · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-admin-layout">
+    <div class="pv-admin-sidebar">
+      {% include 'admin/_nav.html' %}
+    </div>
+
+    <div class="pv-admin-main">
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">RBAC Management</h1>
+          <p class="pv-page-subtitle">Manage roles, permissions, and user assignments</p>
+        </div>
+      </div>
+
+      <div class="pv-rbac-grid">
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>Roles</h2>
+            <p class="pv-card-subtitle">{{ roles|length }} role{{ 's' if roles|length != 1 else '' }}</p>
+          </div>
+          {% if roles %}
+            <div class="pv-table-wrap">
+              <table class="pv-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Scope</th>
+                    <th>Description</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for role in roles %}
+                    <tr>
+                      <td><strong>{{ role.name }}</strong></td>
+                      <td>
+                        {% if role.scope %}
+                          <span class="pv-badge pv-badge-muted">{{ role.scope }}</span>
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td>{{ role.description or '—' }}</td>
+                      <td>
+                        <a href="{{ url_for('admin.rbac_role_detail', role_id=role.id) }}" class="pv-button pv-button-sm">
+                          Manage Permissions
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="pv-empty">
+              <p class="pv-empty-title">No roles found</p>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>Permissions</h2>
+            <p class="pv-card-subtitle">{{ permissions|length }} permission{{ 's' if permissions|length != 1 else '' }}</p>
+          </div>
+          {% if permissions %}
+            <div class="pv-permission-grid">
+              {% for perm in permissions %}
+                <div class="pv-permission-card">
+                  <div class="pv-permission-card-header">
+                    <code class="pv-permission-name">{{ perm.name }}</code>
+                    {% if perm.risk_level %}
+                      <span class="pv-badge pv-badge-{% if perm.risk_level == 'high' %}danger{% elif perm.risk_level == 'medium' %}warning{% else %}muted{% endif %}">
+                        {{ perm.risk_level }}
+                      </span>
+                    {% endif %}
+                  </div>
+                  {% if perm.description %}
+                    <p class="pv-permission-description">{{ perm.description }}</p>
+                  {% endif %}
+                  <div class="pv-permission-flags">
+                    {% if perm.requires_mfa %}
+                      <span class="pv-badge pv-badge-primary">MFA Required</span>
+                    {% endif %}
+                    {% if perm.requires_approval %}
+                      <span class="pv-badge pv-badge-warning">Approval Required</span>
+                    {% endif %}
+                    {% if perm.break_glass_only %}
+                      <span class="pv-badge pv-badge-danger">Break Glass Only</span>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="pv-empty">
+              <p class="pv-empty-title">No permissions found</p>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>User Role Assignments</h2>
+            <p class="pv-card-subtitle">Global role assignments</p>
+          </div>
+          {% if users_with_roles %}
+            <div class="pv-table-wrap">
+              <table class="pv-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Assigned Roles</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in users_with_roles %}
+                    <tr>
+                      <td><strong>{{ item.user.username }}</strong></td>
+                      <td>
+                        {% for role in item.roles %}
+                          <span class="pv-badge pv-badge-primary pv-mr-1">{{ role.name }}</span>
+                        {% endfor %}
+                      </td>
+                      <td>
+                        <a href="{{ url_for('admin.rbac_user_roles', target_user_id=item.user.id) }}" class="pv-button pv-button-sm">
+                          Manage Roles
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="pv-empty">
+              <p class="pv-empty-title">No users with global roles</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

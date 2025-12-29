@@ -35,10 +35,12 @@ from .models import (
     CountryAccessPolicy,
     IpAllowlist,
     IpBlocklist,
+    Permission,
     Property,
     PropertyGroup,
     PropertyZone,
     Role,
+    RolePermission,
     AuditEvent,
     User,
     UserPropertyAccessWindow,
@@ -46,11 +48,11 @@ from .models import (
     UserPropertyGroupScope,
     UserPropertyRoleOverride,
     UserPropertyZoneLink,
+    UserRole,
     PropertyScheduleTemplate,
     PropertyScheduleTemplateWindow,
     UserPropertyScheduleAssignment,
     PropertyGroupScheduleAssignment,
-    UserRole,
     LoginFailure,
     SiteTheme,
     SiteThemeSettings,
@@ -60,6 +62,7 @@ from .security import (
     get_admin_active_property,
     get_current_user,
     set_admin_property_uid_for_session,
+    user_has_permission,
     validate_global_csrf_token,
 )
 from .storage_settings_page import storage_settings_page
@@ -3401,3 +3404,259 @@ def property_update_user(property_id: int, user_id: int):
     )
 
     return redirect(url_for("admin.property_edit", property_id=property_id))
+
+
+@bp.get("/rbac")
+def rbac_management():
+    """RBAC management dashboard - roles, permissions, and assignments."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.RBAC.*"):
+        abort(403)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    roles = []
+    permissions = []
+    users_with_roles = []
+
+    with Session(engine) as db:
+        Role.__table__.create(bind=engine, checkfirst=True)
+        Permission.__table__.create(bind=engine, checkfirst=True)
+        RolePermission.__table__.create(bind=engine, checkfirst=True)
+        UserRole.__table__.create(bind=engine, checkfirst=True)
+
+        roles = db.query(Role).order_by(Role.name).all()
+        permissions = db.query(Permission).order_by(Permission.name).all()
+
+        # Get users with their global roles (property_id is NULL)
+        users_with_global_roles = (
+            db.query(User, UserRole, Role)
+            .join(UserRole, User.id == UserRole.user_id)
+            .join(Role, UserRole.role_id == Role.id)
+            .filter(UserRole.property_id == None)  # noqa: E711
+            .order_by(User.username, Role.name)
+            .all()
+        )
+
+        # Group by user
+        user_roles_map = {}
+        for u, ur, r in users_with_global_roles:
+            if u.id not in user_roles_map:
+                user_roles_map[u.id] = {"user": u, "roles": []}
+            user_roles_map[u.id]["roles"].append(r)
+
+        users_with_roles = list(user_roles_map.values())
+
+    return render_template(
+        "admin/rbac.html",
+        roles=roles,
+        permissions=permissions,
+        users_with_roles=users_with_roles,
+    )
+
+
+@bp.get("/rbac/roles/<int:role_id>")
+def rbac_role_detail(role_id: int):
+    """View and edit a specific role and its permissions."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.RBAC.*"):
+        abort(403)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    role = None
+    all_permissions = []
+    role_permissions = []
+
+    with Session(engine) as db:
+        role = db.get(Role, role_id)
+        if role is None:
+            abort(404)
+
+        all_permissions = db.query(Permission).order_by(Permission.name).all()
+        
+        role_permission_ids = [
+            rp.permission_id
+            for rp in db.query(RolePermission)
+            .filter(RolePermission.role_id == role_id)
+            .all()
+        ]
+        role_permissions = role_permission_ids
+
+    return render_template(
+        "admin/rbac_role_detail.html",
+        role=role,
+        all_permissions=all_permissions,
+        role_permissions=role_permissions,
+    )
+
+
+@bp.post("/rbac/roles/<int:role_id>/permissions")
+def rbac_role_permissions_update(role_id: int):
+    """Update permissions for a role."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.RBAC.*"):
+        abort(403)
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    selected_permission_ids = request.form.getlist("permission_ids")
+    permission_ids: set[int] = set()
+    for raw in selected_permission_ids:
+        try:
+            permission_ids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    with Session(engine) as db:
+        role = db.get(Role, role_id)
+        if role is None:
+            abort(404)
+
+        # Validate permission IDs exist
+        valid_permission_ids = {
+            int(pid) for (pid,) in db.query(Permission.id).all()
+        }
+        permission_ids = {pid for pid in permission_ids if pid in valid_permission_ids}
+
+        # Remove existing permissions
+        db.query(RolePermission).filter(
+            RolePermission.role_id == role_id
+        ).delete(synchronize_session=False)
+
+        # Add new permissions
+        for pid in sorted(permission_ids):
+            db.add(
+                RolePermission(
+                    role_id=role_id,
+                    permission_id=pid,
+                    effect="allow",
+                )
+            )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "RBAC_ROLE_PERMISSIONS_UPDATE",
+        user_id=actor.id if actor else None,
+        details=f"role_id={role_id}, permissions={sorted(permission_ids)}",
+    )
+
+    return redirect(url_for("admin.rbac_role_detail", role_id=role_id))
+
+
+@bp.get("/rbac/users/<int:target_user_id>")
+def rbac_user_roles(target_user_id: int):
+    """Manage global role assignments for a user."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.RBAC.*"):
+        abort(403)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    target_user = None
+    all_roles = []
+    user_role_ids = []
+
+    with Session(engine) as db:
+        target_user = db.get(User, target_user_id)
+        if target_user is None:
+            abort(404)
+
+        all_roles = db.query(Role).order_by(Role.name).all()
+
+        user_role_ids = [
+            ur.role_id
+            for ur in db.query(UserRole)
+            .filter(
+                UserRole.user_id == target_user_id,
+                UserRole.property_id == None  # noqa: E711
+            )
+            .all()
+        ]
+
+    return render_template(
+        "admin/rbac_user_roles.html",
+        target_user=target_user,
+        all_roles=all_roles,
+        user_role_ids=user_role_ids,
+    )
+
+
+@bp.post("/rbac/users/<int:target_user_id>/roles")
+def rbac_user_roles_update(target_user_id: int):
+    """Update global role assignments for a user."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.RBAC.*"):
+        abort(403)
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_user_engine()
+    if engine is None:
+        abort(500)
+
+    selected_role_ids = request.form.getlist("role_ids")
+    role_ids: set[int] = set()
+    for raw in selected_role_ids:
+        try:
+            role_ids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    with Session(engine) as db:
+        target_user = db.get(User, target_user_id)
+        if target_user is None:
+            abort(404)
+
+        # Validate role IDs exist
+        valid_role_ids = {
+            int(rid) for (rid,) in db.query(Role.id).all()
+        }
+        role_ids = {rid for rid in role_ids if rid in valid_role_ids}
+
+        # Remove existing global roles (property_id is NULL)
+        db.query(UserRole).filter(
+            UserRole.user_id == target_user_id,
+            UserRole.property_id == None  # noqa: E711
+        ).delete(synchronize_session=False)
+
+        # Add new role assignments
+        for rid in sorted(role_ids):
+            db.add(
+                UserRole(
+                    user_id=target_user_id,
+                    role_id=rid,
+                    property_id=None,
+                )
+            )
+        db.commit()
+
+    actor = get_current_user()
+    log_event(
+        "RBAC_USER_ROLES_UPDATE",
+        user_id=actor.id if actor else None,
+        details=f"target_user_id={target_user_id}, roles={sorted(role_ids)}",
+    )
+
+    return redirect(url_for("admin.rbac_user_roles", target_user_id=target_user_id))

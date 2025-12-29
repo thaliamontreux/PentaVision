@@ -117,6 +117,20 @@
                       <strong>{{ selected_metrics.last_write_text if selected_metrics else 'n/a' }}</strong>
                     </div>
                     <div class="pv-storage-overview-stat">
+                      Last OK
+                      <strong>{{ selected_metrics.last_ok_text if selected_metrics else 'n/a' }}</strong>
+                    </div>
+                    <div class="pv-storage-overview-stat">
+                      Last error
+                      <strong>
+                        {% if selected_metrics and selected_metrics.last_error_text != 'n/a' %}
+                          {{ selected_metrics.last_error_text }}
+                        {% else %}
+                          None
+                        {% endif %}
+                      </strong>
+                    </div>
+                    <div class="pv-storage-overview-stat">
                       Active streams
                       <strong>{{ selected_metrics.active_streams if selected_metrics else 0 }}</strong>
                     </div>
