@@ -2682,6 +2682,21 @@ body {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
 }
 
+/* Keep watermark visible in fullscreen mode */
+.pv-video-container:fullscreen .pv-video-watermark,
+.pv-video-container:-webkit-full-screen .pv-video-watermark,
+.pv-video-container:-moz-full-screen .pv-video-watermark,
+.pv-video-container:-ms-fullscreen .pv-video-watermark,
+.pv-player-video-wrap:fullscreen .pv-video-watermark,
+.pv-player-video-wrap:-webkit-full-screen .pv-video-watermark,
+.pv-player-video-wrap:-moz-full-screen .pv-video-watermark,
+.pv-player-video-wrap:-ms-fullscreen .pv-video-watermark {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483647;
+}
+
 .pv-status-list {
   list-style: none;
   padding: 0;
