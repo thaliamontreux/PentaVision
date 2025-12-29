@@ -204,12 +204,13 @@
         });
       }
 
-      // Persist autoplay preference in localStorage
+      // Persist autoplay preference in localStorage - default to ON
       if (autoplayToggle) {
         var savedAutoplay = localStorage.getItem('pv_recording_autoplay');
-        if (savedAutoplay === 'true') {
+        // Default to true if never set
+        if (savedAutoplay === null || savedAutoplay === 'true') {
           autoplayToggle.checked = true;
-        } else if (savedAutoplay === 'false') {
+        } else {
           autoplayToggle.checked = false;
         }
         // If URL has autoplay=1, override
