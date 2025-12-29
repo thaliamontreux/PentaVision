@@ -15,6 +15,10 @@
     <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.list_devices') }}">Cameras</a>
   {% endif %}
 
+  {% if has_permission('Nav.Feeds.Cameras.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.camera_health') }}">Camera Health</a>
+  {% endif %}
+
   {% if has_permission('Nav.Feeds.CameraUrlTemplates.View') %}
     <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.list_patterns') }}">Camera URL Templates</a>
   {% endif %}

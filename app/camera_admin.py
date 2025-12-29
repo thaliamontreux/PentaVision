@@ -2750,3 +2750,92 @@ def import_csv():
         errors=errors,
         csrf_token=csrf_token,
     )
+
+
+@bp.get("/health")
+def camera_health():
+    """Camera health monitoring dashboard."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_role(user, "admin"):
+        abort(403)
+
+    engine = get_record_engine()
+    if engine is None:
+        abort(500)
+
+    camera_health_data = []
+    
+    with Session(engine) as db:
+        CameraDevice.__table__.create(bind=engine, checkfirst=True)
+        
+        devices = db.query(CameraDevice).order_by(CameraDevice.name).all()
+        
+        # Get stream manager for live status
+        stream_mgr = get_stream_manager()
+        
+        for device in devices:
+            health = {
+                "id": device.id,
+                "name": device.name,
+                "ip": device.ip,
+                "enabled": bool(device.enabled),
+                "stream_active": False,
+                "last_seen": None,
+                "recording_enabled": False,
+                "storage_configured": False,
+                "health_status": "unknown",
+            }
+            
+            # Check if stream is active
+            if stream_mgr and device.enabled:
+                try:
+                    stream_id = f"camera_{device.id}"
+                    stream_info = stream_mgr.get_stream_info(stream_id)
+                    if stream_info and stream_info.get("active"):
+                        health["stream_active"] = True
+                        health["health_status"] = "healthy"
+                except Exception:
+                    pass
+            
+            # Check storage configuration
+            try:
+                policy = db.query(CameraStoragePolicy).filter(
+                    CameraStoragePolicy.camera_id == device.id
+                ).first()
+                if policy and policy.storage_targets:
+                    health["storage_configured"] = True
+                    health["recording_enabled"] = bool(policy.enabled)
+            except Exception:
+                pass
+            
+            # Determine overall health status
+            if not device.enabled:
+                health["health_status"] = "disabled"
+            elif health["stream_active"]:
+                health["health_status"] = "healthy"
+            elif device.enabled and not health["stream_active"]:
+                health["health_status"] = "warning"
+            
+            camera_health_data.append(health)
+    
+    # Calculate summary stats
+    total_cameras = len(camera_health_data)
+    healthy_count = sum(1 for c in camera_health_data if c["health_status"] == "healthy")
+    warning_count = sum(1 for c in camera_health_data if c["health_status"] == "warning")
+    disabled_count = sum(1 for c in camera_health_data if c["health_status"] == "disabled")
+    
+    summary = {
+        "total": total_cameras,
+        "healthy": healthy_count,
+        "warning": warning_count,
+        "disabled": disabled_count,
+        "health_percentage": int((healthy_count / total_cameras * 100) if total_cameras > 0 else 0),
+    }
+    
+    return render_template(
+        "cameras/health.html",
+        cameras=camera_health_data,
+        summary=summary,
+    )

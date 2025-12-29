@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}Camera Health · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-admin-layout">
+    <div class="pv-admin-sidebar">
+      {% include 'admin/_nav.html' %}
+    </div>
+
+    <div class="pv-admin-main">
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">Camera Health Monitor</h1>
+          <p class="pv-page-subtitle">Real-time status of all cameras</p>
+        </div>
+      </div>
+
+      <div class="pv-health-summary">
+        <div class="pv-health-stat">
+          <div class="pv-health-stat-value">{{ summary.total }}</div>
+          <div class="pv-health-stat-label">Total Cameras</div>
+        </div>
+        <div class="pv-health-stat pv-health-stat-success">
+          <div class="pv-health-stat-value">{{ summary.healthy }}</div>
+          <div class="pv-health-stat-label">Healthy</div>
+        </div>
+        <div class="pv-health-stat pv-health-stat-warning">
+          <div class="pv-health-stat-value">{{ summary.warning }}</div>
+          <div class="pv-health-stat-label">Warning</div>
+        </div>
+        <div class="pv-health-stat pv-health-stat-muted">
+          <div class="pv-health-stat-value">{{ summary.disabled }}</div>
+          <div class="pv-health-stat-label">Disabled</div>
+        </div>
+        <div class="pv-health-stat">
+          <div class="pv-health-stat-value">{{ summary.health_percentage }}%</div>
+          <div class="pv-health-stat-label">Health Score</div>
+        </div>
+      </div>
+
+      <div class="pv-card">
+        <div class="pv-card-header">
+          <h2>Camera Status</h2>
+        </div>
+        {% if cameras %}
+          <div class="pv-table-wrap">
+            <table class="pv-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Camera</th>
+                  <th>IP Address</th>
+                  <th>Stream</th>
+                  <th>Recording</th>
+                  <th>Storage</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for camera in cameras %}
+                  <tr>
+                    <td>
+                      <span class="pv-health-indicator pv-health-indicator-{% if camera.health_status == 'healthy' %}success{% elif camera.health_status == 'warning' %}warning{% elif camera.health_status == 'disabled' %}muted{% else %}unknown{% endif %}">
+                        {% if camera.health_status == 'healthy' %}
+                          ✓
+                        {% elif camera.health_status == 'warning' %}
+                          ⚠
+                        {% elif camera.health_status == 'disabled' %}
+                          ○
+                        {% else %}
+                          ?
+                        {% endif %}
+                      </span>
+                    </td>
+                    <td><strong>{{ camera.name }}</strong></td>
+                    <td><code>{{ camera.ip or '—' }}</code></td>
+                    <td>
+                      {% if camera.stream_active %}
+                        <span class="pv-badge pv-badge-success">Active</span>
+                      {% elif camera.enabled %}
+                        <span class="pv-badge pv-badge-muted">Inactive</span>
+                      {% else %}
+                        <span class="pv-badge pv-badge-muted">—</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if camera.recording_enabled %}
+                        <span class="pv-badge pv-badge-primary">Enabled</span>
+                      {% else %}
+                        <span class="pv-badge pv-badge-muted">Disabled</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if camera.storage_configured %}
+                        <span class="pv-badge pv-badge-success">Configured</span>
+                      {% else %}
+                        <span class="pv-badge pv-badge-warning">Not Configured</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="{{ url_for('camera_admin.edit_device', device_id=camera.id) }}" class="pv-button pv-button-sm">
+                        Edit
+                      </a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="pv-empty">
+            <img src="{{ url_for('static', filename='images/empty-camera.png') }}" alt="" class="pv-empty-icon" />
+            <p class="pv-empty-title">No cameras configured</p>
+            <p class="pv-empty-subtitle">Add cameras to start monitoring their health</p>
+            <a href="{{ url_for('camera_admin.create_device') }}" class="pv-button pv-button-primary">
+              Add Camera
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endblock %}
