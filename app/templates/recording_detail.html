@@ -262,6 +262,35 @@
         });
       }
 
+      // Handle fullscreen for video container (to keep watermark visible)
+      if (video) {
+        var videoContainer = video.closest('.pv-video-container, .pv-player-video-wrap');
+        
+        // Intercept fullscreen button clicks on video controls
+        video.addEventListener('dblclick', function(e) {
+          e.preventDefault();
+          if (videoContainer) {
+            if (document.fullscreenElement) {
+              document.exitFullscreen();
+            } else {
+              videoContainer.requestFullscreen().catch(function(err) {
+                console.error('Fullscreen error:', err);
+              });
+            }
+          }
+        });
+
+        // Listen for fullscreen changes to sync video playback state
+        document.addEventListener('fullscreenchange', function() {
+          if (document.fullscreenElement === videoContainer) {
+            // Entered fullscreen - video should continue playing
+            if (video.paused) {
+              video.play().catch(function() {});
+            }
+          }
+        });
+      }
+
       function setOutput(value) {
         if (!outputEl) return;
         if (typeof value === 'string') {
