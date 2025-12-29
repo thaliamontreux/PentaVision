@@ -2279,14 +2279,14 @@ body {
 }
 
 /* ===== Camera Grid (Recordings Overview) ===== */
-.pv-camera-grid {
+.pv-recordings-camera-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
   padding: 1rem 0;
 }
 
-.pv-camera-tile {
+.pv-rec-camera-tile {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -2299,14 +2299,14 @@ body {
   cursor: pointer;
 }
 
-.pv-camera-tile:hover {
+.pv-rec-camera-tile:hover {
   background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(139, 92, 246, 0.1));
   border-color: rgba(56, 189, 248, 0.4);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
-.pv-camera-tile-icon {
+.pv-rec-camera-tile-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2318,12 +2318,12 @@ body {
   flex-shrink: 0;
 }
 
-.pv-camera-tile-info {
+.pv-rec-camera-tile-info {
   flex: 1;
   min-width: 0;
 }
 
-.pv-camera-tile-name {
+.pv-rec-camera-tile-name {
   margin: 0 0 0.25rem;
   font-size: 1.1rem;
   font-weight: 600;
@@ -2333,17 +2333,17 @@ body {
   text-overflow: ellipsis;
 }
 
-.pv-camera-tile-count {
+.pv-rec-camera-tile-count {
   font-size: 0.85rem;
   color: #94a3b8;
 }
 
-.pv-camera-tile-arrow {
+.pv-rec-camera-tile-arrow {
   color: #64748b;
   transition: color 200ms ease, transform 200ms ease;
 }
 
-.pv-camera-tile:hover .pv-camera-tile-arrow {
+.pv-rec-camera-tile:hover .pv-rec-camera-tile-arrow {
   color: #7dd3fc;
   transform: translate(2px, -2px);
 }

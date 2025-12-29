@@ -17,26 +17,26 @@
             </div>
 
             {% if cameras %}
-              <div class="pv-camera-grid">
+              <div class="pv-recordings-camera-grid">
                 {% for cam in cameras %}
                   <a
                     href="{{ url_for('main.camera_recordings', device_id=cam.id) }}"
-                    class="pv-camera-tile"
+                    class="pv-rec-camera-tile"
                     target="_blank"
                     rel="noopener"
                   >
-                    <div class="pv-camera-tile-icon">
+                    <div class="pv-rec-camera-tile-icon">
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                       </svg>
                     </div>
-                    <div class="pv-camera-tile-info">
-                      <h3 class="pv-camera-tile-name">{{ cam.name }}</h3>
-                      <span class="pv-camera-tile-count">
+                    <div class="pv-rec-camera-tile-info">
+                      <h3 class="pv-rec-camera-tile-name">{{ cam.name }}</h3>
+                      <span class="pv-rec-camera-tile-count">
                         {{ cam.recording_count }} recording{{ 's' if cam.recording_count != 1 else '' }}
                       </span>
                     </div>
-                    <div class="pv-camera-tile-arrow">
+                    <div class="pv-rec-camera-tile-arrow">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                       </svg>
@@ -65,26 +65,26 @@
       </div>
 
       {% if cameras %}
-        <div class="pv-camera-grid">
+        <div class="pv-recordings-camera-grid">
           {% for cam in cameras %}
             <a
               href="{{ url_for('main.camera_recordings', device_id=cam.id) }}"
-              class="pv-camera-tile"
+              class="pv-rec-camera-tile"
               target="_blank"
               rel="noopener"
             >
-              <div class="pv-camera-tile-icon">
+              <div class="pv-rec-camera-tile-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                 </svg>
               </div>
-              <div class="pv-camera-tile-info">
-                <h3 class="pv-camera-tile-name">{{ cam.name }}</h3>
-                <span class="pv-camera-tile-count">
+              <div class="pv-rec-camera-tile-info">
+                <h3 class="pv-rec-camera-tile-name">{{ cam.name }}</h3>
+                <span class="pv-rec-camera-tile-count">
                   {{ cam.recording_count }} recording{{ 's' if cam.recording_count != 1 else '' }}
                 </span>
               </div>
-              <div class="pv-camera-tile-arrow">
+              <div class="pv-rec-camera-tile-arrow">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
