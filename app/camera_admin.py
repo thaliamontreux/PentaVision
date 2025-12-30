@@ -1118,6 +1118,10 @@ def list_devices():
     stream_status: dict[int, dict] = {}
     device_properties: dict[int, int] = {}
     rtmp_status: dict[int, dict] = {}
+    
+    # Get filter parameters
+    filter_group_id = request.args.get("group")
+    filter_tag_id = request.args.get("tag")
 
     if engine is None:
         errors.append("Record database is not configured.")
@@ -1126,11 +1130,62 @@ def list_devices():
         CameraRtmpOutput.__table__.create(bind=engine, checkfirst=True)
 
         with Session(engine) as session_db:
-            devices = (
-                session_db.query(CameraDevice)
-                .order_by(CameraDevice.name)
-                .all()
-            )
+            # Load groups and tags for filtering UI
+            from .models import CameraGroup, CameraTag, CameraGroupMembership, CameraTagAssignment
+            CameraGroup.__table__.create(bind=engine, checkfirst=True)
+            CameraTag.__table__.create(bind=engine, checkfirst=True)
+            CameraGroupMembership.__table__.create(bind=engine, checkfirst=True)
+            CameraTagAssignment.__table__.create(bind=engine, checkfirst=True)
+            
+            all_groups = session_db.query(CameraGroup).order_by(CameraGroup.name).all()
+            all_tags = session_db.query(CameraTag).order_by(CameraTag.name).all()
+            
+            # Build camera groups and tags mappings
+            camera_groups = {}
+            camera_tags = {}
+            
+            for membership in session_db.query(CameraGroupMembership).all():
+                if membership.camera_id not in camera_groups:
+                    camera_groups[membership.camera_id] = []
+                group = session_db.get(CameraGroup, membership.group_id)
+                if group:
+                    camera_groups[membership.camera_id].append(group)
+            
+            for assignment in session_db.query(CameraTagAssignment).all():
+                if assignment.camera_id not in camera_tags:
+                    camera_tags[assignment.camera_id] = []
+                tag = session_db.get(CameraTag, assignment.tag_id)
+                if tag:
+                    camera_tags[assignment.camera_id].append(tag)
+            
+            # Query devices with optional filtering
+            query = session_db.query(CameraDevice)
+            
+            if filter_group_id:
+                try:
+                    group_id = int(filter_group_id)
+                    camera_ids_in_group = {
+                        m.camera_id for m in session_db.query(CameraGroupMembership).filter(
+                            CameraGroupMembership.group_id == group_id
+                        ).all()
+                    }
+                    query = query.filter(CameraDevice.id.in_(camera_ids_in_group))
+                except (ValueError, TypeError):
+                    pass
+            
+            if filter_tag_id:
+                try:
+                    tag_id = int(filter_tag_id)
+                    camera_ids_with_tag = {
+                        a.camera_id for a in session_db.query(CameraTagAssignment).filter(
+                            CameraTagAssignment.tag_id == tag_id
+                        ).all()
+                    }
+                    query = query.filter(CameraDevice.id.in_(camera_ids_with_tag))
+                except (ValueError, TypeError):
+                    pass
+            
+            devices = query.order_by(CameraDevice.name).all()
             patterns = session_db.query(CameraUrlPattern).all()
             patterns_index = {p.id: p for p in patterns}
 
@@ -1196,6 +1251,12 @@ def list_devices():
         csrf_token=csrf_token,
         stream_status=stream_status,
         rtmp_status=rtmp_status,
+        all_groups=all_groups,
+        all_tags=all_tags,
+        camera_groups=camera_groups,
+        camera_tags=camera_tags,
+        filter_group_id=filter_group_id,
+        filter_tag_id=filter_tag_id,
     )
 
 
