@@ -21,9 +21,10 @@ from flask import (
     url_for,
 )
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 
-from app.db import get_record_db
+from app.db import get_record_engine
 from app.models import (
     EnhancedPlugin,
     PluginApiKeyRotation,
@@ -49,7 +50,10 @@ plugin_bp = Blueprint('plugins', __name__)
 @admin_required
 def admin_plugins_list():
     """System Admin: View all installed plugins."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         plugins = db.query(EnhancedPlugin).order_by(
@@ -93,7 +97,10 @@ def admin_plugins_upload():
     if request.method == 'GET':
         return render_template('admin/plugins/upload.html')
     
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         if 'plugin_file' not in request.files:
@@ -154,7 +161,10 @@ def admin_plugins_upload():
 @admin_required
 def admin_plugin_detail(plugin_key):
     """System Admin: View plugin details and manage property access."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         plugin = db.query(EnhancedPlugin).filter(
@@ -209,7 +219,10 @@ def admin_plugin_detail(plugin_key):
 @admin_required
 def admin_toggle_property_access(plugin_key, property_id):
     """System Admin: Enable/disable plugin access for a property."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         plugin = db.query(EnhancedPlugin).filter(
@@ -282,7 +295,10 @@ def admin_toggle_property_access(plugin_key, property_id):
 @admin_required
 def admin_rotate_property_key(plugin_key, property_id):
     """System Admin: Rotate API key for a property (on their behalf)."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         assignment = db.query(PluginPropertyAssignment).filter(
@@ -334,7 +350,10 @@ def admin_rotate_property_key(plugin_key, property_id):
 @property_manager_required
 def property_plugins_list(property_id):
     """Property Manager: View available plugins for this property."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         # Get all verified plugins
@@ -386,7 +405,10 @@ def property_plugins_list(property_id):
 @property_manager_required
 def property_enable_plugin(property_id, plugin_key):
     """Property Manager: Enable a plugin for this property."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         plugin = db.query(EnhancedPlugin).filter(
@@ -446,7 +468,10 @@ def property_enable_plugin(property_id, plugin_key):
 @property_manager_required
 def property_disable_plugin(property_id, plugin_key):
     """Property Manager: Disable a plugin for this property."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         assignment = db.query(PluginPropertyAssignment).filter(
@@ -476,7 +501,10 @@ def property_disable_plugin(property_id, plugin_key):
 @property_manager_required
 def property_rotate_key(property_id, plugin_key):
     """Property Manager: Rotate API key for this property."""
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         assignment = db.query(PluginPropertyAssignment).filter(
@@ -520,7 +548,10 @@ def api_verify_key():
     if not api_key or not plugin_key:
         return jsonify({'error': 'Missing credentials'}), 401
     
-    db = next(get_record_db())
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
     
     try:
         manager = PluginManager(db)
