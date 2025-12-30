@@ -537,6 +537,75 @@ def property_disable_plugin(property_id, plugin_key):
         db.close()
 
 
+@plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/configure', methods=['GET', 'POST'])
+def property_configure_plugin(property_id, plugin_key):
+    """Property Manager: Configure a plugin for this property."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+    db = Session(engine)
+
+    try:
+        plugin = db.query(EnhancedPlugin).filter(
+            EnhancedPlugin.plugin_key == plugin_key
+        ).first()
+
+        if not plugin:
+            abort(404, "Plugin not found")
+
+        assignment = db.query(PluginPropertyAssignment).filter(
+            PluginPropertyAssignment.plugin_key == plugin_key,
+            PluginPropertyAssignment.property_id == property_id
+        ).first()
+
+        if not assignment or not assignment.admin_allowed:
+            abort(403, "Plugin not available for this property")
+
+        # Load plugin definition for config schema
+        config_schema = {}
+        plugin_dir = Path("/opt/pentavision/plugins") / plugin_key
+        definition_path = plugin_dir / "definition.json"
+
+        if definition_path.exists():
+            with open(definition_path) as f:
+                definition = json.load(f)
+                config_schema = definition.get("config_schema", {})
+
+        if request.method == 'POST':
+            # Save configuration
+            config_data = request.json or {}
+
+            assignment.config = json.dumps(config_data)
+            assignment.config_updated_at = datetime.utcnow()
+            db.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Configuration saved successfully'
+            })
+
+        # GET - return current config and schema
+        current_config = {}
+        if assignment.config:
+            current_config = json.loads(assignment.config)
+
+        return render_template(
+            'properties/plugins/configure.html',
+            plugin=plugin,
+            property_id=property_id,
+            config_schema=config_schema,
+            current_config=current_config,
+            assignment=assignment,
+        )
+
+    finally:
+        db.close()
+
+
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/rotate-key', methods=['POST'])
 def property_rotate_key(property_id, plugin_key):
     """Property Manager: Rotate API key for this property."""
