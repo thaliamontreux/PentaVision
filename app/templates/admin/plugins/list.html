@@ -14,6 +14,9 @@
           <p class="pv-page-subtitle">Manage third-party integrations and extensions.</p>
         </div>
         <div class="pv-page-actions">
+          <button onclick="createDemoPlugins()" class="pv-btn pv-btn-secondary" id="demo-btn">
+            Create Demo Plugins
+          </button>
           <a href="{{ url_for('plugins.admin_plugins_upload') }}" class="pv-btn pv-btn-primary">
             Upload Plugin
           </a>
@@ -305,4 +308,34 @@
 }
 </style>
 
+<script>
+async function createDemoPlugins() {
+    const btn = document.getElementById('demo-btn');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    try {
+        const response = await fetch('{{ url_for("plugins.admin_create_demo_plugins") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.textContent = 'Create Demo Plugins';
+        }
+    } catch (err) {
+        alert('Error creating demo plugins: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Create Demo Plugins';
+    }
+}
+</script>
 {% endblock %}

@@ -580,6 +580,141 @@ def property_rotate_key(property_id, plugin_key):
 
 
 # ========================================================================
+# DEMO/TESTING ENDPOINTS
+# ========================================================================
+
+@plugin_bp.route('/admin/plugins/create-demo', methods=['POST'])
+def admin_create_demo_plugins():
+    """Create demo plugins for testing the UI. System Admin only."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.System.*"):
+        abort(403)
+
+    engine = get_record_engine()
+    if not engine:
+        abort(500, "Database not configured")
+
+    from app.models import RecordBase
+    RecordBase.metadata.create_all(engine)
+
+    db = Session(engine)
+
+    try:
+        demo_plugins = [
+            {
+                'plugin_key': 'home-assistant',
+                'version': '1.2.0',
+                'name': 'Home Assistant',
+                'description': 'Integration with Home Assistant for smart home automation and camera events.',
+                'author': 'PentaVision',
+                'author_email': 'plugins@pentavision.io',
+                'category': 'automation',
+                'status': 'active',
+                'runtime_type': 'python',
+                'entrypoint': 'main.py',
+                'min_pentavision_version': '2.0.0',
+                'install_path': '/opt/pentavision/plugins/home-assistant',
+                'last_health_status': 'healthy',
+                'capabilities': '["camera_events", "motion_detection", "person_detection"]',
+                'scopes': '["read:cameras", "read:events", "write:webhooks"]',
+            },
+            {
+                'plugin_key': 'slack-notifications',
+                'version': '1.0.5',
+                'name': 'Slack Notifications',
+                'description': 'Send camera alerts and events to Slack channels.',
+                'author': 'PentaVision',
+                'author_email': 'plugins@pentavision.io',
+                'category': 'notifications',
+                'status': 'verified',
+                'runtime_type': 'python',
+                'entrypoint': 'slack_plugin.py',
+                'min_pentavision_version': '2.0.0',
+                'install_path': '/opt/pentavision/plugins/slack-notifications',
+                'last_health_status': 'healthy',
+                'capabilities': '["notifications", "alerts"]',
+                'scopes': '["read:events", "read:cameras"]',
+            },
+            {
+                'plugin_key': 'license-plate-reader',
+                'version': '2.1.0',
+                'name': 'License Plate Reader',
+                'description': 'AI-powered license plate recognition for vehicle tracking.',
+                'author': 'VisionAI Labs',
+                'author_email': 'support@visionai.com',
+                'category': 'analytics',
+                'status': 'quarantined',
+                'runtime_type': 'python',
+                'entrypoint': 'lpr_main.py',
+                'min_pentavision_version': '2.0.0',
+                'install_path': '/opt/pentavision/plugins/license-plate-reader',
+                'last_health_status': 'failed',
+                'quarantine_reason': 'Security vulnerability detected',
+                'capabilities': '["video_analysis", "object_detection", "license_plates"]',
+                'scopes': '["read:cameras", "read:recordings", "write:metadata"]',
+            },
+            {
+                'plugin_key': 'cloud-backup',
+                'version': '1.1.2',
+                'name': 'Cloud Backup Service',
+                'description': 'Automatic backup of recordings to cloud storage providers.',
+                'author': 'PentaVision',
+                'author_email': 'plugins@pentavision.io',
+                'category': 'storage',
+                'status': 'inactive',
+                'runtime_type': 'python',
+                'entrypoint': 'backup_service.py',
+                'min_pentavision_version': '2.0.0',
+                'install_path': '/opt/pentavision/plugins/cloud-backup',
+                'last_health_status': 'unknown',
+                'capabilities': '["backup", "cloud_storage", "scheduling"]',
+                'scopes': '["read:recordings", "write:storage"]',
+            },
+            {
+                'plugin_key': 'facial-recognition',
+                'version': '3.0.0',
+                'name': 'Facial Recognition',
+                'description': 'Advanced facial recognition with known persons database.',
+                'author': 'SecureVision Inc',
+                'author_email': 'dev@securevision.io',
+                'category': 'analytics',
+                'status': 'failed',
+                'runtime_type': 'python',
+                'entrypoint': 'face_recognition.py',
+                'min_pentavision_version': '2.0.0',
+                'install_path': '/opt/pentavision/plugins/facial-recognition',
+                'last_health_status': 'failed',
+                'capabilities': '["face_detection", "face_recognition", "person_tracking"]',
+                'scopes': '["read:cameras", "read:faces", "write:faces"]',
+            },
+        ]
+
+        created = 0
+        for plugin_data in demo_plugins:
+            existing = db.query(EnhancedPlugin).filter(
+                EnhancedPlugin.plugin_key == plugin_data['plugin_key']
+            ).first()
+
+            if not existing:
+                plugin = EnhancedPlugin(**plugin_data)
+                db.add(plugin)
+                created += 1
+
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Created {created} demo plugins',
+            'total_plugins': len(demo_plugins)
+        })
+
+    finally:
+        db.close()
+
+
+# ========================================================================
 # API ENDPOINTS (for plugins to use)
 # ========================================================================
 
