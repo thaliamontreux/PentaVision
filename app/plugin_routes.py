@@ -23,7 +23,7 @@ from flask import (
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
-from app.database import get_record_db
+from app.db import get_record_db
 from app.models import (
     EnhancedPlugin,
     PluginApiKeyRotation,
