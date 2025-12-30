@@ -1314,8 +1314,8 @@ class PluginTestRun(RecordBase):
     coverage_percentage: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)
     duration_seconds: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)
     
-    results: Mapped[str] = mapped_column(String(16384))
-    logs: Mapped[Optional[str]] = mapped_column(String(16384), nullable=True)
+    results: Mapped[str] = mapped_column(Text)
+    logs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
