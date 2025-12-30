@@ -198,8 +198,8 @@
 
 ## Storage Modules Manager — Full Product & UX Specification
 
-- [ ] Transform `/storage` into a split-view storage orchestration dashboard (providers list left, details panel right).
-- [ ] Treat each configured destination as a Storage Module Instance with:
+- [x] Transform `/storage` into a split-view storage orchestration dashboard (providers list left, details panel right).
+- [x] Treat each configured destination as a Storage Module Instance with:
   - provider type
   - credentials & configuration
   - enable/disable
@@ -241,27 +241,28 @@
     - local drive paths (Windows/Linux server path)
     - mounted volumes (NAS/SAN)
     - container-mounted persistent volumes
-- [ ] Providers list (left panel): implement row/cards with:
-  - icon/logo
+- [x] Providers list (left panel): implement row/cards with:
+  - icon/logo (provider-specific colors)
   - user-defined name
   - provider type label
   - status indicator (Healthy / Degraded / Failing / Disabled)
   - active stream count
   - last successful write timestamp
   - overflow actions: Enable/Disable, Edit, Clone, Delete, View Logs
-- [ ] Provider details panel (right) with tabs:
+- [x] Provider details panel (right) with tabs:
   - Overview
   - Configuration
   - Streams
   - Logs
   - Advanced
-- [ ] Overview tab (read-only) shows:
+- [x] Overview tab (read-only) shows:
   - current health status
   - last connection test result
   - last successful write
   - error rate (last 24h)
   - storage usage (GB/day, GB/month)
   - active vs completed streams
+  - enhanced metric cards with progress bars
 - [ ] Configuration tab:
   - provider selection grouped by category (Object Storage / Cloud Drives / Network Protocols / Local)
   - dynamic credential forms driven by provider schema (required/optional fields, types, validation)
@@ -273,12 +274,13 @@
     - save disabled until test succeeds
     - display success timing details or actionable failure errors
   - add inline help text + "where to find this" links for every provider field (official vendor docs only)
-- [ ] Streams tab:
+- [x] Streams tab:
   - stream table with Stream ID, status (writing/completed/failed), file size, duration, last write time, retry count, action (view/inspect)
-- [ ] Logs tab:
+  - upload queue display
+- [x] Logs tab:
   - capture auth attempts, upload starts/stops, chunk retries, timeouts, permission errors, cleanup failures
   - UX: severity filtering, search, copy/export, correlation by Stream ID
-- [ ] Advanced tab (power users):
+- [x] Advanced tab (power users):
   - retention policies
   - directory/object key templates (e.g. `/{provider}/{year}/{month}/{stream_id}.mp4`)
   - chunk size tuning
@@ -286,7 +288,9 @@
   - encryption settings
   - provider-specific flags
   - bandwidth throttling
-- [ ] Global system features:
+  - global priority ordering view
+  - module actions (enable/disable/clone/delete)
+- [x] Global system features:
   - storage priority ordering for enabled providers
   - automatic failover on failure (health-based routing)
   - safe disable/delete:
