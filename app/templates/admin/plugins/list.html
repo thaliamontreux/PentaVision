@@ -1,19 +1,26 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
-{% block title %}Enhanced Plugins - System Admin{% endblock %}
+{% block title %}Plugins · PentaVision{% endblock %}
 
 {% block content %}
-<div class="admin-container">
-    <div class="admin-header">
-        <h1>Enhanced Plugins</h1>
-        <div class="admin-actions">
-            <a href="{{ url_for('plugins.admin_plugins_upload') }}" class="btn btn-primary">
-                <i class="icon-upload"></i> Upload Plugin
-            </a>
-        </div>
-    </div>
+<section class="pv-section">
+  <div class="pv-admin-layout">
+    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-main">
 
-    {% if plugin_stats %}
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">Enhanced Plugins</h1>
+          <p class="pv-page-subtitle">Manage third-party integrations and extensions.</p>
+        </div>
+        <div class="pv-page-actions">
+          <a href="{{ url_for('plugins.admin_plugins_upload') }}" class="pv-btn pv-btn-primary">
+            Upload Plugin
+          </a>
+        </div>
+      </div>
+
+      {% if plugin_stats %}
     <div class="plugins-grid">
         {% for stat in plugin_stats %}
         <div class="plugin-card" data-plugin-key="{{ stat.plugin.plugin_key }}">
@@ -80,16 +87,19 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state">
+      <div class="empty-state">
         <div class="empty-state-icon">📦</div>
         <h2>No Plugins Installed</h2>
         <p>Upload your first plugin to get started with the Enhanced Plugins system.</p>
-        <a href="{{ url_for('plugins.admin_plugins_upload') }}" class="btn btn-primary">
-            Upload Plugin
+        <a href="{{ url_for('plugins.admin_plugins_upload') }}" class="pv-btn pv-btn-primary">
+          Upload Plugin
         </a>
+      </div>
+      {% endif %}
+
     </div>
-    {% endif %}
-</div>
+  </div>
+</section>
 
 <style>
 .plugins-grid {

@@ -1,17 +1,26 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
-{% block title %}Upload Plugin - System Admin{% endblock %}
+{% block title %}Upload Plugin · PentaVision{% endblock %}
 
 {% block content %}
-<div class="admin-container">
-    <div class="admin-header">
-        <h1>Upload Plugin</h1>
-        <a href="{{ url_for('plugins.admin_plugins_list') }}" class="btn btn-secondary">
-            <i class="icon-back"></i> Back to Plugins
-        </a>
-    </div>
+<section class="pv-section">
+  <div class="pv-admin-layout">
+    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-main">
 
-    <div class="upload-container">
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">Upload Plugin</h1>
+          <p class="pv-page-subtitle">Install a new plugin package.</p>
+        </div>
+        <div class="pv-page-actions">
+          <a href="{{ url_for('plugins.admin_plugins_list') }}" class="pv-btn pv-btn-secondary">
+            ← Back to Plugins
+          </a>
+        </div>
+      </div>
+
+      <div class="upload-container">
         <div class="upload-info">
             <h2>Plugin Package Requirements</h2>
             <ul>
@@ -77,8 +86,11 @@
                 </div>
             </form>
         </div>
+      </div>
+
     </div>
-</div>
+  </div>
+</section>
 
 <style>
 .upload-container {
