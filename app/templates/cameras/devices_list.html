@@ -24,6 +24,36 @@
           </div>
         </div>
 
+        {% if all_groups or all_tags %}
+          <div class="pv-camera-filters">
+            {% if all_groups %}
+              <div class="pv-filter-group">
+                <label>Filter by Group:</label>
+                <select onchange="window.location.href='{{ url_for('camera_admin.list_devices') }}?group=' + this.value + (new URLSearchParams(window.location.search).get('tag') ? '&tag=' + new URLSearchParams(window.location.search).get('tag') : '')">
+                  <option value="">All Groups</option>
+                  {% for group in all_groups %}
+                    <option value="{{ group.id }}" {% if filter_group_id == group.id|string %}selected{% endif %}>{{ group.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% endif %}
+            {% if all_tags %}
+              <div class="pv-filter-group">
+                <label>Filter by Tag:</label>
+                <select onchange="window.location.href='{{ url_for('camera_admin.list_devices') }}?tag=' + this.value + (new URLSearchParams(window.location.search).get('group') ? '&group=' + new URLSearchParams(window.location.search).get('group') : '')">
+                  <option value="">All Tags</option>
+                  {% for tag in all_tags %}
+                    <option value="{{ tag.id }}" {% if filter_tag_id == tag.id|string %}selected{% endif %}>{{ tag.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% endif %}
+            {% if filter_group_id or filter_tag_id %}
+              <a href="{{ url_for('camera_admin.list_devices') }}" class="pv-button pv-button-sm pv-button-secondary">Clear Filters</a>
+            {% endif %}
+          </div>
+        {% endif %}
+
         {% if devices %}
           <div class="pv-bulk-actions" id="bulk-actions" style="display: none;">
             <span class="pv-bulk-actions-label">
@@ -75,6 +105,19 @@
                       <a href="{{ url_for('main.camera_detail', device_id=d.id) }}" class="pv-link-muted">
                         {{ d.name }}
                       </a>
+                      {% if camera_groups.get(d.id) or camera_tags.get(d.id) %}
+                        <div class="pv-camera-badges">
+                          {% for group in camera_groups.get(d.id, []) %}
+                            <span class="pv-camera-group-badge">
+                              <span class="pv-camera-group-indicator" style="background: {{ group.color or '#64748b' }};"></span>
+                              {{ group.name }}
+                            </span>
+                          {% endfor %}
+                          {% for tag in camera_tags.get(d.id, []) %}
+                            <span class="pv-tag-badge" style="background: {{ tag.color or '#64748b' }}; font-size: 0.75rem; padding: 0.125rem 0.5rem;">{{ tag.name }}</span>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
                     </td>
                     <td>{{ d.ip_address }}</td>
                     <td>{{ d.port or '' }}</td>
