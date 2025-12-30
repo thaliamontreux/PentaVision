@@ -57,6 +57,18 @@ def create_app() -> Flask:
         ]
     )
 
+    # Custom Jinja2 filters
+    def from_json_filter(value):
+        """Parse JSON string to Python object."""
+        if not value:
+            return []
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    app.jinja_env.filters['from_json'] = from_json_filter
+
     try:
         from .modules.storage.registry import (  # noqa: PLC0415
             load_storage_provider_plugins,
