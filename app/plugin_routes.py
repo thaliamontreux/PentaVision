@@ -37,7 +37,7 @@ from app.plugin_manager import (
     PluginInstallationError,
     PluginValidationError,
 )
-from app.security import admin_required, property_manager_required
+from app.security import get_current_user, user_has_permission
 
 plugin_bp = Blueprint('plugins', __name__)
 
@@ -47,9 +47,14 @@ plugin_bp = Blueprint('plugins', __name__)
 # ========================================================================
 
 @plugin_bp.route('/admin/plugins')
-@admin_required
 def admin_plugins_list():
     """System Admin: View all installed plugins."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.System.*"):
+        abort(403)
+    
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -91,7 +96,6 @@ def admin_plugins_list():
 
 
 @plugin_bp.route('/admin/plugins/upload', methods=['GET', 'POST'])
-@admin_required
 def admin_plugins_upload():
     """System Admin: Upload and install a new plugin."""
     if request.method == 'GET':
@@ -158,7 +162,6 @@ def admin_plugins_upload():
 
 
 @plugin_bp.route('/admin/plugins/<plugin_key>')
-@admin_required
 def admin_plugin_detail(plugin_key):
     """System Admin: View plugin details and manage property access."""
     engine = get_record_engine()
@@ -216,7 +219,6 @@ def admin_plugin_detail(plugin_key):
 
 
 @plugin_bp.route('/admin/plugins/<plugin_key>/properties/<int:property_id>/toggle', methods=['POST'])
-@admin_required
 def admin_toggle_property_access(plugin_key, property_id):
     """System Admin: Enable/disable plugin access for a property."""
     engine = get_record_engine()
@@ -292,7 +294,6 @@ def admin_toggle_property_access(plugin_key, property_id):
 
 
 @plugin_bp.route('/admin/plugins/<plugin_key>/properties/<int:property_id>/rotate-key', methods=['POST'])
-@admin_required
 def admin_rotate_property_key(plugin_key, property_id):
     """System Admin: Rotate API key for a property (on their behalf)."""
     engine = get_record_engine()
@@ -347,7 +348,6 @@ def admin_rotate_property_key(plugin_key, property_id):
 # ========================================================================
 
 @plugin_bp.route('/properties/<int:property_id>/plugins')
-@property_manager_required
 def property_plugins_list(property_id):
     """Property Manager: View available plugins for this property."""
     engine = get_record_engine()
@@ -402,7 +402,6 @@ def property_plugins_list(property_id):
 
 
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/enable', methods=['POST'])
-@property_manager_required
 def property_enable_plugin(property_id, plugin_key):
     """Property Manager: Enable a plugin for this property."""
     engine = get_record_engine()
@@ -465,7 +464,6 @@ def property_enable_plugin(property_id, plugin_key):
 
 
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/disable', methods=['POST'])
-@property_manager_required
 def property_disable_plugin(property_id, plugin_key):
     """Property Manager: Disable a plugin for this property."""
     engine = get_record_engine()
@@ -498,7 +496,6 @@ def property_disable_plugin(property_id, plugin_key):
 
 
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/rotate-key', methods=['POST'])
-@property_manager_required
 def property_rotate_key(property_id, plugin_key):
     """Property Manager: Rotate API key for this property."""
     engine = get_record_engine()
