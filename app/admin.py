@@ -1283,7 +1283,7 @@ def services():
 
     allowed_services = [
         "pentavision-web.service",
-        "pentavision-video.service",
+        "pentavision-video-worker.service",
         "pentavision-logserver.service",
         "pentavision-blocklist.service",
     ]
