@@ -2,6 +2,43 @@
 
 ## Active feature work
 
+### Enhanced Plugins System
+
+- [x] Design plugin architecture with two-tier control (System Admin + Property Manager)
+- [x] Implement database models (EnhancedPlugin, PluginPropertyAssignment, PluginHealthCheck, PluginEvent, PluginTestRun, PluginApiKeyRotation)
+- [x] Create admin routes and plugin management UI
+- [x] Add plugin navigation link to admin sidebar
+- [x] Implement inline permission checks for all plugin routes
+- [x] Fix MySQL column size issues (VARCHAR to TEXT for large fields)
+- [x] Redesign plugin cards (115px fixed height, dynamic width, status badges, config icon)
+- [x] Create demo plugin endpoint for testing UI
+- [x] Build Home Assistant plugin - complete implementation
+  - [x] Plugin package structure (plugin.id, definition.json, main.py, README.md)
+  - [x] REST API integration with Home Assistant
+  - [x] MQTT support for real-time events
+  - [x] Webhook receiver for HA commands
+  - [x] HMAC signature verification
+  - [x] Background event queue worker
+  - [x] Health check endpoint
+  - [x] Comprehensive test suite (12 tests passing)
+- [x] Create plugin service (scripts/pentavision_plugin_service.py)
+  - [x] Plugin loader and lifecycle management
+  - [x] Health check loop
+  - [x] Auto-reload on assignment changes
+  - [x] Event broadcasting to plugins
+- [x] Create plugin events module (app/plugin_events.py)
+  - [x] Convenience functions for camera events
+  - [x] Event queuing when service not running
+- [x] Add systemd service (deploy/pentavision-plugins.service)
+- [x] Create plugin configuration UI for property managers
+- [x] Update install scripts for plugin service
+- [x] Create plugin installation script (deploy/install_plugins.sh)
+- [ ] Deploy and test end-to-end with Home Assistant
+- [ ] Implement test runner and verification system
+- [ ] Implement runtime supervision service
+
+### Other Active Features
+
 - [x] Design and implement RTMP streaming feature to send camera video from memory to a remote RTMP endpoint.
 - [x] Analyze current recording and motion-detection implementation (models, recording_service, existing recording UI).
 - [x] Design modular storage provider architecture supporting multiple instances per provider (e.g., multiple Google Drives, S3 buckets).
