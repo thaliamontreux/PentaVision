@@ -176,6 +176,77 @@
                 </div>
               </div>
 
+              <div class="pv-storage-metric-grid">
+                <div class="pv-storage-metric-card">
+                  <div class="pv-storage-metric-label">Active Streams</div>
+                  <div class="pv-storage-metric-value {% if selected_metrics and selected_metrics.active_streams > 0 %}is-success{% endif %}">
+                    {{ selected_metrics.active_streams if selected_metrics else 0 }}
+                  </div>
+                  <div class="pv-storage-metric-subtitle">Currently writing</div>
+                </div>
+
+                <div class="pv-storage-metric-card">
+                  <div class="pv-storage-metric-label">Writes (15m)</div>
+                  <div class="pv-storage-metric-value">
+                    {{ selected_metrics.writes_15m if selected_metrics else 0 }}
+                  </div>
+                  <div class="pv-storage-metric-subtitle">{{ selected_metrics.bytes_15m_text if selected_metrics else '0 B' }}</div>
+                </div>
+
+                <div class="pv-storage-metric-card">
+                  <div class="pv-storage-metric-label">Total Stored</div>
+                  <div class="pv-storage-metric-value">
+                    {{ selected_metrics.stored_total_text if selected_metrics else 'n/a' }}
+                  </div>
+                  <div class="pv-storage-metric-subtitle">Lifetime</div>
+                </div>
+
+                {% if usage_pct is not none %}
+                <div class="pv-storage-metric-card">
+                  <div class="pv-storage-metric-label">Storage Usage</div>
+                  <div class="pv-storage-metric-value {% if usage_pct >= 90 %}is-error{% elif usage_pct >= 75 %}is-warning{% else %}is-success{% endif %}">
+                    {{ usage_pct }}%
+                  </div>
+                  <div class="pv-storage-progress-bar">
+                    <div class="pv-storage-progress-fill {% if usage_pct >= 90 %}is-error{% elif usage_pct >= 75 %}is-warning{% else %}is-success{% endif %}" style="width: {{ usage_pct }}%;"></div>
+                  </div>
+                </div>
+                {% endif %}
+              </div>
+
+              <div class="pv-card pv-mt-3">
+                <div class="pv-card-title">Performance Metrics</div>
+                <div class="pv-card-subtitle">Recent activity and health indicators.</div>
+                <div class="pv-mt-2">
+                  <div class="pv-storage-stat-row">
+                    <span class="pv-storage-stat-label">Last Write</span>
+                    <span class="pv-storage-stat-value">{{ selected_metrics.last_write_text if selected_metrics else 'n/a' }}</span>
+                  </div>
+                  <div class="pv-storage-stat-row">
+                    <span class="pv-storage-stat-label">Last Successful Test</span>
+                    <span class="pv-storage-stat-value">{{ selected_metrics.last_ok_text if selected_metrics else 'n/a' }}</span>
+                  </div>
+                  <div class="pv-storage-stat-row">
+                    <span class="pv-storage-stat-label">Last Error</span>
+                    <span class="pv-storage-stat-value {% if selected_metrics and selected_metrics.last_error_text != 'n/a' %}is-error{% endif %}">
+                      {% if selected_metrics and selected_metrics.last_error_text != 'n/a' %}
+                        {{ selected_metrics.last_error_text }}
+                      {% else %}
+                        None
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div class="pv-storage-stat-row">
+                    <span class="pv-storage-stat-label">Provider Type</span>
+                    <span class="pv-storage-stat-value">{{ selected_module.provider_type }}</span>
+                  </div>
+                  <div class="pv-storage-stat-row">
+                    <span class="pv-storage-stat-label">Priority</span>
+                    <span class="pv-storage-stat-value">{{ selected_module.priority if selected_module.priority is not none else 100 }}</span>
+                  </div>
+                </div>
+              </div>
+
               <div class="pv-card pv-mt-3">
                 <div class="pv-card-title">Recent errors</div>
                 <div class="pv-card-subtitle">Most recent error-level events for this module.</div>

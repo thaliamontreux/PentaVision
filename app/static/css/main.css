@@ -5076,6 +5076,105 @@ body {
   font-weight: 650;
 }
 
+.pv-storage-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.pv-storage-metric-card {
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.pv-storage-metric-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.pv-storage-metric-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #e0f2fe;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.pv-storage-metric-value.is-success {
+  color: #86efac;
+}
+
+.pv-storage-metric-value.is-warning {
+  color: #fde047;
+}
+
+.pv-storage-metric-value.is-error {
+  color: #fca5a5;
+}
+
+.pv-storage-metric-subtitle {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.pv-storage-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.pv-storage-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.pv-storage-progress-fill.is-success {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.pv-storage-progress-fill.is-warning {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.pv-storage-progress-fill.is-error {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.pv-storage-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.pv-storage-stat-row:last-child {
+  border-bottom: none;
+}
+
+.pv-storage-stat-label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.pv-storage-stat-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e0f2fe;
+}
+
 .pv-storage-overview-form {
   margin-top: 0.9rem;
 }
