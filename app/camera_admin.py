@@ -30,6 +30,7 @@ from .models import (
     CameraDevice,
     CameraDlnaMedia,
     CameraPropertyLink,
+    CameraRecording,
     CameraRtmpOutput,
     CameraStoragePolicy,
     CameraUrlPattern,
@@ -3227,15 +3228,15 @@ def camera_health():
             # Check if stream is active
             if stream_mgr and is_enabled:
                 try:
-                    stream_id = f"camera_{device.id}"
-                    stream_info = stream_mgr.get_stream_info(stream_id)
-                    if stream_info and stream_info.get("active"):
-                        health["stream_active"] = True
-                        health["health_status"] = "healthy"
+                    stream_status = stream_mgr.get_status()
+                    if stream_status and device.id in stream_status:
+                        cam_status = stream_status[device.id]
+                        if cam_status.get("active") or cam_status.get("running"):
+                            health["stream_active"] = True
                 except Exception:
                     pass
             
-            # Check storage configuration
+            # Check storage configuration and recent recordings
             try:
                 policy = db.query(CameraStoragePolicy).filter(
                     CameraStoragePolicy.device_id == device.id
@@ -3243,15 +3244,25 @@ def camera_health():
                 if policy and policy.storage_targets:
                     health["storage_configured"] = True
                     health["recording_enabled"] = True
+                    
+                # Check if there are recent recordings (within last hour)
+                from datetime import datetime, timedelta, timezone
+                one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+                recent_recording = db.query(CameraRecording).filter(
+                    CameraRecording.device_id == device.id,
+                    CameraRecording.created_at >= one_hour_ago
+                ).first()
+                if recent_recording:
+                    health["stream_active"] = True
             except Exception:
                 pass
             
             # Determine overall health status
             if not is_enabled:
                 health["health_status"] = "disabled"
-            elif health["stream_active"]:
+            elif health["stream_active"] or health["recording_enabled"]:
                 health["health_status"] = "healthy"
-            elif is_enabled and not health["stream_active"]:
+            elif is_enabled:
                 health["health_status"] = "warning"
             
             camera_health_data.append(health)
