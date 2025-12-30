@@ -24,7 +24,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 
-from app.db import get_record_engine
+from app.db import get_record_engine, get_user_engine
 from app.models import (
     EnhancedPlugin,
     PluginApiKeyRotation,
