@@ -20,6 +20,7 @@ from .diagnostics import (
     bp as diagnostics_bp,
 )
 from .installer import bp as installer_bp
+from .plugin_routes import plugin_bp
 from .property_manager import bp as pm_bp
 from .models import (
     create_face_schema,
@@ -208,6 +209,7 @@ def create_app() -> Flask:
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(camera_admin_bp)
     app.register_blueprint(pm_bp)
+    app.register_blueprint(plugin_bp)
 
     @app.errorhandler(Exception)
     def _handle_uncaught(err):  # pragma: no cover - error wiring

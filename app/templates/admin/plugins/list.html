@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Enhanced Plugins - System Admin{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Enhanced Plugins</h1>
+        <div class="admin-actions">
+            <a href="{{ url_for('plugins.admin_plugins_upload') }}" class="btn btn-primary">
+                <i class="icon-upload"></i> Upload Plugin
+            </a>
+        </div>
+    </div>
+
+    {% if plugin_stats %}
+    <div class="plugins-grid">
+        {% for stat in plugin_stats %}
+        <div class="plugin-card" data-plugin-key="{{ stat.plugin.plugin_key }}">
+            <div class="plugin-card-header">
+                <div class="plugin-icon">
+                    {% if stat.plugin.icon_path %}
+                    <img src="{{ stat.plugin.icon_path }}" alt="{{ stat.plugin.name }}">
+                    {% else %}
+                    <div class="plugin-icon-placeholder">
+                        {{ stat.plugin.name[0]|upper }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="plugin-info">
+                    <h3>{{ stat.plugin.name }}</h3>
+                    <div class="plugin-meta">
+                        <span class="plugin-version">v{{ stat.plugin.version }}</span>
+                        <span class="plugin-category">{{ stat.plugin.category }}</span>
+                    </div>
+                </div>
+                <div class="plugin-status">
+                    <span class="status-badge status-{{ stat.plugin.status }}">
+                        {{ stat.plugin.status|replace('_', ' ')|title }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="plugin-card-body">
+                <p class="plugin-description">{{ stat.plugin.description }}</p>
+                
+                <div class="plugin-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Properties Using</span>
+                        <span class="stat-value">{{ stat.property_count }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Installed</span>
+                        <span class="stat-value">{{ stat.plugin.installed_at|local_dt }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Health</span>
+                        <span class="stat-value status-{{ stat.plugin.last_health_status or 'unknown' }}">
+                            {{ stat.plugin.last_health_status|default('Unknown')|title }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="plugin-card-footer">
+                <a href="{{ url_for('plugins.admin_plugin_detail', plugin_key=stat.plugin.plugin_key) }}" class="btn btn-sm btn-secondary">
+                    View Details
+                </a>
+                {% if stat.plugin.status == 'verified' %}
+                <button class="btn btn-sm btn-success" onclick="enablePlugin('{{ stat.plugin.plugin_key }}')">
+                    Enable System-Wide
+                </button>
+                {% elif stat.plugin.status == 'enabled' %}
+                <button class="btn btn-sm btn-warning" onclick="disablePlugin('{{ stat.plugin.plugin_key }}')">
+                    Disable System-Wide
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">📦</div>
+        <h2>No Plugins Installed</h2>
+        <p>Upload your first plugin to get started with the Enhanced Plugins system.</p>
+        <a href="{{ url_for('plugins.admin_plugins_upload') }}" class="btn btn-primary">
+            Upload Plugin
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.plugins-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.plugin-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.plugin-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.plugin-card-header {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #f0f0f0;
+    gap: 12px;
+}
+
+.plugin-icon {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+}
+
+.plugin-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.plugin-icon-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 8px;
+}
+
+.plugin-info {
+    flex: 1;
+}
+
+.plugin-info h3 {
+    margin: 0 0 4px 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.plugin-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 13px;
+    color: #666;
+}
+
+.plugin-version {
+    font-family: monospace;
+}
+
+.plugin-category {
+    text-transform: capitalize;
+}
+
+.plugin-status {
+    flex-shrink: 0;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-verified {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.status-enabled {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.status-quarantined {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.status-installed_pending_verification {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.plugin-card-body {
+    padding: 16px;
+}
+
+.plugin-description {
+    margin: 0 0 16px 0;
+    color: #555;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.plugin-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.plugin-card-footer {
+    padding: 12px 16px;
+    background: #f8f8f8;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.empty-state h2 {
+    margin: 0 0 12px 0;
+    color: #333;
+}
+
+.empty-state p {
+    margin: 0 0 24px 0;
+    color: #666;
+}
+</style>
+
+<script>
+function enablePlugin(pluginKey) {
+    if (!confirm('Enable this plugin system-wide? Properties will still need to enable it individually.')) {
+        return;
+    }
+    
+    // TODO: Implement enable endpoint
+    alert('Enable functionality coming soon');
+}
+
+function disablePlugin(pluginKey) {
+    if (!confirm('Disable this plugin system-wide? This will prevent new property activations.')) {
+        return;
+    }
+    
+    // TODO: Implement disable endpoint
+    alert('Disable functionality coming soon');
+}
+</script>
+{% endblock %}

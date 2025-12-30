@@ -1,0 +1,624 @@
+{% extends "base.html" %}
+
+{% block title %}Enhanced Plugins - Property Manager{% endblock %}
+
+{% block content %}
+<div class="property-container">
+    <div class="property-header">
+        <h1>Enhanced Plugins</h1>
+        <p class="property-subtitle">Manage plugins for your property</p>
+    </div>
+
+    {% if plugin_statuses %}
+    <div class="plugins-list">
+        {% for ps in plugin_statuses %}
+        <div class="plugin-item {% if not ps.admin_allowed %}plugin-disabled{% endif %}">
+            <div class="plugin-item-header">
+                <div class="plugin-icon">
+                    {% if ps.plugin.icon_path %}
+                    <img src="{{ ps.plugin.icon_path }}" alt="{{ ps.plugin.name }}">
+                    {% else %}
+                    <div class="plugin-icon-placeholder">
+                        {{ ps.plugin.name[0]|upper }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="plugin-info">
+                    <h3>{{ ps.plugin.name }}</h3>
+                    <p class="plugin-description">{{ ps.plugin.description }}</p>
+                    <div class="plugin-meta">
+                        <span class="plugin-version">v{{ ps.plugin.version }}</span>
+                        <span class="plugin-category">{{ ps.plugin.category|title }}</span>
+                    </div>
+                </div>
+                <div class="plugin-controls">
+                    {% if not ps.admin_allowed %}
+                    <div class="status-message status-blocked">
+                        <i class="icon-lock"></i> Disabled by Administrator
+                    </div>
+                    {% elif ps.status == 'enabled' %}
+                    <div class="toggle-switch">
+                        <label class="switch">
+                            <input type="checkbox" checked onchange="togglePlugin('{{ ps.plugin.plugin_key }}', false)">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label">Enabled</span>
+                    </div>
+                    {% elif ps.can_enable %}
+                    <div class="toggle-switch">
+                        <label class="switch">
+                            <input type="checkbox" onchange="togglePlugin('{{ ps.plugin.plugin_key }}', true)">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label">Disabled</span>
+                    </div>
+                    {% else %}
+                    <div class="status-message status-unavailable">
+                        Not Available
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if ps.status == 'enabled' %}
+            <div class="plugin-item-body">
+                <div class="api-key-section">
+                    <div class="api-key-header">
+                        <h4>API Key</h4>
+                        <div class="api-key-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="copyApiKey('{{ ps.api_key_prefix }}')">
+                                <i class="icon-copy"></i> Copy
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="rotateApiKey('{{ ps.plugin.plugin_key }}')">
+                                <i class="icon-refresh"></i> Rotate
+                            </button>
+                        </div>
+                    </div>
+                    <div class="api-key-display">
+                        <code id="key-{{ ps.plugin.plugin_key }}">{{ ps.api_key_prefix }}***********************</code>
+                    </div>
+                    <div class="api-key-meta">
+                        {% if ps.api_key_last_used %}
+                        <span class="last-used">Last used: {{ ps.api_key_last_used|local_dt }}</span>
+                        {% else %}
+                        <span class="last-used">Never used</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="plugin-capabilities">
+                    <h4>Capabilities</h4>
+                    <div class="capabilities-grid">
+                        {% set caps = ps.plugin.capabilities|from_json %}
+                        {% for cap in caps %}
+                        <div class="capability-item">
+                            <i class="icon-check"></i> {{ cap }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">🔌</div>
+        <h2>No Plugins Available</h2>
+        <p>Contact your system administrator to enable plugins for your property.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div id="apiKeyModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>API Key Generated</h2>
+            <button class="modal-close" onclick="closeApiKeyModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="key-display-box">
+                <div class="warning-banner">
+                    <i class="icon-warning"></i>
+                    <strong>IMPORTANT:</strong> Copy this key now. It will not be shown again for security.
+                </div>
+                <div class="key-value" id="newApiKey"></div>
+                <button class="btn btn-primary btn-large" onclick="copyNewKey()">
+                    <i class="icon-copy"></i> Copy to Clipboard
+                </button>
+            </div>
+            <div class="key-instructions">
+                <h4>Next Steps:</h4>
+                <ol>
+                    <li>Copy the API key above</li>
+                    <li>Update your integration configuration</li>
+                    <li>Test the connection</li>
+                </ol>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeApiKeyModal()">I've Copied the Key</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.property-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.property-header {
+    margin-bottom: 30px;
+}
+
+.property-header h1 {
+    margin: 0 0 8px 0;
+    font-size: 28px;
+}
+
+.property-subtitle {
+    margin: 0;
+    color: #666;
+    font-size: 16px;
+}
+
+.plugins-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.plugin-item {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.plugin-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.plugin-item.plugin-disabled {
+    opacity: 0.6;
+}
+
+.plugin-item-header {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    gap: 16px;
+}
+
+.plugin-icon {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+}
+
+.plugin-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.plugin-icon-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: bold;
+    border-radius: 8px;
+}
+
+.plugin-info {
+    flex: 1;
+}
+
+.plugin-info h3 {
+    margin: 0 0 8px 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.plugin-description {
+    margin: 0 0 8px 0;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.plugin-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 13px;
+    color: #888;
+}
+
+.plugin-version {
+    font-family: monospace;
+}
+
+.plugin-controls {
+    flex-shrink: 0;
+}
+
+.toggle-switch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 28px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #667eea;
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px);
+}
+
+.toggle-label {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.status-message {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.status-blocked {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.status-unavailable {
+    background: #f5f5f5;
+    color: #999;
+}
+
+.plugin-item-body {
+    padding: 0 20px 20px 20px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.api-key-section {
+    background: #f8f9fa;
+    padding: 16px;
+    border-radius: 6px;
+    margin-top: 16px;
+}
+
+.api-key-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.api-key-header h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #666;
+    letter-spacing: 0.5px;
+}
+
+.api-key-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.api-key-display {
+    background: white;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 8px;
+}
+
+.api-key-display code {
+    font-family: monospace;
+    font-size: 13px;
+    color: #333;
+    word-break: break-all;
+}
+
+.api-key-meta {
+    font-size: 12px;
+    color: #888;
+}
+
+.plugin-capabilities {
+    margin-top: 20px;
+}
+
+.plugin-capabilities h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #666;
+    letter-spacing: 0.5px;
+}
+
+.capabilities-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.capability-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #e8f5e9;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #2e7d32;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+}
+
+.empty-state-icon {
+    font-size: 72px;
+    margin-bottom: 20px;
+}
+
+.empty-state h2 {
+    margin: 0 0 12px 0;
+    color: #333;
+}
+
+.empty-state p {
+    margin: 0;
+    color: #666;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 24px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 22px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #666;
+    line-height: 1;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.key-display-box {
+    background: #f8f9fa;
+    padding: 24px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.warning-banner {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+}
+
+.warning-banner i {
+    font-size: 20px;
+    color: #e65100;
+}
+
+.key-value {
+    font-family: monospace;
+    font-size: 15px;
+    background: white;
+    padding: 16px;
+    border-radius: 6px;
+    margin: 20px 0;
+    word-break: break-all;
+    border: 2px solid #667eea;
+    color: #333;
+}
+
+.btn-large {
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+.key-instructions {
+    margin-top: 24px;
+    text-align: left;
+}
+
+.key-instructions h4 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+}
+
+.key-instructions ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.key-instructions li {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #e0e0e0;
+    text-align: right;
+}
+</style>
+
+<script>
+const propertyId = {{ property_id }};
+let currentNewKey = '';
+
+function togglePlugin(pluginKey, enable) {
+    const action = enable ? 'enable' : 'disable';
+    const url = `/properties/${propertyId}/plugins/${pluginKey}/${action}`;
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            if (enable && data.api_key) {
+                // Show API key modal
+                currentNewKey = data.api_key;
+                document.getElementById('newApiKey').textContent = data.api_key;
+                document.getElementById('apiKeyModal').style.display = 'flex';
+            } else {
+                location.reload();
+            }
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+            location.reload();
+        }
+    })
+    .catch(err => {
+        alert('Error: ' + err.message);
+        location.reload();
+    });
+}
+
+function rotateApiKey(pluginKey) {
+    if (!confirm('Rotate API key? Your current key will be immediately invalidated and you will need to update your configuration.')) {
+        return;
+    }
+    
+    fetch(`/properties/${propertyId}/plugins/${pluginKey}/rotate-key`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            currentNewKey = data.api_key;
+            document.getElementById('newApiKey').textContent = data.api_key;
+            document.getElementById('apiKeyModal').style.display = 'flex';
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+function copyApiKey(prefix) {
+    const maskedKey = prefix + '***********************';
+    navigator.clipboard.writeText(maskedKey).then(() => {
+        alert('Masked API key copied to clipboard');
+    });
+}
+
+function copyNewKey() {
+    navigator.clipboard.writeText(currentNewKey).then(() => {
+        alert('API key copied to clipboard!');
+    });
+}
+
+function closeApiKeyModal() {
+    document.getElementById('apiKeyModal').style.display = 'none';
+    location.reload();
+}
+</script>
+{% endblock %}

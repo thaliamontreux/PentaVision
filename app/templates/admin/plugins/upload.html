@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Plugin - System Admin{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Upload Plugin</h1>
+        <a href="{{ url_for('plugins.admin_plugins_list') }}" class="btn btn-secondary">
+            <i class="icon-back"></i> Back to Plugins
+        </a>
+    </div>
+
+    <div class="upload-container">
+        <div class="upload-info">
+            <h2>Plugin Package Requirements</h2>
+            <ul>
+                <li><strong>Format:</strong> ZIP archive named <code>{plugin_key}-{version}.zip</code></li>
+                <li><strong>Required Files:</strong>
+                    <ul>
+                        <li><code>plugin.id</code> - Plugin identity and integrity manifest</li>
+                        <li><code>definition.json</code> - Capabilities and configuration schema</li>
+                        <li><code>tests/test_plan.json</code> - Test suite definition</li>
+                        <li><code>README.md</code> - Documentation</li>
+                    </ul>
+                </li>
+                <li><strong>Version Compatibility:</strong> Must specify min/max PentaVision versions</li>
+                <li><strong>Hash Verification:</strong> All files must have SHA256 hashes in plugin.id</li>
+            </ul>
+
+            <div class="info-box info-box-warning">
+                <strong>⚠️ Security Notice</strong>
+                <p>Plugins run with elevated privileges. Only upload plugins from trusted sources. All plugins undergo:</p>
+                <ul>
+                    <li>Hash verification</li>
+                    <li>Compatibility checks</li>
+                    <li>Dependency approval</li>
+                    <li>Mandatory test suite execution</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="upload-form-container">
+            <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                <div class="form-group">
+                    <label for="plugin_file">Plugin Package (.zip)</label>
+                    <div class="file-upload-area" id="dropZone">
+                        <input type="file" name="plugin_file" id="plugin_file" accept=".zip" required>
+                        <div class="file-upload-placeholder">
+                            <div class="upload-icon">📦</div>
+                            <p>Drag & drop plugin ZIP here or click to browse</p>
+                            <p class="file-upload-hint">Maximum size: 100MB</p>
+                        </div>
+                        <div class="file-upload-selected" style="display: none;">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name"></div>
+                                <div class="file-size"></div>
+                            </div>
+                            <button type="button" class="btn-remove" onclick="clearFile()">×</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="upload-progress" id="uploadProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Uploading...</div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="uploadBtn">
+                        <i class="icon-upload"></i> Upload & Install
+                    </button>
+                    <a href="{{ url_for('plugins.admin_plugins_list') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.upload-info h2 {
+    margin: 0 0 16px 0;
+    font-size: 20px;
+}
+
+.upload-info ul {
+    margin: 0 0 20px 0;
+    padding-left: 20px;
+}
+
+.upload-info li {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+
+.upload-info code {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.info-box {
+    padding: 16px;
+    border-radius: 6px;
+    margin-top: 20px;
+}
+
+.info-box-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+}
+
+.info-box strong {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.info-box p {
+    margin: 8px 0;
+}
+
+.info-box ul {
+    margin: 8px 0 0 0;
+}
+
+.upload-form-container {
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.file-upload-area {
+    position: relative;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.file-upload-area:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.file-upload-area.drag-over {
+    border-color: #667eea;
+    background: #f0f2ff;
+}
+
+.file-upload-area input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.upload-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.file-upload-placeholder p {
+    margin: 8px 0;
+    color: #666;
+}
+
+.file-upload-hint {
+    font-size: 13px;
+    color: #999;
+}
+
+.file-upload-selected {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: #f8f8f8;
+    border-radius: 6px;
+}
+
+.file-icon {
+    font-size: 32px;
+}
+
+.file-info {
+    flex: 1;
+    text-align: left;
+}
+
+.file-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.file-size {
+    font-size: 13px;
+    color: #666;
+}
+
+.btn-remove {
+    background: #dc3545;
+    color: white;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.btn-remove:hover {
+    background: #c82333;
+}
+
+.upload-progress {
+    margin: 20px 0;
+}
+
+.progress-bar {
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    width: 0%;
+    transition: width 0.3s;
+}
+
+.progress-text {
+    text-align: center;
+    font-size: 14px;
+    color: #666;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+@media (max-width: 1024px) {
+    .upload-container {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('plugin_file');
+const uploadForm = document.getElementById('uploadForm');
+const uploadProgress = document.getElementById('uploadProgress');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+
+// Drag and drop handlers
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        fileInput.files = files;
+        updateFileDisplay();
+    }
+});
+
+fileInput.addEventListener('change', updateFileDisplay);
+
+function updateFileDisplay() {
+    const file = fileInput.files[0];
+    if (file) {
+        const placeholder = dropZone.querySelector('.file-upload-placeholder');
+        const selected = dropZone.querySelector('.file-upload-selected');
+        
+        placeholder.style.display = 'none';
+        selected.style.display = 'flex';
+        
+        selected.querySelector('.file-name').textContent = file.name;
+        selected.querySelector('.file-size').textContent = formatFileSize(file.size);
+    }
+}
+
+function clearFile() {
+    fileInput.value = '';
+    const placeholder = dropZone.querySelector('.file-upload-placeholder');
+    const selected = dropZone.querySelector('.file-upload-selected');
+    
+    placeholder.style.display = 'block';
+    selected.style.display = 'none';
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+uploadForm.addEventListener('submit', (e) => {
+    const file = fileInput.files[0];
+    if (!file) {
+        e.preventDefault();
+        alert('Please select a plugin file');
+        return;
+    }
+    
+    if (!file.name.endsWith('.zip')) {
+        e.preventDefault();
+        alert('Plugin must be a .zip file');
+        return;
+    }
+    
+    // Show progress (simulated - real progress would need AJAX)
+    uploadProgress.style.display = 'block';
+    document.getElementById('uploadBtn').disabled = true;
+    
+    // Simulate progress
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += 5;
+        if (progress >= 90) {
+            clearInterval(interval);
+            progressText.textContent = 'Processing...';
+        } else {
+            progressFill.style.width = progress + '%';
+            progressText.textContent = 'Uploading... ' + progress + '%';
+        }
+    }, 100);
+});
+</script>
+{% endblock %}
