@@ -1,0 +1,27 @@
+[Unit]
+Description=PentaVision Plugin Service
+After=network.target mysql.service pentavision-web.service
+Wants=pentavision-web.service
+
+[Service]
+Type=simple
+User=pentavision
+Group=pentavision
+WorkingDirectory=/opt/pentavision/app
+Environment="PATH=/opt/pentavision/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/pentavision/app"
+ExecStart=/opt/pentavision/venv/bin/python /opt/pentavision/app/scripts/pentavision_plugin_service.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pentavision /dev/shm /tmp
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
