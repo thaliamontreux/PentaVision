@@ -3660,3 +3660,154 @@ def rbac_user_roles_update(target_user_id: int):
     )
 
     return redirect(url_for("admin.rbac_user_roles", target_user_id=target_user_id))
+
+
+@bp.get("/diagnostics")
+def diagnostics():
+    """System diagnostics and health monitoring dashboard."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.System.*"):
+        abort(403)
+
+    import platform
+    import psutil
+    from .db import get_record_engine
+
+    diagnostics_data = {
+        "system": {},
+        "database": {},
+        "services": {},
+        "storage": {},
+        "performance": {},
+    }
+
+    # System information
+    try:
+        diagnostics_data["system"] = {
+            "platform": platform.system(),
+            "platform_release": platform.release(),
+            "platform_version": platform.version(),
+            "architecture": platform.machine(),
+            "hostname": platform.node(),
+            "processor": platform.processor(),
+            "python_version": platform.python_version(),
+            "cpu_count": psutil.cpu_count(),
+            "cpu_percent": psutil.cpu_percent(interval=1),
+            "memory_total": psutil.virtual_memory().total,
+            "memory_available": psutil.virtual_memory().available,
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_total": psutil.disk_usage('/').total,
+            "disk_used": psutil.disk_usage('/').used,
+            "disk_percent": psutil.disk_usage('/').percent,
+            "boot_time": datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc),
+        }
+    except Exception as e:
+        diagnostics_data["system"]["error"] = str(e)
+
+    # Database connectivity
+    try:
+        user_engine = get_user_engine()
+        record_engine = get_record_engine()
+        
+        diagnostics_data["database"]["user_db"] = {
+            "connected": user_engine is not None,
+            "url": str(user_engine.url) if user_engine else None,
+        }
+        diagnostics_data["database"]["record_db"] = {
+            "connected": record_engine is not None,
+            "url": str(record_engine.url) if record_engine else None,
+        }
+
+        # Test queries
+        if user_engine:
+            with Session(user_engine) as db:
+                user_count = db.query(User).count()
+                diagnostics_data["database"]["user_db"]["user_count"] = user_count
+                diagnostics_data["database"]["user_db"]["status"] = "healthy"
+
+        if record_engine:
+            from .models import CameraDevice
+            with Session(record_engine) as db:
+                camera_count = db.query(CameraDevice).count()
+                diagnostics_data["database"]["record_db"]["camera_count"] = camera_count
+                diagnostics_data["database"]["record_db"]["status"] = "healthy"
+
+    except Exception as e:
+        diagnostics_data["database"]["error"] = str(e)
+
+    # Service status
+    try:
+        from .stream_service import get_stream_manager
+        stream_mgr = get_stream_manager()
+        
+        diagnostics_data["services"]["stream_manager"] = {
+            "running": stream_mgr is not None,
+            "active_streams": len(stream_mgr.get_active_streams()) if stream_mgr else 0,
+        }
+
+        # Check recording service
+        try:
+            from .recording_service import RecordingManager
+            rec_mgr = RecordingManager.get_instance()
+            diagnostics_data["services"]["recording_manager"] = {
+                "running": rec_mgr is not None,
+                "active_workers": len(rec_mgr._workers) if rec_mgr and hasattr(rec_mgr, '_workers') else 0,
+            }
+        except Exception:
+            diagnostics_data["services"]["recording_manager"] = {"running": False}
+
+    except Exception as e:
+        diagnostics_data["services"]["error"] = str(e)
+
+    # Storage modules status
+    try:
+        if record_engine:
+            from .models import StorageModule
+            with Session(record_engine) as db:
+                storage_modules = db.query(StorageModule).all()
+                diagnostics_data["storage"]["total_modules"] = len(storage_modules)
+                diagnostics_data["storage"]["enabled_modules"] = sum(1 for m in storage_modules if m.enabled)
+                diagnostics_data["storage"]["modules"] = [
+                    {
+                        "name": m.name,
+                        "provider": m.provider_type,
+                        "enabled": bool(m.enabled),
+                    }
+                    for m in storage_modules
+                ]
+    except Exception as e:
+        diagnostics_data["storage"]["error"] = str(e)
+
+    # Performance metrics
+    try:
+        import time
+        diagnostics_data["performance"]["uptime_seconds"] = int(time.time() - psutil.boot_time())
+        
+        # Network I/O
+        net_io = psutil.net_io_counters()
+        diagnostics_data["performance"]["network"] = {
+            "bytes_sent": net_io.bytes_sent,
+            "bytes_recv": net_io.bytes_recv,
+            "packets_sent": net_io.packets_sent,
+            "packets_recv": net_io.packets_recv,
+        }
+
+        # Disk I/O
+        disk_io = psutil.disk_io_counters()
+        if disk_io:
+            diagnostics_data["performance"]["disk_io"] = {
+                "read_bytes": disk_io.read_bytes,
+                "write_bytes": disk_io.write_bytes,
+                "read_count": disk_io.read_count,
+                "write_count": disk_io.write_count,
+            }
+
+    except Exception as e:
+        diagnostics_data["performance"]["error"] = str(e)
+
+    return render_template(
+        "admin/diagnostics.html",
+        diagnostics=diagnostics_data,
+    )

@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+
+{% block title %}System Diagnostics · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-admin-layout">
+    <div class="pv-admin-sidebar">
+      {% include 'admin/_nav.html' %}
+    </div>
+
+    <div class="pv-admin-main">
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">System Diagnostics</h1>
+          <p class="pv-page-subtitle">Monitor system health, performance, and service status</p>
+        </div>
+        <div class="pv-page-actions">
+          <button type="button" class="pv-button pv-button-secondary" onclick="location.reload()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="pv-diagnostics-grid">
+        <!-- System Information -->
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>System Information</h2>
+          </div>
+          <div class="pv-card-body">
+            {% if diagnostics.system.error %}
+              <div class="pv-alert pv-alert-error">{{ diagnostics.system.error }}</div>
+            {% else %}
+              <div class="pv-diagnostics-info">
+                <div class="pv-diagnostics-row">
+                  <span class="pv-diagnostics-label">Platform</span>
+                  <span class="pv-diagnostics-value">{{ diagnostics.system.platform }} {{ diagnostics.system.platform_release }}</span>
+                </div>
+                <div class="pv-diagnostics-row">
+                  <span class="pv-diagnostics-label">Architecture</span>
+                  <span class="pv-diagnostics-value">{{ diagnostics.system.architecture }}</span>
+                </div>
+                <div class="pv-diagnostics-row">
+                  <span class="pv-diagnostics-label">Hostname</span>
+                  <span class="pv-diagnostics-value">{{ diagnostics.system.hostname }}</span>
+                </div>
+                <div class="pv-diagnostics-row">
+                  <span class="pv-diagnostics-label">Python Version</span>
+                  <span class="pv-diagnostics-value">{{ diagnostics.system.python_version }}</span>
+                </div>
+                <div class="pv-diagnostics-row">
+                  <span class="pv-diagnostics-label">CPU Cores</span>
+                  <span class="pv-diagnostics-value">{{ diagnostics.system.cpu_count }}</span>
+                </div>
+                <div class="pv-diagnostics-row">
+                  <span class="pv-diagnostics-label">Boot Time</span>
+                  <span class="pv-diagnostics-value">{{ diagnostics.system.boot_time|local_dt if diagnostics.system.boot_time else '—' }}</span>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Resource Usage -->
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>Resource Usage</h2>
+          </div>
+          <div class="pv-card-body">
+            {% if not diagnostics.system.error %}
+              <div class="pv-diagnostics-metric">
+                <div class="pv-diagnostics-metric-header">
+                  <span class="pv-diagnostics-metric-label">CPU Usage</span>
+                  <span class="pv-diagnostics-metric-value">{{ "%.1f"|format(diagnostics.system.cpu_percent) }}%</span>
+                </div>
+                <div class="pv-progress-bar">
+                  <div class="pv-progress-fill" style="width: {{ diagnostics.system.cpu_percent }}%; background: {% if diagnostics.system.cpu_percent > 80 %}#ef4444{% elif diagnostics.system.cpu_percent > 60 %}#fbbf24{% else %}#22c55e{% endif %};"></div>
+                </div>
+              </div>
+
+              <div class="pv-diagnostics-metric">
+                <div class="pv-diagnostics-metric-header">
+                  <span class="pv-diagnostics-metric-label">Memory Usage</span>
+                  <span class="pv-diagnostics-metric-value">{{ "%.1f"|format(diagnostics.system.memory_percent) }}%</span>
+                </div>
+                <div class="pv-progress-bar">
+                  <div class="pv-progress-fill" style="width: {{ diagnostics.system.memory_percent }}%; background: {% if diagnostics.system.memory_percent > 80 %}#ef4444{% elif diagnostics.system.memory_percent > 60 %}#fbbf24{% else %}#22c55e{% endif %};"></div>
+                </div>
+                <div class="pv-diagnostics-metric-detail">
+                  {{ (diagnostics.system.memory_available / 1024 / 1024 / 1024)|round(2) }} GB available of {{ (diagnostics.system.memory_total / 1024 / 1024 / 1024)|round(2) }} GB
+                </div>
+              </div>
+
+              <div class="pv-diagnostics-metric">
+                <div class="pv-diagnostics-metric-header">
+                  <span class="pv-diagnostics-metric-label">Disk Usage</span>
+                  <span class="pv-diagnostics-metric-value">{{ "%.1f"|format(diagnostics.system.disk_percent) }}%</span>
+                </div>
+                <div class="pv-progress-bar">
+                  <div class="pv-progress-fill" style="width: {{ diagnostics.system.disk_percent }}%; background: {% if diagnostics.system.disk_percent > 80 %}#ef4444{% elif diagnostics.system.disk_percent > 60 %}#fbbf24{% else %}#22c55e{% endif %};"></div>
+                </div>
+                <div class="pv-diagnostics-metric-detail">
+                  {{ (diagnostics.system.disk_used / 1024 / 1024 / 1024)|round(2) }} GB used of {{ (diagnostics.system.disk_total / 1024 / 1024 / 1024)|round(2) }} GB
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Database Status -->
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>Database Status</h2>
+          </div>
+          <div class="pv-card-body">
+            {% if diagnostics.database.error %}
+              <div class="pv-alert pv-alert-error">{{ diagnostics.database.error }}</div>
+            {% else %}
+              <div class="pv-diagnostics-status-list">
+                <div class="pv-diagnostics-status-item">
+                  <div class="pv-diagnostics-status-header">
+                    <span class="pv-diagnostics-status-indicator {% if diagnostics.database.user_db.connected %}pv-status-success{% else %}pv-status-error{% endif %}"></span>
+                    <span class="pv-diagnostics-status-label">User Database</span>
+                    <span class="pv-badge {% if diagnostics.database.user_db.status == 'healthy' %}pv-badge-success{% else %}pv-badge-muted{% endif %}">
+                      {{ diagnostics.database.user_db.status|default('disconnected') }}
+                    </span>
+                  </div>
+                  {% if diagnostics.database.user_db.user_count is defined %}
+                    <div class="pv-diagnostics-status-detail">{{ diagnostics.database.user_db.user_count }} users</div>
+                  {% endif %}
+                </div>
+
+                <div class="pv-diagnostics-status-item">
+                  <div class="pv-diagnostics-status-header">
+                    <span class="pv-diagnostics-status-indicator {% if diagnostics.database.record_db.connected %}pv-status-success{% else %}pv-status-error{% endif %}"></span>
+                    <span class="pv-diagnostics-status-label">Record Database</span>
+                    <span class="pv-badge {% if diagnostics.database.record_db.status == 'healthy' %}pv-badge-success{% else %}pv-badge-muted{% endif %}">
+                      {{ diagnostics.database.record_db.status|default('disconnected') }}
+                    </span>
+                  </div>
+                  {% if diagnostics.database.record_db.camera_count is defined %}
+                    <div class="pv-diagnostics-status-detail">{{ diagnostics.database.record_db.camera_count }} cameras</div>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Services Status -->
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>Services Status</h2>
+          </div>
+          <div class="pv-card-body">
+            {% if diagnostics.services.error %}
+              <div class="pv-alert pv-alert-error">{{ diagnostics.services.error }}</div>
+            {% else %}
+              <div class="pv-diagnostics-status-list">
+                {% if diagnostics.services.stream_manager %}
+                  <div class="pv-diagnostics-status-item">
+                    <div class="pv-diagnostics-status-header">
+                      <span class="pv-diagnostics-status-indicator {% if diagnostics.services.stream_manager.running %}pv-status-success{% else %}pv-status-error{% endif %}"></span>
+                      <span class="pv-diagnostics-status-label">Stream Manager</span>
+                      <span class="pv-badge {% if diagnostics.services.stream_manager.running %}pv-badge-success{% else %}pv-badge-error{% endif %}">
+                        {{ 'running' if diagnostics.services.stream_manager.running else 'stopped' }}
+                      </span>
+                    </div>
+                    {% if diagnostics.services.stream_manager.active_streams is defined %}
+                      <div class="pv-diagnostics-status-detail">{{ diagnostics.services.stream_manager.active_streams }} active streams</div>
+                    {% endif %}
+                  </div>
+                {% endif %}
+
+                {% if diagnostics.services.recording_manager %}
+                  <div class="pv-diagnostics-status-item">
+                    <div class="pv-diagnostics-status-header">
+                      <span class="pv-diagnostics-status-indicator {% if diagnostics.services.recording_manager.running %}pv-status-success{% else %}pv-status-error{% endif %}"></span>
+                      <span class="pv-diagnostics-status-label">Recording Manager</span>
+                      <span class="pv-badge {% if diagnostics.services.recording_manager.running %}pv-badge-success{% else %}pv-badge-error{% endif %}">
+                        {{ 'running' if diagnostics.services.recording_manager.running else 'stopped' }}
+                      </span>
+                    </div>
+                    {% if diagnostics.services.recording_manager.active_workers is defined %}
+                      <div class="pv-diagnostics-status-detail">{{ diagnostics.services.recording_manager.active_workers }} active workers</div>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Storage Modules -->
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>Storage Modules</h2>
+          </div>
+          <div class="pv-card-body">
+            {% if diagnostics.storage.error %}
+              <div class="pv-alert pv-alert-error">{{ diagnostics.storage.error }}</div>
+            {% else %}
+              <div class="pv-diagnostics-summary">
+                <div class="pv-diagnostics-summary-item">
+                  <span class="pv-diagnostics-summary-value">{{ diagnostics.storage.total_modules|default(0) }}</span>
+                  <span class="pv-diagnostics-summary-label">Total Modules</span>
+                </div>
+                <div class="pv-diagnostics-summary-item">
+                  <span class="pv-diagnostics-summary-value">{{ diagnostics.storage.enabled_modules|default(0) }}</span>
+                  <span class="pv-diagnostics-summary-label">Enabled</span>
+                </div>
+              </div>
+
+              {% if diagnostics.storage.modules %}
+                <div class="pv-diagnostics-list">
+                  {% for module in diagnostics.storage.modules[:5] %}
+                    <div class="pv-diagnostics-list-item">
+                      <span class="pv-diagnostics-status-indicator {% if module.enabled %}pv-status-success{% else %}pv-status-muted{% endif %}"></span>
+                      <span class="pv-diagnostics-list-name">{{ module.name }}</span>
+                      <span class="pv-badge pv-badge-muted">{{ module.provider }}</span>
+                    </div>
+                  {% endfor %}
+                  {% if diagnostics.storage.modules|length > 5 %}
+                    <div class="pv-diagnostics-list-more">
+                      +{{ diagnostics.storage.modules|length - 5 }} more
+                    </div>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="pv-card">
+          <div class="pv-card-header">
+            <h2>Performance Metrics</h2>
+          </div>
+          <div class="pv-card-body">
+            {% if diagnostics.performance.error %}
+              <div class="pv-alert pv-alert-error">{{ diagnostics.performance.error }}</div>
+            {% else %}
+              <div class="pv-diagnostics-info">
+                {% if diagnostics.performance.uptime_seconds is defined %}
+                  <div class="pv-diagnostics-row">
+                    <span class="pv-diagnostics-label">System Uptime</span>
+                    <span class="pv-diagnostics-value">
+                      {% set days = (diagnostics.performance.uptime_seconds / 86400)|int %}
+                      {% set hours = ((diagnostics.performance.uptime_seconds % 86400) / 3600)|int %}
+                      {% set minutes = ((diagnostics.performance.uptime_seconds % 3600) / 60)|int %}
+                      {{ days }}d {{ hours }}h {{ minutes }}m
+                    </span>
+                  </div>
+                {% endif %}
+
+                {% if diagnostics.performance.network %}
+                  <div class="pv-diagnostics-row">
+                    <span class="pv-diagnostics-label">Network Sent</span>
+                    <span class="pv-diagnostics-value">{{ (diagnostics.performance.network.bytes_sent / 1024 / 1024 / 1024)|round(2) }} GB</span>
+                  </div>
+                  <div class="pv-diagnostics-row">
+                    <span class="pv-diagnostics-label">Network Received</span>
+                    <span class="pv-diagnostics-value">{{ (diagnostics.performance.network.bytes_recv / 1024 / 1024 / 1024)|round(2) }} GB</span>
+                  </div>
+                {% endif %}
+
+                {% if diagnostics.performance.disk_io %}
+                  <div class="pv-diagnostics-row">
+                    <span class="pv-diagnostics-label">Disk Read</span>
+                    <span class="pv-diagnostics-value">{{ (diagnostics.performance.disk_io.read_bytes / 1024 / 1024 / 1024)|round(2) }} GB</span>
+                  </div>
+                  <div class="pv-diagnostics-row">
+                    <span class="pv-diagnostics-label">Disk Write</span>
+                    <span class="pv-diagnostics-value">{{ (diagnostics.performance.disk_io.write_bytes / 1024 / 1024 / 1024)|round(2) }} GB</span>
+                  </div>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

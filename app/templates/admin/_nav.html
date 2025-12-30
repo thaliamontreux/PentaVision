@@ -75,6 +75,10 @@
     <a class="pv-admin-navbtn" href="{{ url_for('admin.services') }}">Services</a>
   {% endif %}
 
+  {% if has_permission('Admin.System.*') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.diagnostics') }}">System Diagnostics</a>
+  {% endif %}
+
   {% if has_permission('Nav.Installer.Databases.View') %}
     <a class="pv-admin-navbtn" href="{{ url_for('installer.install') }}">Installer &amp; Databases</a>
   {% endif %}
