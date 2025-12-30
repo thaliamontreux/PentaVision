@@ -1,0 +1,127 @@
+{
+    "capabilities": [
+        "camera_events",
+        "motion_detection",
+        "person_detection",
+        "recording_events",
+        "webhook_receiver"
+    ],
+    "scopes": [
+        "read:cameras",
+        "read:events",
+        "read:recordings",
+        "write:webhooks"
+    ],
+    "config_schema": {
+        "type": "object",
+        "required": ["ha_url", "ha_token"],
+        "properties": {
+            "ha_url": {
+                "type": "string",
+                "title": "Home Assistant URL",
+                "description": "URL of your Home Assistant instance (e.g., http://homeassistant.local:8123)",
+                "pattern": "^https?://.+"
+            },
+            "ha_token": {
+                "type": "string",
+                "title": "Long-Lived Access Token",
+                "description": "Generate this in Home Assistant: Profile → Long-Lived Access Tokens",
+                "format": "password"
+            },
+            "webhook_secret": {
+                "type": "string",
+                "title": "Webhook Secret",
+                "description": "Secret for authenticating incoming webhooks from Home Assistant",
+                "format": "password"
+            },
+            "event_types": {
+                "type": "array",
+                "title": "Event Types to Send",
+                "description": "Which PentaVision events to forward to Home Assistant",
+                "items": {
+                    "type": "string",
+                    "enum": ["motion_start", "motion_end", "person_detected", "recording_started", "recording_ended", "camera_online", "camera_offline"]
+                },
+                "default": ["motion_start", "person_detected", "recording_started"]
+            },
+            "mqtt_enabled": {
+                "type": "boolean",
+                "title": "Enable MQTT",
+                "description": "Use MQTT for real-time event delivery (requires MQTT broker)",
+                "default": false
+            },
+            "mqtt_broker": {
+                "type": "string",
+                "title": "MQTT Broker",
+                "description": "MQTT broker hostname (e.g., localhost or homeassistant.local)"
+            },
+            "mqtt_port": {
+                "type": "integer",
+                "title": "MQTT Port",
+                "description": "MQTT broker port",
+                "default": 1883
+            },
+            "mqtt_username": {
+                "type": "string",
+                "title": "MQTT Username"
+            },
+            "mqtt_password": {
+                "type": "string",
+                "title": "MQTT Password",
+                "format": "password"
+            },
+            "mqtt_topic_prefix": {
+                "type": "string",
+                "title": "MQTT Topic Prefix",
+                "description": "Prefix for MQTT topics",
+                "default": "pentavision"
+            }
+        }
+    },
+    "endpoints": {
+        "health": "/health",
+        "webhook": "/webhook/ha"
+    },
+    "requirements": {
+        "pip_packages": [
+            "requests>=2.28.0",
+            "paho-mqtt>=1.6.0"
+        ],
+        "os_packages": [],
+        "ports": [],
+        "disk_space_mb": 10,
+        "memory_mb": 64
+    },
+    "events_produced": [
+        {
+            "name": "ha.event_sent",
+            "description": "Event was successfully sent to Home Assistant"
+        },
+        {
+            "name": "ha.event_failed",
+            "description": "Failed to send event to Home Assistant"
+        },
+        {
+            "name": "ha.webhook_received",
+            "description": "Received webhook from Home Assistant"
+        }
+    ],
+    "events_consumed": [
+        {
+            "name": "camera.motion_detected",
+            "description": "Motion detected on a camera"
+        },
+        {
+            "name": "camera.person_detected",
+            "description": "Person detected on a camera"
+        },
+        {
+            "name": "recording.started",
+            "description": "Recording started"
+        },
+        {
+            "name": "recording.ended",
+            "description": "Recording ended"
+        }
+    ]
+}

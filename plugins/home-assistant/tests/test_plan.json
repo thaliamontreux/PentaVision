@@ -1,0 +1,51 @@
+{
+    "test_suite": "home-assistant",
+    "version": "1.0.0",
+    "tests": [
+        {
+            "id": "test_plugin_init",
+            "name": "Plugin Initialization",
+            "description": "Verify plugin initializes with valid configuration",
+            "type": "unit",
+            "required": true
+        },
+        {
+            "id": "test_ha_connection",
+            "name": "Home Assistant Connection",
+            "description": "Test connection to Home Assistant API",
+            "type": "integration",
+            "required": true,
+            "requires_config": ["ha_url", "ha_token"]
+        },
+        {
+            "id": "test_event_handling",
+            "name": "Event Handling",
+            "description": "Verify events are properly queued and processed",
+            "type": "unit",
+            "required": true
+        },
+        {
+            "id": "test_webhook_signature",
+            "name": "Webhook Signature Verification",
+            "description": "Test HMAC signature verification for webhooks",
+            "type": "unit",
+            "required": true
+        },
+        {
+            "id": "test_mqtt_connection",
+            "name": "MQTT Connection",
+            "description": "Test MQTT broker connection when enabled",
+            "type": "integration",
+            "required": false,
+            "requires_config": ["mqtt_broker"]
+        },
+        {
+            "id": "test_health_check",
+            "name": "Health Check",
+            "description": "Verify health check returns correct status",
+            "type": "unit",
+            "required": true
+        }
+    ],
+    "coverage_threshold": 80
+}

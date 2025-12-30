@@ -1,0 +1,16 @@
+{
+    "plugin_key": "home-assistant",
+    "version": "1.0.0",
+    "name": "Home Assistant Integration",
+    "description": "Bidirectional integration with Home Assistant for smart home automation. Sends camera events (motion, person detection, recordings) to Home Assistant and receives automation triggers.",
+    "author": "PentaVision",
+    "author_email": "plugins@pentavision.io",
+    "website": "https://pentavision.io/plugins/home-assistant",
+    "category": "automation",
+    "entrypoint": "main.py",
+    "runtime_type": "python",
+    "min_pentavision_version": "2.0.0",
+    "max_pentavision_version": null,
+    "checksum": "sha256:pending",
+    "signature": null
+}
