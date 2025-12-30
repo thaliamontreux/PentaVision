@@ -61,6 +61,12 @@
             </span>
             <button type="button" class="pv-button pv-button-sm" onclick="bulkEnable()">Enable Selected</button>
             <button type="button" class="pv-button pv-button-sm" onclick="bulkDisable()">Disable Selected</button>
+            {% if all_groups %}
+              <button type="button" class="pv-button pv-button-sm" onclick="showBulkGroupModal()">Assign to Group</button>
+            {% endif %}
+            {% if all_tags %}
+              <button type="button" class="pv-button pv-button-sm" onclick="showBulkTagModal()">Assign Tags</button>
+            {% endif %}
             <button type="button" class="pv-button pv-button-sm pv-button-secondary" onclick="clearSelection()">Clear Selection</button>
           </div>
         {% endif %}
@@ -307,5 +313,154 @@
         }, 10000);
       }
     }
+
+    function showBulkGroupModal() {
+      const modal = document.getElementById('bulk-group-modal');
+      if (modal) modal.classList.add('is-visible');
+    }
+
+    function showBulkTagModal() {
+      const modal = document.getElementById('bulk-tag-modal');
+      if (modal) modal.classList.add('is-visible');
+    }
+
+    function closeBulkGroupModal() {
+      const modal = document.getElementById('bulk-group-modal');
+      if (modal) modal.classList.remove('is-visible');
+    }
+
+    function closeBulkTagModal() {
+      const modal = document.getElementById('bulk-tag-modal');
+      if (modal) modal.classList.remove('is-visible');
+    }
+
+    function bulkAssignGroup() {
+      const cameraIds = getSelectedCameraIds();
+      const groupId = document.getElementById('bulk-group-select').value;
+      
+      if (cameraIds.length === 0 || !groupId) return;
+      
+      fetch('{{ url_for("camera_admin.bulk_assign_group") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+          camera_ids: cameraIds,
+          group_id: parseInt(groupId)
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast(`Successfully assigned ${data.updated} camera(s) to group`);
+          closeBulkGroupModal();
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Failed to assign cameras to group');
+        }
+      })
+      .catch(error => {
+        showToast('Error: ' + error.message);
+      });
+    }
+
+    function bulkAssignTags() {
+      const cameraIds = getSelectedCameraIds();
+      const checkboxes = document.querySelectorAll('#bulk-tag-form input[type="checkbox"]:checked');
+      const tagIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+      
+      if (cameraIds.length === 0 || tagIds.length === 0) {
+        showToast('Please select at least one tag');
+        return;
+      }
+      
+      fetch('{{ url_for("camera_admin.bulk_assign_tags") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+          camera_ids: cameraIds,
+          tag_ids: tagIds
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast(`Successfully assigned tags to ${data.updated} camera(s)`);
+          closeBulkTagModal();
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Failed to assign tags to cameras');
+        }
+      })
+      .catch(error => {
+        showToast('Error: ' + error.message);
+      });
+    }
   </script>
+
+  <!-- Bulk Group Assignment Modal -->
+  {% if all_groups %}
+  <div class="pv-modal" id="bulk-group-modal">
+    <div class="pv-modal-dialog">
+      <div class="pv-modal-header">
+        <div>
+          <div class="pv-card-title">Assign to Group</div>
+          <div class="pv-card-subtitle">Select a group to assign the selected cameras to.</div>
+        </div>
+        <button type="button" class="pv-button pv-button-small" onclick="closeBulkGroupModal()">Close</button>
+      </div>
+      <div class="pv-modal-body">
+        <div class="pv-field-group">
+          <label for="bulk-group-select">Group</label>
+          <select id="bulk-group-select" class="pv-input">
+            <option value="">Select a group...</option>
+            {% for group in all_groups %}
+              <option value="{{ group.id }}">{{ group.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="pv-mt-2">
+          <button type="button" class="pv-button" onclick="bulkAssignGroup()">Assign to Group</button>
+          <button type="button" class="pv-button pv-button-secondary" onclick="closeBulkGroupModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Bulk Tag Assignment Modal -->
+  {% if all_tags %}
+  <div class="pv-modal" id="bulk-tag-modal">
+    <div class="pv-modal-dialog">
+      <div class="pv-modal-header">
+        <div>
+          <div class="pv-card-title">Assign Tags</div>
+          <div class="pv-card-subtitle">Select tags to assign to the selected cameras.</div>
+        </div>
+        <button type="button" class="pv-button pv-button-small" onclick="closeBulkTagModal()">Close</button>
+      </div>
+      <div class="pv-modal-body">
+        <form id="bulk-tag-form">
+          <div class="pv-checkbox-group">
+            {% for tag in all_tags %}
+              <label class="pv-checkbox-label">
+                <input type="checkbox" value="{{ tag.id }}" />
+                <span class="pv-tag-badge" style="background: {{ tag.color or '#64748b' }};">{{ tag.name }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </form>
+        <div class="pv-mt-2">
+          <button type="button" class="pv-button" onclick="bulkAssignTags()">Assign Tags</button>
+          <button type="button" class="pv-button pv-button-secondary" onclick="closeBulkTagModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 {% endblock %}

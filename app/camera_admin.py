@@ -2942,6 +2942,125 @@ def bulk_update():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@bp.post("/bulk-assign-group")
+def bulk_assign_group():
+    """Bulk assign cameras to a group."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+
+    engine = get_record_engine()
+    if engine is None:
+        return jsonify({"success": False, "error": "Database not configured"}), 500
+
+    try:
+        data = request.get_json()
+        camera_ids = data.get("camera_ids", [])
+        group_id = data.get("group_id")
+
+        if not camera_ids or not group_id:
+            return jsonify({"success": False, "error": "Missing camera_ids or group_id"}), 400
+
+        from .models import CameraGroupMembership
+        
+        updated_count = 0
+        with Session(engine) as db:
+            CameraGroupMembership.__table__.create(bind=engine, checkfirst=True)
+            
+            for camera_id in camera_ids:
+                try:
+                    # Check if membership already exists
+                    existing = db.query(CameraGroupMembership).filter(
+                        CameraGroupMembership.camera_id == int(camera_id),
+                        CameraGroupMembership.group_id == int(group_id)
+                    ).first()
+                    
+                    if not existing:
+                        db.add(CameraGroupMembership(
+                            camera_id=int(camera_id),
+                            group_id=int(group_id)
+                        ))
+                        updated_count += 1
+                except Exception:
+                    continue
+            
+            db.commit()
+
+        log_event(
+            "CAMERA_BULK_GROUP_ASSIGN",
+            user_id=user.id,
+            details=f"group_id={group_id}, cameras={len(camera_ids)}, updated={updated_count}",
+        )
+
+        return jsonify({"success": True, "updated": updated_count})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.post("/bulk-assign-tags")
+def bulk_assign_tags():
+    """Bulk assign tags to cameras."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+
+    engine = get_record_engine()
+    if engine is None:
+        return jsonify({"success": False, "error": "Database not configured"}), 500
+
+    try:
+        data = request.get_json()
+        camera_ids = data.get("camera_ids", [])
+        tag_ids = data.get("tag_ids", [])
+
+        if not camera_ids or not tag_ids:
+            return jsonify({"success": False, "error": "Missing camera_ids or tag_ids"}), 400
+
+        from .models import CameraTagAssignment
+        
+        updated_count = 0
+        with Session(engine) as db:
+            CameraTagAssignment.__table__.create(bind=engine, checkfirst=True)
+            
+            for camera_id in camera_ids:
+                for tag_id in tag_ids:
+                    try:
+                        # Check if assignment already exists
+                        existing = db.query(CameraTagAssignment).filter(
+                            CameraTagAssignment.camera_id == int(camera_id),
+                            CameraTagAssignment.tag_id == int(tag_id)
+                        ).first()
+                        
+                        if not existing:
+                            db.add(CameraTagAssignment(
+                                camera_id=int(camera_id),
+                                tag_id=int(tag_id)
+                            ))
+                            updated_count += 1
+                    except Exception:
+                        continue
+            
+            db.commit()
+
+        log_event(
+            "CAMERA_BULK_TAG_ASSIGN",
+            user_id=user.id,
+            details=f"tags={len(tag_ids)}, cameras={len(camera_ids)}, assignments={updated_count}",
+        )
+
+        return jsonify({"success": True, "updated": len(camera_ids)})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @bp.get("/groups")
 def camera_groups():
     """Camera groups management page."""
