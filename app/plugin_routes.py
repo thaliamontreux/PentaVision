@@ -184,6 +184,11 @@ def admin_plugin_detail(plugin_key):
         abort(500, "Database not configured")
     db = Session(engine)
     
+    user_engine = get_user_engine()
+    if not user_engine:
+        abort(500, "User database not configured")
+    user_db = Session(user_engine)
+    
     try:
         plugin = db.query(EnhancedPlugin).filter(
             EnhancedPlugin.plugin_key == plugin_key
@@ -192,8 +197,8 @@ def admin_plugin_detail(plugin_key):
         if not plugin:
             abort(404)
         
-        # Get all properties
-        properties = db.query(Property).order_by(Property.name).all()
+        # Get all properties from UserDB
+        properties = user_db.query(Property).order_by(Property.name).all()
         
         # Get property assignments
         assignments = db.query(PluginPropertyAssignment).filter(
@@ -231,6 +236,7 @@ def admin_plugin_detail(plugin_key):
     
     finally:
         db.close()
+        user_db.close()
 
 
 @plugin_bp.route('/admin/plugins/<plugin_key>/properties/<int:property_id>/toggle', methods=['POST'])
