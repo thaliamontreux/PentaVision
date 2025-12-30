@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Camera Groups · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-admin-layout">
+    <div class="pv-admin-sidebar">
+      {% include 'admin/_nav.html' %}
+    </div>
+
+    <div class="pv-admin-main">
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">Camera Groups</h1>
+          <p class="pv-page-subtitle">Organize cameras into logical groups for easier management</p>
+        </div>
+        <div class="pv-page-actions">
+          <button type="button" class="pv-button pv-button-primary" onclick="showCreateGroupModal()">
+            Create Group
+          </button>
+        </div>
+      </div>
+
+      {% if groups %}
+        <div class="pv-groups-grid">
+          {% for group in groups %}
+            <div class="pv-group-card">
+              <div class="pv-group-card-header">
+                {% if group.color %}
+                  <div class="pv-group-color" style="background: {{ group.color }};"></div>
+                {% else %}
+                  <div class="pv-group-color" style="background: #64748b;"></div>
+                {% endif %}
+                <div class="pv-group-info">
+                  <h3 class="pv-group-name">{{ group.name }}</h3>
+                  {% if group.description %}
+                    <p class="pv-group-description">{{ group.description }}</p>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="pv-group-stats">
+                <div class="pv-group-stat">
+                  <span class="pv-group-stat-value">{{ group.member_count }}</span>
+                  <span class="pv-group-stat-label">Cameras</span>
+                </div>
+              </div>
+              <div class="pv-group-actions">
+                <a href="{{ url_for('camera_admin.list_devices') }}?group={{ group.id }}" class="pv-button pv-button-sm">
+                  View Cameras
+                </a>
+                <form method="post" action="{{ url_for('camera_admin.camera_group_delete', group_id=group.id) }}" class="pv-inline-form" onsubmit="return confirm('Delete group {{ group.name }}? Cameras will not be deleted.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <button type="submit" class="pv-button pv-button-sm pv-button-danger">Delete</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="pv-empty">
+          <p class="pv-empty-title">No camera groups yet</p>
+          <p class="pv-empty-subtitle">Create groups to organize your cameras by location, type, or purpose</p>
+          <button type="button" class="pv-button pv-button-primary" onclick="showCreateGroupModal()">
+            Create First Group
+          </button>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- Create Group Modal -->
+  <div class="pv-modal" id="create-group-modal" style="display: none;">
+    <div class="pv-modal-dialog">
+      <h2 class="pv-modal-title">Create Camera Group</h2>
+      <form method="post" action="{{ url_for('camera_admin.camera_group_create') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        
+        <div class="pv-field-group">
+          <label for="group-name">Group Name</label>
+          <input type="text" id="group-name" name="name" required placeholder="e.g., Building A, Parking Lot" />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="group-description">Description (optional)</label>
+          <textarea id="group-description" name="description" rows="3" placeholder="Describe this group..."></textarea>
+        </div>
+
+        <div class="pv-field-group">
+          <label for="group-color">Color</label>
+          <input type="color" id="group-color" name="color" value="#38bdf8" />
+        </div>
+
+        <div class="pv-modal-actions">
+          <button type="button" class="pv-button" onclick="hideCreateGroupModal()">Cancel</button>
+          <button type="submit" class="pv-button pv-button-primary">Create Group</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function showCreateGroupModal() {
+      document.getElementById('create-group-modal').style.display = 'flex';
+    }
+
+    function hideCreateGroupModal() {
+      document.getElementById('create-group-modal').style.display = 'none';
+    }
+
+    // Close modal on outside click
+    document.getElementById('create-group-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        hideCreateGroupModal();
+      }
+    });
+  </script>
+{% endblock %}

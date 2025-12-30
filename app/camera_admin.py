@@ -2804,6 +2804,251 @@ def bulk_update():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@bp.get("/groups")
+def camera_groups():
+    """Camera groups management page."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_role(user, "admin"):
+        abort(403)
+
+    engine = get_record_engine()
+    if engine is None:
+        abort(500)
+
+    from .models import CameraGroup, CameraGroupMembership
+
+    groups = []
+    with Session(engine) as db:
+        CameraGroup.__table__.create(bind=engine, checkfirst=True)
+        CameraGroupMembership.__table__.create(bind=engine, checkfirst=True)
+        
+        group_rows = db.query(CameraGroup).order_by(CameraGroup.name).all()
+        
+        for group in group_rows:
+            member_count = db.query(CameraGroupMembership).filter(
+                CameraGroupMembership.group_id == group.id
+            ).count()
+            
+            groups.append({
+                "id": group.id,
+                "name": group.name,
+                "description": group.description,
+                "color": group.color,
+                "member_count": member_count,
+                "created_at": group.created_at,
+            })
+
+    csrf_token = _ensure_csrf_token()
+    return render_template(
+        "cameras/groups.html",
+        groups=groups,
+        csrf_token=csrf_token,
+    )
+
+
+@bp.post("/groups/create")
+def camera_group_create():
+    """Create a new camera group."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_role(user, "admin"):
+        abort(403)
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_record_engine()
+    if engine is None:
+        abort(500)
+
+    from .models import CameraGroup
+
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    color = request.form.get("color", "").strip()
+
+    if not name:
+        return redirect(url_for("camera_admin.camera_groups"))
+
+    with Session(engine) as db:
+        CameraGroup.__table__.create(bind=engine, checkfirst=True)
+        
+        group = CameraGroup(
+            name=name,
+            description=description if description else None,
+            color=color if color else None,
+        )
+        db.add(group)
+        db.commit()
+
+    log_event(
+        "CAMERA_GROUP_CREATE",
+        user_id=user.id,
+        details=f"name={name}",
+    )
+
+    return redirect(url_for("camera_admin.camera_groups"))
+
+
+@bp.post("/groups/<int:group_id>/delete")
+def camera_group_delete(group_id: int):
+    """Delete a camera group."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_role(user, "admin"):
+        abort(403)
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_record_engine()
+    if engine is None:
+        abort(500)
+
+    from .models import CameraGroup, CameraGroupMembership
+
+    with Session(engine) as db:
+        # Delete memberships first
+        db.query(CameraGroupMembership).filter(
+            CameraGroupMembership.group_id == group_id
+        ).delete()
+        
+        # Delete group
+        db.query(CameraGroup).filter(CameraGroup.id == group_id).delete()
+        db.commit()
+
+    log_event(
+        "CAMERA_GROUP_DELETE",
+        user_id=user.id,
+        details=f"group_id={group_id}",
+    )
+
+    return redirect(url_for("camera_admin.camera_groups"))
+
+
+@bp.get("/tags")
+def camera_tags():
+    """Camera tags management page."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_role(user, "admin"):
+        abort(403)
+
+    engine = get_record_engine()
+    if engine is None:
+        abort(500)
+
+    from .models import CameraTag, CameraTagAssignment
+
+    tags = []
+    with Session(engine) as db:
+        CameraTag.__table__.create(bind=engine, checkfirst=True)
+        CameraTagAssignment.__table__.create(bind=engine, checkfirst=True)
+        
+        tag_rows = db.query(CameraTag).order_by(CameraTag.name).all()
+        
+        for tag in tag_rows:
+            usage_count = db.query(CameraTagAssignment).filter(
+                CameraTagAssignment.tag_id == tag.id
+            ).count()
+            
+            tags.append({
+                "id": tag.id,
+                "name": tag.name,
+                "color": tag.color,
+                "usage_count": usage_count,
+                "created_at": tag.created_at,
+            })
+
+    csrf_token = _ensure_csrf_token()
+    return render_template(
+        "cameras/tags.html",
+        tags=tags,
+        csrf_token=csrf_token,
+    )
+
+
+@bp.post("/tags/create")
+def camera_tag_create():
+    """Create a new camera tag."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_role(user, "admin"):
+        abort(403)
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_record_engine()
+    if engine is None:
+        abort(500)
+
+    from .models import CameraTag
+
+    name = request.form.get("name", "").strip()
+    color = request.form.get("color", "").strip()
+
+    if not name:
+        return redirect(url_for("camera_admin.camera_tags"))
+
+    with Session(engine) as db:
+        CameraTag.__table__.create(bind=engine, checkfirst=True)
+        
+        tag = CameraTag(
+            name=name,
+            color=color if color else None,
+        )
+        db.add(tag)
+        db.commit()
+
+    log_event(
+        "CAMERA_TAG_CREATE",
+        user_id=user.id,
+        details=f"name={name}",
+    )
+
+    return redirect(url_for("camera_admin.camera_tags"))
+
+
+@bp.post("/tags/<int:tag_id>/delete")
+def camera_tag_delete(tag_id: int):
+    """Delete a camera tag."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_role(user, "admin"):
+        abort(403)
+    if not _validate_csrf_token(request.form.get("csrf_token")):
+        abort(400)
+
+    engine = get_record_engine()
+    if engine is None:
+        abort(500)
+
+    from .models import CameraTag, CameraTagAssignment
+
+    with Session(engine) as db:
+        # Delete assignments first
+        db.query(CameraTagAssignment).filter(
+            CameraTagAssignment.tag_id == tag_id
+        ).delete()
+        
+        # Delete tag
+        db.query(CameraTag).filter(CameraTag.id == tag_id).delete()
+        db.commit()
+
+    log_event(
+        "CAMERA_TAG_DELETE",
+        user_id=user.id,
+        details=f"tag_id={tag_id}",
+    )
+
+    return redirect(url_for("camera_admin.camera_tags"))
+
+
 @bp.get("/health")
 def camera_health():
     """Camera health monitoring dashboard."""

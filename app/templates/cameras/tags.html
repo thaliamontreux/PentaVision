@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block title %}Camera Tags · PentaVision{% endblock %}
+
+{% block content %}
+  <section class="pv-admin-layout">
+    <div class="pv-admin-sidebar">
+      {% include 'admin/_nav.html' %}
+    </div>
+
+    <div class="pv-admin-main">
+      <div class="pv-page-header">
+        <div>
+          <h1 class="pv-page-title">Camera Tags</h1>
+          <p class="pv-page-subtitle">Tag cameras for flexible filtering and organization</p>
+        </div>
+        <div class="pv-page-actions">
+          <button type="button" class="pv-button pv-button-primary" onclick="showCreateTagModal()">
+            Create Tag
+          </button>
+        </div>
+      </div>
+
+      {% if tags %}
+        <div class="pv-tags-list">
+          {% for tag in tags %}
+            <div class="pv-tag-item">
+              <div class="pv-tag-badge" style="background: {{ tag.color or '#64748b' }};">
+                {{ tag.name }}
+              </div>
+              <div class="pv-tag-meta">
+                <span class="pv-tag-usage">{{ tag.usage_count }} camera{{ 's' if tag.usage_count != 1 else '' }}</span>
+              </div>
+              <div class="pv-tag-actions">
+                <a href="{{ url_for('camera_admin.list_devices') }}?tag={{ tag.id }}" class="pv-button pv-button-sm">
+                  View
+                </a>
+                <form method="post" action="{{ url_for('camera_admin.camera_tag_delete', tag_id=tag.id) }}" class="pv-inline-form" onsubmit="return confirm('Delete tag {{ tag.name }}?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <button type="submit" class="pv-button pv-button-sm pv-button-danger">Delete</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="pv-empty">
+          <p class="pv-empty-title">No tags yet</p>
+          <p class="pv-empty-subtitle">Create tags to categorize cameras by features, location, or any custom criteria</p>
+          <button type="button" class="pv-button pv-button-primary" onclick="showCreateTagModal()">
+            Create First Tag
+          </button>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- Create Tag Modal -->
+  <div class="pv-modal" id="create-tag-modal" style="display: none;">
+    <div class="pv-modal-dialog">
+      <h2 class="pv-modal-title">Create Camera Tag</h2>
+      <form method="post" action="{{ url_for('camera_admin.camera_tag_create') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        
+        <div class="pv-field-group">
+          <label for="tag-name">Tag Name</label>
+          <input type="text" id="tag-name" name="name" required placeholder="e.g., outdoor, PTZ, 4K" />
+        </div>
+
+        <div class="pv-field-group">
+          <label for="tag-color">Color</label>
+          <input type="color" id="tag-color" name="color" value="#22c55e" />
+        </div>
+
+        <div class="pv-modal-actions">
+          <button type="button" class="pv-button" onclick="hideCreateTagModal()">Cancel</button>
+          <button type="submit" class="pv-button pv-button-primary">Create Tag</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function showCreateTagModal() {
+      document.getElementById('create-tag-modal').style.display = 'flex';
+    }
+
+    function hideCreateTagModal() {
+      document.getElementById('create-tag-modal').style.display = 'none';
+    }
+
+    // Close modal on outside click
+    document.getElementById('create-tag-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        hideCreateTagModal();
+      }
+    });
+  </script>
+{% endblock %}

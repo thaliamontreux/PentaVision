@@ -19,6 +19,14 @@
     <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.camera_health') }}">Camera Health</a>
   {% endif %}
 
+  {% if has_permission('Nav.Feeds.Cameras.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.camera_groups') }}">Camera Groups</a>
+  {% endif %}
+
+  {% if has_permission('Nav.Feeds.Cameras.View') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.camera_tags') }}">Camera Tags</a>
+  {% endif %}
+
   {% if has_permission('Nav.Feeds.CameraUrlTemplates.View') %}
     <a class="pv-admin-navbtn" href="{{ url_for('camera_admin.list_patterns') }}">Camera URL Templates</a>
   {% endif %}
