@@ -1,6 +1,26 @@
-# PentaVision Attendance & Recording Platform
+# PentaVision - Enterprise IP Camera Management & Recording Platform
 
-This project is a web-based system for managing attendance and video recordings using facial recognition, secure authentication (passkeys/2FA), and pluggable cloud storage providers.
+**Version:** 1.1.0  
+**Last Updated:** December 30, 2025
+
+PentaVision is an enterprise-grade IP camera management and recording system built with Flask. It provides comprehensive camera monitoring, flexible storage orchestration with multiple provider support, role-based access control (RBAC), and real-time health monitoring.
+
+## Key Features
+
+- **Multi-Camera Management:** Add, configure, monitor, and organize IP cameras with groups and tags
+- **Live Streaming:** Real-time RTSP/HTTP stream viewing with HLS conversion
+- **Scheduled Recording:** Continuous and time-based recording with segment management
+- **Storage Orchestration:** 15+ pluggable storage providers (GCS, S3, Azure, Dropbox, Local, FTP, etc.)
+- **Health Monitoring:** Real-time camera and storage health dashboards with metrics
+- **Bulk Operations:** Assign multiple cameras to groups/tags simultaneously
+- **User Management:** Multi-user support with granular RBAC permissions
+- **Audit Logging:** Comprehensive event tracking for security and compliance
+
+## Documentation
+
+- **[Project Blueprint](Project_Blueprint.md)** - Comprehensive architecture documentation for developers and AI assistants
+- **[Release Notes v1.1](RELEASE_NOTES_v1.1.md)** - Latest release features and improvements
+- **[TODO](TODO.md)** - Project roadmap and planned features
 
 ## Quick start (development)
 
