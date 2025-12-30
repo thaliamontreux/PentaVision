@@ -2947,7 +2947,7 @@ def camera_groups():
     user = get_current_user()
     if user is None:
         abort(403)
-    if not user_has_role(user, "admin"):
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
         abort(403)
 
     engine = get_record_engine()
@@ -2991,7 +2991,7 @@ def camera_group_create():
     user = get_current_user()
     if user is None:
         abort(403)
-    if not user_has_role(user, "admin"):
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
         abort(403)
     if not _validate_csrf_token(request.form.get("csrf_token")):
         abort(400)
@@ -3035,7 +3035,7 @@ def camera_group_delete(group_id: int):
     user = get_current_user()
     if user is None:
         abort(403)
-    if not user_has_role(user, "admin"):
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
         abort(403)
     if not _validate_csrf_token(request.form.get("csrf_token")):
         abort(400)
@@ -3071,7 +3071,7 @@ def camera_tags():
     user = get_current_user()
     if user is None:
         abort(403)
-    if not user_has_role(user, "admin"):
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
         abort(403)
 
     engine = get_record_engine()
@@ -3114,7 +3114,7 @@ def camera_tag_create():
     user = get_current_user()
     if user is None:
         abort(403)
-    if not user_has_role(user, "admin"):
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
         abort(403)
     if not _validate_csrf_token(request.form.get("csrf_token")):
         abort(400)
@@ -3156,7 +3156,7 @@ def camera_tag_delete(tag_id: int):
     user = get_current_user()
     if user is None:
         abort(403)
-    if not user_has_role(user, "admin"):
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
         abort(403)
     if not _validate_csrf_token(request.form.get("csrf_token")):
         abort(400)
