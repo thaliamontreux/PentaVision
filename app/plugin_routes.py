@@ -4,7 +4,6 @@ Enhanced Plugins System - Admin Routes
 Flask blueprint for plugin management endpoints.
 """
 
-import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +19,6 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 
@@ -98,9 +96,15 @@ def admin_plugins_list():
 @plugin_bp.route('/admin/plugins/upload', methods=['GET', 'POST'])
 def admin_plugins_upload():
     """System Admin: Upload and install a new plugin."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.System.*"):
+        abort(403)
+
     if request.method == 'GET':
         return render_template('admin/plugins/upload.html')
-    
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -164,6 +168,12 @@ def admin_plugins_upload():
 @plugin_bp.route('/admin/plugins/<plugin_key>')
 def admin_plugin_detail(plugin_key):
     """System Admin: View plugin details and manage property access."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.System.*"):
+        abort(403)
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -221,6 +231,12 @@ def admin_plugin_detail(plugin_key):
 @plugin_bp.route('/admin/plugins/<plugin_key>/properties/<int:property_id>/toggle', methods=['POST'])
 def admin_toggle_property_access(plugin_key, property_id):
     """System Admin: Enable/disable plugin access for a property."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -296,6 +312,12 @@ def admin_toggle_property_access(plugin_key, property_id):
 @plugin_bp.route('/admin/plugins/<plugin_key>/properties/<int:property_id>/rotate-key', methods=['POST'])
 def admin_rotate_property_key(plugin_key, property_id):
     """System Admin: Rotate API key for a property (on their behalf)."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -350,6 +372,11 @@ def admin_rotate_property_key(plugin_key, property_id):
 @plugin_bp.route('/properties/<int:property_id>/plugins')
 def property_plugins_list(property_id):
     """Property Manager: View available plugins for this property."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    # TODO: Add property-level permission check
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -404,6 +431,11 @@ def property_plugins_list(property_id):
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/enable', methods=['POST'])
 def property_enable_plugin(property_id, plugin_key):
     """Property Manager: Enable a plugin for this property."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    # TODO: Add property-level permission check
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -466,6 +498,11 @@ def property_enable_plugin(property_id, plugin_key):
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/disable', methods=['POST'])
 def property_disable_plugin(property_id, plugin_key):
     """Property Manager: Disable a plugin for this property."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    # TODO: Add property-level permission check
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
@@ -498,6 +535,11 @@ def property_disable_plugin(property_id, plugin_key):
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/rotate-key', methods=['POST'])
 def property_rotate_key(property_id, plugin_key):
     """Property Manager: Rotate API key for this property."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    # TODO: Add property-level permission check
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
