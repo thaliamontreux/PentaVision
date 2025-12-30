@@ -4814,6 +4814,77 @@ body {
   position: relative;
 }
 
+/* Provider-specific icon colors */
+.pv-storage-provider-icon[data-provider="gcs"] {
+  background: radial-gradient(circle at top left, rgba(66, 133, 244, 0.5), rgba(234, 67, 53, 0.3));
+  border-color: rgba(66, 133, 244, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="s3"] {
+  background: radial-gradient(circle at top left, rgba(255, 153, 0, 0.5), rgba(35, 47, 62, 0.8));
+  border-color: rgba(255, 153, 0, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="azure_blob"] {
+  background: radial-gradient(circle at top left, rgba(0, 120, 212, 0.5), rgba(0, 188, 242, 0.3));
+  border-color: rgba(0, 120, 212, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="dropbox"] {
+  background: radial-gradient(circle at top left, rgba(0, 97, 255, 0.5), rgba(0, 126, 229, 0.3));
+  border-color: rgba(0, 97, 255, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="onedrive"] {
+  background: radial-gradient(circle at top left, rgba(0, 120, 215, 0.5), rgba(0, 164, 239, 0.3));
+  border-color: rgba(0, 120, 215, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="box"] {
+  background: radial-gradient(circle at top left, rgba(0, 97, 224, 0.5), rgba(0, 114, 239, 0.3));
+  border-color: rgba(0, 97, 224, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="webdav"],
+.pv-storage-provider-icon[data-provider="nextcloud"] {
+  background: radial-gradient(circle at top left, rgba(0, 130, 201, 0.5), rgba(0, 150, 220, 0.3));
+  border-color: rgba(0, 130, 201, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="ftp"],
+.pv-storage-provider-icon[data-provider="sftp"],
+.pv-storage-provider-icon[data-provider="scp"] {
+  background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.5), rgba(124, 58, 237, 0.3));
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="local_fs"],
+.pv-storage-provider-icon[data-provider="local_drive"] {
+  background: radial-gradient(circle at top left, rgba(34, 197, 94, 0.5), rgba(22, 163, 74, 0.3));
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="db"],
+.pv-storage-provider-icon[data-provider="sql_db"] {
+  background: radial-gradient(circle at top left, rgba(168, 85, 247, 0.5), rgba(147, 51, 234, 0.3));
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="swift"] {
+  background: radial-gradient(circle at top left, rgba(239, 68, 68, 0.5), rgba(220, 38, 38, 0.3));
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="pcloud"] {
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.5), rgba(37, 99, 235, 0.3));
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.pv-storage-provider-icon[data-provider="mega"] {
+  background: radial-gradient(circle at top left, rgba(239, 68, 68, 0.5), rgba(220, 38, 38, 0.3));
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
 .pv-storage-provider-icon-text {
   font-weight: 700;
   letter-spacing: 0.02em;
