@@ -1494,10 +1494,39 @@ def storage_settings_page():
         except Exception:  # noqa: BLE001
             pass
 
+    # Build module metrics for all modules (active stream counts)
+    module_metrics = {}
+    if record_engine is not None and modules:
+        with Session(record_engine) as session_db:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+            for mod in modules:
+                try:
+                    mod_name = str(getattr(mod, "name", "") or "")
+                    if mod_name:
+                        active_count = (
+                            session_db.query(
+                                func.count(
+                                    func.distinct(CameraRecording.device_id)
+                                )
+                            )
+                            .filter(
+                                CameraRecording.storage_provider == mod_name,
+                                CameraRecording.created_at >= cutoff,
+                            )
+                            .scalar()
+                            or 0
+                        )
+                        module_metrics[mod.id] = {
+                            "active_streams": active_count
+                        }
+                except Exception:  # noqa: BLE001
+                    continue
+
     return render_template(
         "storage_modules.html",
         global_csrf_token=global_csrf_token,
         modules=modules,
+        module_metrics=module_metrics,
         module_test_result=module_test_result,
         module_test_ready=module_test_ready,
         open_wizard=open_wizard,

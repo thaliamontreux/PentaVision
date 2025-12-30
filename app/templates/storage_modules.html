@@ -48,6 +48,19 @@
                     </span>
                   </div>
                 </div>
+                <div class="pv-storage-provider-badges">
+                  {% set active_count = module_metrics.get(m.id, {}).get('active_streams', 0) if module_metrics else 0 %}
+                  {% if active_count > 0 %}
+                    <span class="pv-storage-stream-badge">
+                      <span class="pv-storage-stream-badge-icon"></span>
+                      {{ active_count }} stream{{ 's' if active_count != 1 else '' }}
+                    </span>
+                  {% endif %}
+                  {% set health_status = 'disabled' if not m.is_enabled else ('healthy' if m.status == 'ok' else 'degraded') %}
+                  <span class="pv-storage-health-badge is-{{ health_status }}">
+                    {% if health_status == 'healthy' %}✓ Healthy{% elif health_status == 'degraded' %}⚠ Degraded{% else %}○ Disabled{% endif %}
+                  </span>
+                </div>
               </a>
             {% endfor %}
           {% else %}
