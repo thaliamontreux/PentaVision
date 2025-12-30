@@ -295,6 +295,49 @@
           >{{ form.notes }}</textarea>
         </div>
 
+        {% if all_groups %}
+          <div class="pv-field-group">
+            <label>Groups</label>
+            <div class="pv-checkbox-group">
+              {% for group in all_groups %}
+                <label class="pv-checkbox-label">
+                  <input
+                    type="checkbox"
+                    name="groups"
+                    value="{{ group.id }}"
+                    {% if group.id in camera_group_ids %}checked{% endif %}
+                  />
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 3px; height: 16px; background: {{ group.color or '#64748b' }}; border-radius: 2px;"></div>
+                    <span>{{ group.name }}</span>
+                  </div>
+                </label>
+              {% endfor %}
+            </div>
+            <p class="pv-card-subtitle">Assign this camera to one or more groups for organization</p>
+          </div>
+        {% endif %}
+
+        {% if all_tags %}
+          <div class="pv-field-group">
+            <label>Tags</label>
+            <div class="pv-checkbox-group">
+              {% for tag in all_tags %}
+                <label class="pv-checkbox-label">
+                  <input
+                    type="checkbox"
+                    name="tags"
+                    value="{{ tag.id }}"
+                    {% if tag.id in camera_tag_ids %}checked{% endif %}
+                  />
+                  <span class="pv-tag-badge" style="background: {{ tag.color or '#64748b' }};">{{ tag.name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+            <p class="pv-card-subtitle">Tag this camera for flexible filtering and search</p>
+          </div>
+        {% endif %}
+
         <div class="pv-field-group">
           <label for="storage_targets">Storage providers (optional)</label>
           <input
