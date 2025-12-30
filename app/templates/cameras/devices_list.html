@@ -24,6 +24,17 @@
           </div>
         </div>
 
+        {% if devices %}
+          <div class="pv-bulk-actions" id="bulk-actions" style="display: none;">
+            <span class="pv-bulk-actions-label">
+              <span id="selected-count">0</span> camera(s) selected
+            </span>
+            <button type="button" class="pv-button pv-button-sm" onclick="bulkEnable()">Enable Selected</button>
+            <button type="button" class="pv-button pv-button-sm" onclick="bulkDisable()">Disable Selected</button>
+            <button type="button" class="pv-button pv-button-sm pv-button-secondary" onclick="clearSelection()">Clear Selection</button>
+          </div>
+        {% endif %}
+
         {% if errors %}
           <div class="pv-alert pv-alert-error">
             <ul>
@@ -39,6 +50,9 @@
             <table class="pv-table">
               <thead>
                 <tr>
+                  <th style="width: 40px;">
+                    <input type="checkbox" id="select-all" onchange="toggleSelectAll(this)" />
+                  </th>
                   <th>Name</th>
                   <th>IP</th>
                   <th>Port</th>
@@ -54,6 +68,9 @@
                 {% for d in devices %}
                   {% set pat = patterns.get(d.pattern_id) %}
                   <tr>
+                    <td>
+                      <input type="checkbox" class="camera-checkbox" data-camera-id="{{ d.id }}" onchange="updateBulkActions()" />
+                    </td>
                     <td>
                       <a href="{{ url_for('main.camera_detail', device_id=d.id) }}" class="pv-link-muted">
                         {{ d.name }}
@@ -141,4 +158,111 @@
       </div>
     </div>
   </section>
+
+  <script>
+    function toggleSelectAll(checkbox) {
+      const checkboxes = document.querySelectorAll('.camera-checkbox');
+      checkboxes.forEach(cb => cb.checked = checkbox.checked);
+      updateBulkActions();
+    }
+
+    function updateBulkActions() {
+      const checkboxes = document.querySelectorAll('.camera-checkbox:checked');
+      const count = checkboxes.length;
+      const bulkActions = document.getElementById('bulk-actions');
+      const countSpan = document.getElementById('selected-count');
+      
+      if (count > 0) {
+        bulkActions.style.display = 'flex';
+        countSpan.textContent = count;
+      } else {
+        bulkActions.style.display = 'none';
+        document.getElementById('select-all').checked = false;
+      }
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.camera-checkbox').forEach(cb => cb.checked = false);
+      document.getElementById('select-all').checked = false;
+      updateBulkActions();
+    }
+
+    function getSelectedCameraIds() {
+      const checkboxes = document.querySelectorAll('.camera-checkbox:checked');
+      return Array.from(checkboxes).map(cb => cb.dataset.cameraId);
+    }
+
+    function bulkEnable() {
+      const cameraIds = getSelectedCameraIds();
+      if (cameraIds.length === 0) return;
+      
+      if (!confirm(`Enable ${cameraIds.length} camera(s)?`)) return;
+      
+      fetch('{{ url_for("camera_admin.bulk_update") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+          camera_ids: cameraIds,
+          action: 'enable'
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast(`Successfully enabled ${data.updated} camera(s)`);
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Failed to enable cameras');
+        }
+      })
+      .catch(error => {
+        showToast('Error: ' + error.message);
+      });
+    }
+
+    function bulkDisable() {
+      const cameraIds = getSelectedCameraIds();
+      if (cameraIds.length === 0) return;
+      
+      if (!confirm(`Disable ${cameraIds.length} camera(s)?`)) return;
+      
+      fetch('{{ url_for("camera_admin.bulk_update") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+          camera_ids: cameraIds,
+          action: 'disable'
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast(`Successfully disabled ${data.updated} camera(s)`);
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Failed to disable cameras');
+        }
+      })
+      .catch(error => {
+        showToast('Error: ' + error.message);
+      });
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('pv-global-toast');
+      if (toast) {
+        toast.textContent = message;
+        toast.style.display = 'block';
+        setTimeout(() => {
+          toast.style.display = 'none';
+        }, 10000);
+      }
+    }
+  </script>
 {% endblock %}

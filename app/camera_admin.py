@@ -2752,6 +2752,58 @@ def import_csv():
     )
 
 
+@bp.post("/bulk-update")
+def bulk_update():
+    """Bulk update camera settings (enable/disable)."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({"success": False, "error": "Not authenticated"}), 403
+    if not user_has_role(user, "admin"):
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+
+    engine = get_record_engine()
+    if engine is None:
+        return jsonify({"success": False, "error": "Database not configured"}), 500
+
+    try:
+        data = request.get_json()
+        camera_ids = data.get("camera_ids", [])
+        action = data.get("action", "")
+
+        if not camera_ids or not action:
+            return jsonify({"success": False, "error": "Missing camera_ids or action"}), 400
+
+        if action not in ["enable", "disable"]:
+            return jsonify({"success": False, "error": "Invalid action"}), 400
+
+        updated_count = 0
+        with Session(engine) as db:
+            for camera_id in camera_ids:
+                try:
+                    device = db.query(CameraDevice).filter(CameraDevice.id == int(camera_id)).first()
+                    if device:
+                        if action == "enable":
+                            device.is_active = 1
+                        else:
+                            device.is_active = 0
+                        updated_count += 1
+                except Exception:
+                    continue
+            
+            db.commit()
+
+        log_event(
+            "CAMERA_BULK_UPDATE",
+            user_id=user.id,
+            details=f"action={action}, cameras={len(camera_ids)}, updated={updated_count}",
+        )
+
+        return jsonify({"success": True, "updated": updated_count})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @bp.get("/health")
 def camera_health():
     """Camera health monitoring dashboard."""
