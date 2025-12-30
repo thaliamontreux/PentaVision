@@ -490,6 +490,36 @@
           </div>
 
           <div class="pv-storage-tabpanel" data-panel="advanced">
+            <div class="pv-card pv-mt-3">
+              <div class="pv-card-title">Global Priority Order</div>
+              <div class="pv-card-subtitle">Storage modules are used in priority order (lower number = higher priority). Automatic failover occurs when a module is unavailable.</div>
+              {% if modules %}
+                <div class="pv-mt-2">
+                  {% for m in modules|sort(attribute='priority') %}
+                    <div class="pv-storage-stat-row">
+                      <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div class="pv-storage-provider-icon" data-provider="{{ m.provider_type }}" style="width: 32px; height: 32px; font-size: 0.7rem;">
+                          <span class="pv-storage-provider-icon-text">{{ (m.provider_type or '?')[:2] }}</span>
+                        </div>
+                        <div>
+                          <div class="pv-storage-stat-value" style="font-size: 0.875rem; margin-bottom: 0.125rem;">{{ m.label or m.name }}</div>
+                          <div class="pv-storage-stat-label" style="font-size: 0.75rem;">{{ m.provider_type }}</div>
+                        </div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span class="pv-storage-health-badge is-{% if not m.is_enabled %}disabled{% elif m.status == 'ok' %}healthy{% else %}degraded{% endif %}" style="font-size: 0.7rem; padding: 0.125rem 0.5rem;">
+                          {% if not m.is_enabled %}Disabled{% elif m.status == 'ok' %}Active{% else %}Degraded{% endif %}
+                        </span>
+                        <span class="pv-storage-stat-value" style="font-size: 0.875rem; min-width: 60px; text-align: right;">Priority {{ m.priority if m.priority is not none else 100 }}</span>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="pv-card-subtitle pv-mt-2">No storage modules configured.</div>
+              {% endif %}
+            </div>
+
             {% if selected_module %}
               {% set adv_readonly = (selected_module and selected_metrics and selected_metrics.active_streams|int > 0) %}
               <div class="pv-card pv-mt-3">
