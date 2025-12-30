@@ -728,6 +728,57 @@ class CameraDevice(RecordBase):
     )
 
 
+class CameraGroup(RecordBase):
+    __tablename__ = "camera_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class CameraGroupMembership(RecordBase):
+    __tablename__ = "camera_group_memberships"
+    __table_args__ = (
+        UniqueConstraint('camera_id', 'group_id', name='uq_camera_group'),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    camera_id: Mapped[int] = mapped_column(Integer, index=True)
+    group_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class CameraTag(RecordBase):
+    __tablename__ = "camera_tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class CameraTagAssignment(RecordBase):
+    __tablename__ = "camera_tag_assignments"
+    __table_args__ = (
+        UniqueConstraint('camera_id', 'tag_id', name='uq_camera_tag'),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    camera_id: Mapped[int] = mapped_column(Integer, index=True)
+    tag_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class FaceEmbedding(FaceBase):
     __tablename__ = "face_embeddings"
 
