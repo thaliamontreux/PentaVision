@@ -41,6 +41,7 @@ from .models_iptv import CameraIptvChannel
 from .security import (
     get_admin_active_property,
     get_current_user,
+    user_has_permission,
     user_has_property_access,
     user_has_role,
 )
@@ -3191,7 +3192,7 @@ def camera_health():
     user = get_current_user()
     if user is None:
         abort(403)
-    if not user_has_role(user, "admin"):
+    if not user_has_permission(user, "Nav.Feeds.Cameras.View"):
         abort(403)
 
     engine = get_record_engine()
