@@ -2130,6 +2130,28 @@ def edit_device(device_id: int):
             .filter(CameraPropertyLink.device_id == device_id)
             .first()
         )
+        
+        # Load groups and tags
+        from .models import CameraGroup, CameraTag, CameraGroupMembership, CameraTagAssignment
+        CameraGroup.__table__.create(bind=engine, checkfirst=True)
+        CameraTag.__table__.create(bind=engine, checkfirst=True)
+        CameraGroupMembership.__table__.create(bind=engine, checkfirst=True)
+        CameraTagAssignment.__table__.create(bind=engine, checkfirst=True)
+        
+        all_groups = session_db.query(CameraGroup).order_by(CameraGroup.name).all()
+        all_tags = session_db.query(CameraTag).order_by(CameraTag.name).all()
+        
+        camera_group_ids = {
+            m.group_id for m in session_db.query(CameraGroupMembership).filter(
+                CameraGroupMembership.camera_id == device_id
+            ).all()
+        }
+        
+        camera_tag_ids = {
+            a.tag_id for a in session_db.query(CameraTagAssignment).filter(
+                CameraTagAssignment.camera_id == device_id
+            ).all()
+        }
 
         if device is None:
             errors.append("Camera device not found.")
@@ -2322,6 +2344,55 @@ def edit_device(device_id: int):
                     form["storage_targets"],
                     retention_days_int,
                 )
+                
+                # Update group memberships
+                from .models import CameraGroup, CameraGroupMembership
+                CameraGroupMembership.__table__.create(bind=engine, checkfirst=True)
+                
+                selected_groups = request.form.getlist("groups")
+                group_ids = set()
+                for g in selected_groups:
+                    try:
+                        group_ids.add(int(g))
+                    except (ValueError, TypeError):
+                        continue
+                
+                # Remove existing memberships
+                session_db.query(CameraGroupMembership).filter(
+                    CameraGroupMembership.camera_id == device.id
+                ).delete()
+                
+                # Add new memberships
+                for gid in group_ids:
+                    session_db.add(CameraGroupMembership(
+                        camera_id=device.id,
+                        group_id=gid,
+                    ))
+                
+                # Update tag assignments
+                from .models import CameraTag, CameraTagAssignment
+                CameraTagAssignment.__table__.create(bind=engine, checkfirst=True)
+                
+                selected_tags = request.form.getlist("tags")
+                tag_ids = set()
+                for t in selected_tags:
+                    try:
+                        tag_ids.add(int(t))
+                    except (ValueError, TypeError):
+                        continue
+                
+                # Remove existing assignments
+                session_db.query(CameraTagAssignment).filter(
+                    CameraTagAssignment.camera_id == device.id
+                ).delete()
+                
+                # Add new assignments
+                for tid in tag_ids:
+                    session_db.add(CameraTagAssignment(
+                        camera_id=device.id,
+                        tag_id=tid,
+                    ))
+                
                 session_db.commit()
                 actor = get_current_user()
                 log_event(
@@ -2345,6 +2416,10 @@ def edit_device(device_id: int):
         location_options=LOCATION_OPTIONS,
         direction_options=DIRECTION_OPTIONS,
         pattern_params_json=pattern_params_json,
+        all_groups=all_groups,
+        all_tags=all_tags,
+        camera_group_ids=camera_group_ids,
+        camera_tag_ids=camera_tag_ids,
     )
 
 
