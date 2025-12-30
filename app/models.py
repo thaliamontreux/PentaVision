@@ -1172,6 +1172,172 @@ def create_record_schema(engine) -> None:
         pass
 
 
+class EnhancedPlugin(RecordBase):
+    __tablename__ = "enhanced_plugins"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugin_key: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    version: Mapped[str] = mapped_column(String(50))
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    author: Mapped[str] = mapped_column(String(255))
+    author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    category: Mapped[str] = mapped_column(String(50), index=True)
+    icon_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    
+    install_path: Mapped[str] = mapped_column(String(500))
+    installed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    installed_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    status: Mapped[str] = mapped_column(String(50), index=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    quarantine_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    quarantine_details: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    quarantined_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    capabilities: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    scopes: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    runtime_type: Mapped[str] = mapped_column(String(50))
+    entrypoint: Mapped[str] = mapped_column(String(500))
+    
+    min_pentavision_version: Mapped[str] = mapped_column(String(50))
+    max_pentavision_version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    pip_packages: Mapped[Optional[str]] = mapped_column(String(4096), nullable=True)
+    os_packages: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    required_ports: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    disk_space_mb: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    memory_mb: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    health_endpoint: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    health_interval_seconds: Mapped[int] = mapped_column(Integer, server_default="30")
+    health_timeout_seconds: Mapped[int] = mapped_column(Integer, server_default="5")
+    health_unhealthy_threshold: Mapped[int] = mapped_column(Integer, server_default="3")
+    last_health_check: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_health_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    test_results: Mapped[Optional[str]] = mapped_column(String(8192), nullable=True)
+    test_coverage_percentage: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PluginPropertyAssignment(RecordBase):
+    __tablename__ = "plugin_property_assignments"
+    __table_args__ = (
+        UniqueConstraint("plugin_key", "property_id", name="ux_plugin_property"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugin_key: Mapped[str] = mapped_column(String(255), index=True)
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    
+    status: Mapped[str] = mapped_column(String(50), index=True)
+    enabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    enabled_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    disabled_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    admin_allowed: Mapped[int] = mapped_column(Integer, server_default="1", index=True)
+    admin_disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    admin_disabled_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    admin_disabled_reason: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    
+    api_key_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    api_key_prefix: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    api_key_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    api_key_last_used: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    api_key_rotated_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    api_key_last_rotation: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    config: Mapped[Optional[str]] = mapped_column(String(8192), nullable=True)
+    
+    quarantine_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    quarantine_details: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    quarantined_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    last_health_check: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_health_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PluginHealthCheck(RecordBase):
+    __tablename__ = "plugin_health_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugin_key: Mapped[str] = mapped_column(String(255), index=True)
+    property_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    
+    status: Mapped[str] = mapped_column(String(50))
+    response_time_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_body: Mapped[Optional[str]] = mapped_column(String(4096), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class PluginEvent(RecordBase):
+    __tablename__ = "plugin_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugin_key: Mapped[str] = mapped_column(String(255), index=True)
+    property_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    
+    event_type: Mapped[str] = mapped_column(String(100), index=True)
+    severity: Mapped[str] = mapped_column(String(20))
+    message: Mapped[str] = mapped_column(String(2048))
+    details: Mapped[Optional[str]] = mapped_column(String(8192), nullable=True)
+    
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class PluginTestRun(RecordBase):
+    __tablename__ = "plugin_test_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugin_key: Mapped[str] = mapped_column(String(255), index=True)
+    
+    run_type: Mapped[str] = mapped_column(String(50))
+    property_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    status: Mapped[str] = mapped_column(String(50))
+    tests_total: Mapped[int] = mapped_column(Integer)
+    tests_passed: Mapped[int] = mapped_column(Integer)
+    tests_failed: Mapped[int] = mapped_column(Integer)
+    tests_skipped: Mapped[int] = mapped_column(Integer)
+    
+    coverage_percentage: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)
+    
+    results: Mapped[str] = mapped_column(String(16384))
+    logs: Mapped[Optional[str]] = mapped_column(String(16384), nullable=True)
+    
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    triggered_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+class PluginApiKeyRotation(RecordBase):
+    __tablename__ = "plugin_api_key_rotations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plugin_key: Mapped[str] = mapped_column(String(255))
+    property_id: Mapped[int] = mapped_column(Integer, index=True)
+    
+    old_key_prefix: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    new_key_prefix: Mapped[str] = mapped_column(String(20))
+    
+    rotated_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rotated_by_admin: Mapped[int] = mapped_column(Integer, server_default="0")
+    reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    
+    rotated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
 class AuditEvent(AuditBase):
     __tablename__ = "audit_events"
 
