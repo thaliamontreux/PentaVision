@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     String,
+    Text,
     UniqueConstraint,
     func,
     inspect,
@@ -1179,7 +1180,7 @@ class EnhancedPlugin(RecordBase):
     plugin_key: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     version: Mapped[str] = mapped_column(String(50))
     name: Mapped[str] = mapped_column(String(255))
-    description: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     author: Mapped[str] = mapped_column(String(255))
     author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     website: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -1193,18 +1194,18 @@ class EnhancedPlugin(RecordBase):
     status: Mapped[str] = mapped_column(String(50), index=True)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     quarantine_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    quarantine_details: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    quarantine_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     quarantined_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    
-    capabilities: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
-    scopes: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+
+    capabilities: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    scopes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     runtime_type: Mapped[str] = mapped_column(String(50))
     entrypoint: Mapped[str] = mapped_column(String(500))
     
     min_pentavision_version: Mapped[str] = mapped_column(String(50))
     max_pentavision_version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    pip_packages: Mapped[Optional[str]] = mapped_column(String(4096), nullable=True)
-    os_packages: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+    pip_packages: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    os_packages: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     required_ports: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     disk_space_mb: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     memory_mb: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -1216,7 +1217,7 @@ class EnhancedPlugin(RecordBase):
     last_health_check: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_health_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
-    test_results: Mapped[Optional[str]] = mapped_column(String(8192), nullable=True)
+    test_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     test_coverage_percentage: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
