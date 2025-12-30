@@ -3207,7 +3207,7 @@ def camera_health():
         devices = db.query(CameraDevice).order_by(CameraDevice.name).all()
         
         # Get stream manager for live status
-        stream_mgr = get_stream_manager()
+        stream_mgr = get_stream_manager(current_app)
         
         for device in devices:
             is_enabled = bool(getattr(device, "is_active", 1))
