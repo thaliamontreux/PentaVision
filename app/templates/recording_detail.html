@@ -57,7 +57,7 @@
         <div class="pv-player-controls pv-mt-3">
           <div class="pv-player-nav">
             {% if prev_recording_id %}
-              <a href="{{ url_for('main.recording_detail', recording_id=prev_recording_id, autoplay=1) }}" class="pv-player-nav-btn" title="Previous recording">
+              <a href="{{ url_for('main.recording_detail', recording_id=prev_recording_id, autoplay=1) }}" class="pv-player-nav-btn" id="prev-btn" title="Previous recording">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
                 Previous
               </a>
@@ -72,6 +72,13 @@
               <input type="checkbox" id="autoplay-toggle" {% if autoplay %}checked{% endif %}>
               <span class="pv-player-autoplay-label">Auto-play next</span>
             </label>
+
+            <button type="button" class="pv-player-shortcuts-btn" onclick="showKeyboardHelp()" title="Keyboard shortcuts (?)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>
+              </svg>
+            </button>
 
             {% if next_recording_id %}
               <a href="{{ url_for('main.recording_detail', recording_id=next_recording_id, autoplay=1) }}" class="pv-player-nav-btn" id="next-btn" title="Next recording">
@@ -289,6 +296,182 @@
             }
           }
         });
+      }
+
+      // Keyboard shortcuts for video playback
+      document.addEventListener('keydown', function(e) {
+        // Don't trigger shortcuts if user is typing in an input field
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+          return;
+        }
+
+        if (!video) return;
+
+        switch(e.key.toLowerCase()) {
+          case ' ':
+          case 'k':
+            // Space or K: Play/Pause
+            e.preventDefault();
+            if (video.paused) {
+              video.play();
+            } else {
+              video.pause();
+            }
+            break;
+
+          case 'arrowleft':
+          case 'j':
+            // Left arrow or J: Rewind 5 seconds
+            e.preventDefault();
+            video.currentTime = Math.max(0, video.currentTime - 5);
+            break;
+
+          case 'arrowright':
+          case 'l':
+            // Right arrow or L: Forward 5 seconds
+            e.preventDefault();
+            video.currentTime = Math.min(video.duration, video.currentTime + 5);
+            break;
+
+          case 'arrowup':
+            // Up arrow: Volume up
+            e.preventDefault();
+            video.volume = Math.min(1, video.volume + 0.1);
+            break;
+
+          case 'arrowdown':
+            // Down arrow: Volume down
+            e.preventDefault();
+            video.volume = Math.max(0, video.volume - 0.1);
+            break;
+
+          case 'm':
+            // M: Mute/Unmute
+            e.preventDefault();
+            video.muted = !video.muted;
+            break;
+
+          case 'f':
+            // F: Toggle fullscreen
+            e.preventDefault();
+            if (videoContainer) {
+              if (document.fullscreenElement) {
+                document.exitFullscreen();
+              } else {
+                videoContainer.requestFullscreen().catch(function(err) {
+                  console.error('Fullscreen error:', err);
+                });
+              }
+            }
+            break;
+
+          case 'n':
+            // N: Next recording
+            e.preventDefault();
+            if (nextBtn && nextBtn.href) {
+              window.location.href = nextBtn.href;
+            }
+            break;
+
+          case 'p':
+            // P: Previous recording
+            e.preventDefault();
+            var prevBtn = document.getElementById('prev-btn');
+            if (prevBtn && prevBtn.href) {
+              window.location.href = prevBtn.href;
+            }
+            break;
+
+          case 'a':
+            // A: Toggle autoplay
+            e.preventDefault();
+            if (autoplayToggle) {
+              autoplayToggle.checked = !autoplayToggle.checked;
+              autoplayToggle.dispatchEvent(new Event('change'));
+            }
+            break;
+
+          case '0':
+          case 'home':
+            // 0 or Home: Jump to start
+            e.preventDefault();
+            video.currentTime = 0;
+            break;
+
+          case 'end':
+            // End: Jump to end
+            e.preventDefault();
+            video.currentTime = video.duration;
+            break;
+
+          case ',':
+            // Comma: Previous frame (when paused)
+            if (video.paused) {
+              e.preventDefault();
+              video.currentTime = Math.max(0, video.currentTime - 1/30);
+            }
+            break;
+
+          case '.':
+            // Period: Next frame (when paused)
+            if (video.paused) {
+              e.preventDefault();
+              video.currentTime = Math.min(video.duration, video.currentTime + 1/30);
+            }
+            break;
+
+          case '?':
+            // Show keyboard shortcuts help
+            e.preventDefault();
+            showKeyboardHelp();
+            break;
+        }
+
+        // Number keys 1-9: Jump to 10%-90% of video
+        if (e.key >= '1' && e.key <= '9') {
+          e.preventDefault();
+          var percent = parseInt(e.key) / 10;
+          video.currentTime = video.duration * percent;
+        }
+      });
+
+      // Show keyboard shortcuts help modal
+      function showKeyboardHelp() {
+        var helpText = 
+          'Keyboard Shortcuts:\n\n' +
+          'Space / K - Play/Pause\n' +
+          'Left / J - Rewind 5 seconds\n' +
+          'Right / L - Forward 5 seconds\n' +
+          'Up - Volume up\n' +
+          'Down - Volume down\n' +
+          'M - Mute/Unmute\n' +
+          'F - Fullscreen\n' +
+          'N - Next recording\n' +
+          'P - Previous recording\n' +
+          'A - Toggle autoplay\n' +
+          '0 / Home - Jump to start\n' +
+          'End - Jump to end\n' +
+          '1-9 - Jump to 10%-90%\n' +
+          ', - Previous frame (paused)\n' +
+          '. - Next frame (paused)\n' +
+          '? - Show this help';
+        
+        alert(helpText);
+      }
+
+      // Show keyboard shortcuts hint on first visit
+      if (video && !localStorage.getItem('pv_shortcuts_shown')) {
+        setTimeout(function() {
+          var toast = document.getElementById('pv-global-toast');
+          if (toast) {
+            toast.textContent = 'Tip: Press ? to see keyboard shortcuts';
+            toast.style.display = 'block';
+            setTimeout(function() {
+              toast.style.display = 'none';
+            }, 5000);
+          }
+          localStorage.setItem('pv_shortcuts_shown', 'true');
+        }, 2000);
       }
 
       function setOutput(value) {
