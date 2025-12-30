@@ -3210,11 +3210,13 @@ def camera_health():
         stream_mgr = get_stream_manager()
         
         for device in devices:
+            is_enabled = bool(getattr(device, "is_active", 1))
+            
             health = {
                 "id": device.id,
                 "name": device.name,
-                "ip": device.ip,
-                "enabled": bool(device.enabled),
+                "ip": device.ip_address,
+                "enabled": is_enabled,
                 "stream_active": False,
                 "last_seen": None,
                 "recording_enabled": False,
@@ -3223,7 +3225,7 @@ def camera_health():
             }
             
             # Check if stream is active
-            if stream_mgr and device.enabled:
+            if stream_mgr and is_enabled:
                 try:
                     stream_id = f"camera_{device.id}"
                     stream_info = stream_mgr.get_stream_info(stream_id)
@@ -3236,20 +3238,20 @@ def camera_health():
             # Check storage configuration
             try:
                 policy = db.query(CameraStoragePolicy).filter(
-                    CameraStoragePolicy.camera_id == device.id
+                    CameraStoragePolicy.device_id == device.id
                 ).first()
                 if policy and policy.storage_targets:
                     health["storage_configured"] = True
-                    health["recording_enabled"] = bool(policy.enabled)
+                    health["recording_enabled"] = True
             except Exception:
                 pass
             
             # Determine overall health status
-            if not device.enabled:
+            if not is_enabled:
                 health["health_status"] = "disabled"
             elif health["stream_active"]:
                 health["health_status"] = "healthy"
-            elif device.enabled and not health["stream_active"]:
+            elif is_enabled and not health["stream_active"]:
                 health["health_status"] = "warning"
             
             camera_health_data.append(health)
