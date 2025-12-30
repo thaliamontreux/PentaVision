@@ -27,6 +27,13 @@ from .models import (
     create_record_schema,
     create_user_schema,
     StorageModule,
+    # Enhanced Plugins models - must be imported to register with RecordBase.metadata
+    EnhancedPlugin,
+    PluginPropertyAssignment,
+    PluginHealthCheck,
+    PluginEvent,
+    PluginTestRun,
+    PluginApiKeyRotation,
 )
 from .security import (
     apply_sql_seed_file,
