@@ -52,12 +52,17 @@ def admin_plugins_list():
         abort(403)
     if not user_has_permission(user, "Admin.System.*"):
         abort(403)
-    
+
     engine = get_record_engine()
     if not engine:
         abort(500, "Database not configured")
+
+    # Ensure plugin tables exist
+    from app.models import RecordBase
+    RecordBase.metadata.create_all(engine)
+
     db = Session(engine)
-    
+
     try:
         plugins = db.query(EnhancedPlugin).order_by(
             EnhancedPlugin.category,

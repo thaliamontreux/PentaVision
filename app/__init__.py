@@ -20,7 +20,6 @@ from .diagnostics import (
     bp as diagnostics_bp,
 )
 from .installer import bp as installer_bp
-from .plugin_routes import plugin_bp
 from .property_manager import bp as pm_bp
 from .models import (
     create_face_schema,
@@ -35,6 +34,7 @@ from .models import (
     PluginTestRun,
     PluginApiKeyRotation,
 )
+from .plugin_routes import plugin_bp  # Import after models to ensure tables are registered
 from .security import (
     apply_sql_seed_file,
     init_security,
