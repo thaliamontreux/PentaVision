@@ -3391,6 +3391,13 @@ def camera_health():
     healthy_count = sum(1 for c in camera_health_data if c["health_status"] == "healthy")
     warning_count = sum(1 for c in camera_health_data if c["health_status"] == "warning")
     disabled_count = sum(1 for c in camera_health_data if c["health_status"] == "disabled")
+    active_streams = sum(1 for c in camera_health_data if c["stream_active"])
+    recording_count = sum(1 for c in camera_health_data if c["recording_enabled"])
+    storage_ok = sum(1 for c in camera_health_data if c["storage_configured"])
+    
+    # Calculate uptime percentage (cameras that are healthy or recording)
+    uptime_count = sum(1 for c in camera_health_data if c["health_status"] == "healthy" or c["stream_active"])
+    uptime_percentage = int((uptime_count / total_cameras * 100) if total_cameras > 0 else 0)
     
     summary = {
         "total": total_cameras,
@@ -3398,6 +3405,10 @@ def camera_health():
         "warning": warning_count,
         "disabled": disabled_count,
         "health_percentage": int((healthy_count / total_cameras * 100) if total_cameras > 0 else 0),
+        "active_streams": active_streams,
+        "recording_count": recording_count,
+        "storage_ok": storage_ok,
+        "uptime_percentage": uptime_percentage,
     }
     
     return render_template(

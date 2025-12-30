@@ -20,22 +20,60 @@
         <div class="pv-health-stat">
           <div class="pv-health-stat-value">{{ summary.total }}</div>
           <div class="pv-health-stat-label">Total Cameras</div>
+          <div class="pv-health-stat-progress">
+            <div class="pv-health-stat-progress-bar" style="width: 100%; background: linear-gradient(90deg, #0ea5e9, #38bdf8);"></div>
+          </div>
         </div>
         <div class="pv-health-stat pv-health-stat-success">
           <div class="pv-health-stat-value">{{ summary.healthy }}</div>
           <div class="pv-health-stat-label">Healthy</div>
+          <div class="pv-health-stat-progress">
+            <div class="pv-health-stat-progress-bar" style="width: {% if summary.total > 0 %}{{ (summary.healthy / summary.total * 100)|int }}{% else %}0{% endif %}%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+          </div>
         </div>
         <div class="pv-health-stat pv-health-stat-warning">
           <div class="pv-health-stat-value">{{ summary.warning }}</div>
           <div class="pv-health-stat-label">Warning</div>
+          <div class="pv-health-stat-progress">
+            <div class="pv-health-stat-progress-bar" style="width: {% if summary.total > 0 %}{{ (summary.warning / summary.total * 100)|int }}{% else %}0{% endif %}%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+          </div>
         </div>
         <div class="pv-health-stat pv-health-stat-muted">
           <div class="pv-health-stat-value">{{ summary.disabled }}</div>
           <div class="pv-health-stat-label">Disabled</div>
+          <div class="pv-health-stat-progress">
+            <div class="pv-health-stat-progress-bar" style="width: {% if summary.total > 0 %}{{ (summary.disabled / summary.total * 100)|int }}{% else %}0{% endif %}%; background: linear-gradient(90deg, #64748b, #94a3b8);"></div>
+          </div>
         </div>
-        <div class="pv-health-stat">
+        <div class="pv-health-stat {% if summary.health_percentage >= 90 %}pv-health-stat-success{% elif summary.health_percentage >= 70 %}pv-health-stat-warning{% else %}pv-health-stat-error{% endif %}">
           <div class="pv-health-stat-value">{{ summary.health_percentage }}%</div>
           <div class="pv-health-stat-label">Health Score</div>
+          <div class="pv-health-stat-progress">
+            <div class="pv-health-stat-progress-bar" style="width: {{ summary.health_percentage }}%; background: {% if summary.health_percentage >= 90 %}linear-gradient(90deg, #10b981, #34d399){% elif summary.health_percentage >= 70 %}linear-gradient(90deg, #f59e0b, #fbbf24){% else %}linear-gradient(90deg, #ef4444, #f87171){% endif %};"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pv-storage-metric-grid" style="margin-top: 1.5rem;">
+        <div class="pv-storage-metric-card">
+          <div class="pv-storage-metric-label">Active Streams</div>
+          <div class="pv-storage-metric-value is-success">{{ summary.active_streams or 0 }}</div>
+          <div class="pv-storage-metric-subtitle">Currently streaming</div>
+        </div>
+        <div class="pv-storage-metric-card">
+          <div class="pv-storage-metric-label">Recording</div>
+          <div class="pv-storage-metric-value">{{ summary.recording_count or 0 }}</div>
+          <div class="pv-storage-metric-subtitle">Cameras recording</div>
+        </div>
+        <div class="pv-storage-metric-card">
+          <div class="pv-storage-metric-label">Storage OK</div>
+          <div class="pv-storage-metric-value">{{ summary.storage_ok or 0 }}</div>
+          <div class="pv-storage-metric-subtitle">Properly configured</div>
+        </div>
+        <div class="pv-storage-metric-card">
+          <div class="pv-storage-metric-label">Uptime</div>
+          <div class="pv-storage-metric-value">{{ summary.uptime_percentage or 0 }}%</div>
+          <div class="pv-storage-metric-subtitle">Last 24 hours</div>
         </div>
       </div>
 
