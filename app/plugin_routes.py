@@ -380,6 +380,162 @@ def admin_rotate_property_key(plugin_key, property_id):
         db.close()
 
 
+@plugin_bp.route('/admin/plugins/<plugin_key>/toggle-status', methods=['POST'])
+def admin_toggle_plugin_status(plugin_key):
+    """System Admin: Enable/disable the entire plugin module globally."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
+    engine = get_record_engine()
+    if not engine:
+        return jsonify({'error': 'Database not configured'}), 500
+    db = Session(engine)
+
+    try:
+        plugin = db.query(EnhancedPlugin).filter(
+            EnhancedPlugin.plugin_key == plugin_key
+        ).first()
+
+        if not plugin:
+            return jsonify({'error': 'Plugin not found'}), 404
+
+        action = request.json.get('action')
+
+        if action == 'enable':
+            plugin.status = 'enabled'
+        elif action == 'disable':
+            plugin.status = 'disabled'
+        else:
+            return jsonify({'error': 'Invalid action'}), 400
+
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Plugin {action}d successfully'
+        })
+
+    finally:
+        db.close()
+
+
+@plugin_bp.route('/admin/plugins/<plugin_key>/properties/<int:property_id>/toggle-feature', methods=['POST'])
+def admin_toggle_property_feature(plugin_key, property_id):
+    """System Admin: Toggle feature on/off for a specific property."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
+    engine = get_record_engine()
+    if not engine:
+        return jsonify({'error': 'Database not configured'}), 500
+    db = Session(engine)
+
+    try:
+        assignment = db.query(PluginPropertyAssignment).filter(
+            PluginPropertyAssignment.plugin_key == plugin_key,
+            PluginPropertyAssignment.property_id == property_id
+        ).first()
+
+        action = request.json.get('action')  # 'on' or 'off'
+
+        if action == 'on':
+            if not assignment:
+                # Create new assignment with enabled status
+                assignment = PluginPropertyAssignment(
+                    plugin_key=plugin_key,
+                    property_id=property_id,
+                    status='enabled',
+                    admin_allowed=True,
+                    enabled_at=datetime.utcnow(),
+                    enabled_by=session.get('user_id')
+                )
+                db.add(assignment)
+            else:
+                assignment.status = 'enabled'
+                assignment.enabled_at = datetime.utcnow()
+                assignment.enabled_by = session.get('user_id')
+                assignment.disabled_at = None
+                assignment.disabled_by = None
+
+        elif action == 'off':
+            if not assignment:
+                return jsonify({'error': 'No assignment found'}), 404
+
+            assignment.status = 'disabled'
+            assignment.disabled_at = datetime.utcnow()
+            assignment.disabled_by = session.get('user_id')
+
+        else:
+            return jsonify({'error': 'Invalid action'}), 400
+
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Feature turned {action}'
+        })
+
+    finally:
+        db.close()
+
+
+@plugin_bp.route('/admin/plugins/<plugin_key>/properties/<int:property_id>/generate-key', methods=['POST'])
+def admin_generate_property_key(plugin_key, property_id):
+    """System Admin: Generate a new API key for a property that doesn't have one."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
+    engine = get_record_engine()
+    if not engine:
+        return jsonify({'error': 'Database not configured'}), 500
+    db = Session(engine)
+
+    try:
+        # Get or create assignment
+        assignment = db.query(PluginPropertyAssignment).filter(
+            PluginPropertyAssignment.plugin_key == plugin_key,
+            PluginPropertyAssignment.property_id == property_id
+        ).first()
+
+        if not assignment:
+            assignment = PluginPropertyAssignment(
+                plugin_key=plugin_key,
+                property_id=property_id,
+                status='disabled',
+                admin_allowed=True
+            )
+            db.add(assignment)
+            db.flush()
+
+        manager = PluginManager(db)
+
+        # Generate new key
+        full_key, prefix = manager.generate_api_key(
+            plugin_key=plugin_key,
+            property_id=property_id,
+            user_id=session.get('user_id')
+        )
+
+        return jsonify({
+            'success': True,
+            'api_key': full_key,
+            'prefix': prefix,
+            'message': 'API key generated successfully'
+        })
+
+    finally:
+        db.close()
+
+
 # ========================================================================
 # PROPERTY MANAGER ROUTES
 # ========================================================================

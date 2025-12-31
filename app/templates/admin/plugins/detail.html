@@ -14,7 +14,20 @@
           <h1 class="pv-page-title">{{ plugin.name }}</h1>
           <p class="pv-page-subtitle">{{ plugin.description }}</p>
         </div>
-        <span class="plugin-status-badge status-{{ plugin.status }}">{{ plugin.status|replace('_', ' ')|title }}</span>
+        <div class="plugin-header-actions">
+          <span class="plugin-status-badge status-{{ plugin.status }}">{{ plugin.status|replace('_', ' ')|title }}</span>
+          {% if plugin.status == 'enabled' or plugin.status == 'active' or plugin.status == 'verified' %}
+          <button class="pv-pm-btn pv-pm-btn-danger" onclick="togglePluginStatus('disable')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            Disable Module
+          </button>
+          {% else %}
+          <button class="pv-pm-btn pv-pm-btn-primary" onclick="togglePluginStatus('enable')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Enable Module
+          </button>
+          {% endif %}
+        </div>
       </div>
 
       <!-- Plugin Info Card -->
@@ -93,7 +106,19 @@
               <tr data-property-id="{{ ps.property.id }}">
                 <td><strong>{{ ps.property.name }}</strong></td>
                 <td>
-                  <span class="plugin-status-sm status-{{ ps.status }}">{{ ps.status|replace('_', ' ')|title }}</span>
+                  <div class="plugin-feature-toggle">
+                    {% if ps.status == 'enabled' or ps.status == 'active' %}
+                    <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-success plugin-feature-on" onclick="toggleFeature({{ ps.property.id }}, 'off')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg>
+                      Feature On
+                    </button>
+                    {% else %}
+                    <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-muted" onclick="toggleFeature({{ ps.property.id }}, 'on')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>
+                      Feature Off
+                    </button>
+                    {% endif %}
+                  </div>
                 </td>
                 <td>
                   {% if ps.admin_allowed %}
@@ -103,11 +128,21 @@
                   {% endif %}
                 </td>
                 <td>
-                  {% if ps.api_key_prefix %}
-                  <code class="plugin-api-key">{{ ps.api_key_prefix }}***</code>
-                  {% else %}
-                  <span class="plugin-text-muted">No key</span>
-                  {% endif %}
+                  <div class="plugin-api-key-cell">
+                    {% if ps.api_key_prefix %}
+                    <code class="plugin-api-key">{{ ps.api_key_prefix }}***</code>
+                    <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-subtle" onclick="rotateKey({{ ps.property.id }})" title="Rotate API Key">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                      Rotate
+                    </button>
+                    {% else %}
+                    <span class="plugin-text-muted">No key</span>
+                    <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-primary" onclick="generateKey({{ ps.property.id }})" title="Generate API Key">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                      Generate
+                    </button>
+                    {% endif %}
+                  </div>
                 </td>
                 <td>
                   {% if ps.api_key_last_used %}
@@ -119,9 +154,9 @@
                 <td>
                   <div class="plugin-actions">
                     {% if ps.admin_allowed %}
-                    <button class="pv-pm-btn pv-pm-btn-subtle" onclick="toggleAccess({{ ps.property.id }}, 'disable')">Disable</button>
+                    <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-subtle" onclick="toggleAccess({{ ps.property.id }}, 'disable')">Block</button>
                     {% else %}
-                    <button class="pv-pm-btn pv-pm-btn-primary" onclick="toggleAccess({{ ps.property.id }}, 'enable')">Enable</button>
+                    <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-primary" onclick="toggleAccess({{ ps.property.id }}, 'enable')">Allow</button>
                     {% endif %}
                   </div>
                 </td>
@@ -156,28 +191,34 @@
   </div>
 </section>
 
-<div id="keyModal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>API Key Rotated</h2>
-            <button class="modal-close" onclick="closeKeyModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="key-display-box">
-                <p><strong>⚠️ IMPORTANT:</strong> Copy this key now. It will not be shown again.</p>
-                <div class="key-value" id="keyValue"></div>
-                <button class="btn btn-primary" onclick="copyKey()">
-                    <i class="icon-copy"></i> Copy to Clipboard
-                </button>
-            </div>
-            <p class="key-instructions">
-                Share this key securely with the property manager. They will need to update their configuration.
-            </p>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeKeyModal()">I've Copied the Key</button>
-        </div>
+<!-- API Key Modal -->
+<div id="keyModal" class="plugin-modal" style="display: none;">
+  <div class="plugin-modal-content">
+    <div class="plugin-modal-header">
+      <h2 id="keyModalTitle">API Key Generated</h2>
+      <button class="plugin-modal-close" onclick="closeKeyModal()">&times;</button>
     </div>
+    <div class="plugin-modal-body">
+      <div class="key-warning">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Copy this key now. It will not be shown again.</span>
+      </div>
+      <div class="key-display">
+        <code id="keyValue"></code>
+        <button class="key-copy-btn" onclick="copyKey()" title="Copy to clipboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <p class="key-instructions">Share this key securely with the property manager for their plugin configuration.</p>
+    </div>
+    <div class="plugin-modal-footer">
+      <button class="pv-pm-btn pv-pm-btn-primary" onclick="copyKeyAndClose()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copy & Close
+      </button>
+      <button class="pv-pm-btn" onclick="closeKeyModal()">Close</button>
+    </div>
+  </div>
 </div>
 
 <style>
@@ -192,6 +233,12 @@
 .pv-back-link:hover {
   text-decoration: underline;
   color: #bae6fd;
+}
+
+.plugin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .plugin-status-badge {
@@ -211,6 +258,57 @@
   background: rgba(251, 191, 36, 0.2);
   color: #fbbf24;
   border: 1px solid rgba(251, 191, 36, 0.4);
+}
+.plugin-status-badge.status-disabled {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* Button variants */
+.pv-pm-btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.pv-pm-btn-danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+.pv-pm-btn-danger:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.35), rgba(220, 38, 38, 0.35));
+  border-color: rgba(239, 68, 68, 0.6);
+}
+.pv-pm-btn-success {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.2));
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+.pv-pm-btn-success:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.35), rgba(22, 163, 74, 0.35));
+  border-color: rgba(34, 197, 94, 0.6);
+}
+.pv-pm-btn-muted {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #64748b;
+}
+.pv-pm-btn-muted:hover {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.plugin-feature-toggle {
+  display: inline-block;
+}
+.plugin-feature-on svg {
+  color: #4ade80;
+}
+
+.plugin-api-key-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .plugin-info-card {
@@ -407,67 +505,121 @@
   color: #94a3b8;
 }
 
-/* Modal - Dark Theme */
-.modal {
+/* Plugin Modal - Dark Theme */
+.plugin-modal {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 
-.modal-content {
+.plugin-modal-content {
   background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.3);
   border-radius: 12px;
   width: 90%;
-  max-width: 500px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  max-width: 520px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(56, 189, 248, 0.1);
 }
 
-.modal-header {
-  padding: 20px;
+.plugin-modal-header {
+  padding: 20px 24px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.15);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.modal-header h2 {
+.plugin-modal-header h2 {
   margin: 0;
+  font-size: 18px;
   color: #e2e8f0;
 }
 
-.modal-close {
+.plugin-modal-close {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: 28px;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
+  line-height: 1;
 }
-.modal-close:hover {
+.plugin-modal-close:hover {
   color: #e2e8f0;
 }
 
-.modal-body {
-  padding: 20px;
-  color: #e2e8f0;
+.plugin-modal-body {
+  padding: 24px;
 }
 
-.key-display-box {
-  background: rgba(15, 23, 42, 0.5);
-  padding: 20px;
+.key-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
   border-radius: 8px;
-  text-align: center;
+  margin-bottom: 20px;
+}
+.key-warning svg {
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+.key-warning span {
+  color: #fbbf24;
+  font-size: 14px;
 }
 
-.key-display-box p {
-  color: #fbbf24;
+.key-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px solid rgba(56, 189, 248, 0.4);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.key-display code {
+  flex: 1;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  color: #7dd3fc;
+  word-break: break-all;
+}
+.key-copy-btn {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  color: #7dd3fc;
+  transition: all 0.15s;
+}
+.key-copy-btn:hover {
+  background: rgba(56, 189, 248, 0.25);
+  color: #bae6fd;
+}
+
+.key-instructions {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.plugin-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .key-value {
@@ -499,18 +651,17 @@
 const pluginKey = '{{ plugin.plugin_key }}';
 let currentApiKey = '';
 
-function toggleAccess(propertyId, action) {
+// Toggle global plugin status (enable/disable the entire module)
+function togglePluginStatus(action) {
     const confirmMsg = action === 'enable' 
-        ? 'Enable plugin access for this property?'
-        : 'Disable plugin access for this property? They will not be able to use this plugin.';
+        ? 'Enable this plugin module globally?'
+        : 'Disable this plugin module globally? It will be unavailable to all properties.';
     
     if (!confirm(confirmMsg)) return;
     
-    fetch(`/admin/plugins/${pluginKey}/properties/${propertyId}/toggle`, {
+    fetch(`/admin/plugins/${pluginKey}/toggle-status`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: action })
     })
     .then(r => r.json())
@@ -524,23 +675,17 @@ function toggleAccess(propertyId, action) {
     .catch(err => alert('Error: ' + err.message));
 }
 
-function rotateKey(propertyId) {
-    if (!confirm('Rotate API key for this property? Their current key will be immediately invalidated.')) {
-        return;
-    }
-    
-    fetch(`/admin/plugins/${pluginKey}/properties/${propertyId}/rotate-key`, {
+// Toggle feature on/off for a specific property
+function toggleFeature(propertyId, action) {
+    fetch(`/admin/plugins/${pluginKey}/properties/${propertyId}/toggle-feature`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action })
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            currentApiKey = data.api_key;
-            document.getElementById('keyValue').textContent = data.api_key;
-            document.getElementById('keyModal').style.display = 'flex';
+            location.reload();
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
@@ -548,34 +693,97 @@ function rotateKey(propertyId) {
     .catch(err => alert('Error: ' + err.message));
 }
 
+// Toggle admin access (allow/block) for a property
+function toggleAccess(propertyId, action) {
+    const confirmMsg = action === 'enable' 
+        ? 'Allow this property to use the plugin?'
+        : 'Block this property from using the plugin?';
+    
+    if (!confirm(confirmMsg)) return;
+    
+    fetch(`/admin/plugins/${pluginKey}/properties/${propertyId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+// Rotate existing API key
+function rotateKey(propertyId) {
+    if (!confirm('Rotate API key? The current key will be immediately invalidated.')) {
+        return;
+    }
+    
+    fetch(`/admin/plugins/${pluginKey}/properties/${propertyId}/rotate-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showKeyModal(data.api_key, 'API Key Rotated');
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+// Generate new API key for property without one
+function generateKey(propertyId) {
+    fetch(`/admin/plugins/${pluginKey}/properties/${propertyId}/generate-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showKeyModal(data.api_key, 'API Key Generated');
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+// Show the API key modal
+function showKeyModal(apiKey, title) {
+    currentApiKey = apiKey;
+    document.getElementById('keyModalTitle').textContent = title;
+    document.getElementById('keyValue').textContent = apiKey;
+    document.getElementById('keyModal').style.display = 'flex';
+}
+
+// Copy key to clipboard
 function copyKey() {
     navigator.clipboard.writeText(currentApiKey).then(() => {
-        alert('API key copied to clipboard!');
+        const btn = event.target.closest('button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+        setTimeout(() => { btn.innerHTML = originalHTML; }, 1500);
     });
 }
 
+// Copy and close modal
+function copyKeyAndClose() {
+    navigator.clipboard.writeText(currentApiKey).then(() => {
+        closeKeyModal();
+    });
+}
+
+// Close the key modal
 function closeKeyModal() {
     document.getElementById('keyModal').style.display = 'none';
     location.reload();
-}
-
-function runTests() {
-    alert('Test runner coming soon');
-}
-
-function viewLogs() {
-    alert('Log viewer coming soon');
-}
-
-function restartPlugin() {
-    alert('Plugin restart coming soon');
-}
-
-function uninstallPlugin() {
-    if (!confirm('Uninstall this plugin? This will remove it from all properties.')) {
-        return;
-    }
-    alert('Uninstall functionality coming soon');
 }
 </script>
 {% endblock %}
