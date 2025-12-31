@@ -1,363 +1,301 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
-{% block title %}Configure {{ plugin.name }}{% endblock %}
+{% block title %}Configure {{ plugin.name }} · PentaVision{% endblock %}
 
 {% block content %}
-<div class="config-container">
-    <div class="config-header">
-        <a href="{{ url_for('plugins.property_plugins_list', property_id=property_id) }}" class="back-link">
-            ← Back to Plugins
-        </a>
-        <h1>Configure {{ plugin.name }}</h1>
-        <p class="config-subtitle">{{ plugin.description }}</p>
-    </div>
+<section class="pv-section">
+  <div class="pv-admin-layout">
+    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-main">
 
-    <form id="configForm" class="config-form">
-        <div class="config-sections">
+      <div class="pv-page-header">
+        <div>
+          <a href="{{ url_for('plugins.property_plugins_list', property_id=property_id) }}" class="pv-back-link">
+            ← Back to Plugins
+          </a>
+          <h1 class="pv-page-title">Configure {{ plugin.name }}</h1>
+          <p class="pv-page-subtitle">{{ plugin.description }}</p>
+        </div>
+      </div>
+
+      <div class="pv-card">
+        <form id="configForm">
+          <div class="config-sections">
             {% if config_schema.properties %}
             {% for field_name, field_schema in config_schema.properties.items() %}
-            <div class="config-field {% if field_name in config_schema.get('required', []) %}required{% endif %}">
-                <label for="field-{{ field_name }}">
-                    {{ field_schema.title or field_name }}
-                    {% if field_name in config_schema.get('required', []) %}
-                    <span class="required-mark">*</span>
-                    {% endif %}
-                </label>
-
-                {% if field_schema.description %}
-                <p class="field-description">{{ field_schema.description }}</p>
+            <div class="pv-form-group">
+              <label class="pv-label" for="field-{{ field_name }}">
+                {{ field_schema.title or field_name }}
+                {% if field_name in config_schema.get('required', []) %}
+                <span class="pv-required">*</span>
                 {% endif %}
+              </label>
 
-                {% if field_schema.type == 'boolean' %}
-                <label class="toggle-switch">
-                    <input type="checkbox"
-                           id="field-{{ field_name }}"
-                           name="{{ field_name }}"
-                           {% if current_config.get(field_name, field_schema.get('default', false)) %}checked{% endif %}>
-                    <span class="toggle-slider"></span>
-                </label>
+              {% if field_schema.description %}
+              <p class="pv-field-hint">{{ field_schema.description }}</p>
+              {% endif %}
 
-                {% elif field_schema.type == 'array' and field_schema.items and field_schema.items.enum %}
-                <div class="checkbox-group">
-                    {% for option in field_schema.items.enum %}
-                    <label class="checkbox-item">
-                        <input type="checkbox"
-                               name="{{ field_name }}"
-                               value="{{ option }}"
-                               {% if option in current_config.get(field_name, field_schema.get('default', [])) %}checked{% endif %}>
-                        {{ option|replace('_', ' ')|title }}
-                    </label>
-                    {% endfor %}
-                </div>
-
-                {% elif field_schema.type == 'integer' %}
-                <input type="number"
+              {% if field_schema.type == 'boolean' %}
+              <label class="pv-toggle">
+                <input type="checkbox"
                        id="field-{{ field_name }}"
                        name="{{ field_name }}"
-                       value="{{ current_config.get(field_name, field_schema.get('default', '')) }}"
-                       {% if field_schema.minimum is defined %}min="{{ field_schema.minimum }}"{% endif %}
-                       {% if field_schema.maximum is defined %}max="{{ field_schema.maximum }}"{% endif %}
-                       class="config-input">
+                       {% if current_config.get(field_name, field_schema.get('default', false)) %}checked{% endif %}>
+                <span class="pv-toggle-slider"></span>
+              </label>
 
-                {% elif field_schema.format == 'password' %}
-                <div class="password-field">
-                    <input type="password"
-                           id="field-{{ field_name }}"
-                           name="{{ field_name }}"
-                           value="{{ current_config.get(field_name, '') }}"
-                           class="config-input"
-                           autocomplete="off">
-                    <button type="button" class="toggle-password" onclick="togglePassword('field-{{ field_name }}')">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                    </button>
-                </div>
+              {% elif field_schema.type == 'array' and field_schema.items and field_schema.items.enum %}
+              <div class="pv-checkbox-group">
+                {% for option in field_schema.items.enum %}
+                <label class="pv-checkbox-item">
+                  <input type="checkbox"
+                         name="{{ field_name }}"
+                         value="{{ option }}"
+                         {% if option in current_config.get(field_name, field_schema.get('default', [])) %}checked{% endif %}>
+                  <span>{{ option|replace('_', ' ')|title }}</span>
+                </label>
+                {% endfor %}
+              </div>
 
-                {% else %}
-                <input type="text"
+              {% elif field_schema.type == 'integer' %}
+              <input type="number"
+                     id="field-{{ field_name }}"
+                     name="{{ field_name }}"
+                     value="{{ current_config.get(field_name, field_schema.get('default', '')) }}"
+                     {% if field_schema.minimum is defined %}min="{{ field_schema.minimum }}"{% endif %}
+                     {% if field_schema.maximum is defined %}max="{{ field_schema.maximum }}"{% endif %}
+                     class="pv-input">
+
+              {% elif field_schema.format == 'password' %}
+              <div class="pv-password-field">
+                <input type="password"
                        id="field-{{ field_name }}"
                        name="{{ field_name }}"
-                       value="{{ current_config.get(field_name, field_schema.get('default', '')) }}"
-                       {% if field_schema.pattern %}pattern="{{ field_schema.pattern }}"{% endif %}
-                       class="config-input"
-                       {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}>
-                {% endif %}
+                       value="{{ current_config.get(field_name, '') }}"
+                       class="pv-input"
+                       autocomplete="off">
+                <button type="button" class="pv-password-toggle" onclick="togglePassword('field-{{ field_name }}')">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+
+              {% else %}
+              <input type="text"
+                     id="field-{{ field_name }}"
+                     name="{{ field_name }}"
+                     value="{{ current_config.get(field_name, field_schema.get('default', '')) }}"
+                     {% if field_schema.pattern %}pattern="{{ field_schema.pattern }}"{% endif %}
+                     class="pv-input"
+                     {% if field_schema.placeholder %}placeholder="{{ field_schema.placeholder }}"{% endif %}>
+              {% endif %}
             </div>
             {% endfor %}
             {% else %}
-            <div class="no-config">
-                <p>This plugin does not require any configuration.</p>
+            <div class="pv-empty pv-empty-sm">
+              <p>This plugin does not require any configuration.</p>
             </div>
             {% endif %}
-        </div>
+          </div>
 
-        <div class="config-actions">
-            <button type="button" class="btn btn-secondary" onclick="testConnection()">
-                Test Connection
+          <div class="pv-form-actions">
+            <button type="button" class="pv-btn pv-btn-secondary" onclick="testConnection()">
+              Test Connection
             </button>
-            <button type="submit" class="btn btn-primary">
-                Save Configuration
+            <button type="submit" class="pv-btn pv-btn-primary">
+              Save Configuration
             </button>
-        </div>
-    </form>
+          </div>
+        </form>
 
-    <div class="config-status" id="statusPanel" style="display: none;">
-        <div class="status-content">
-            <span class="status-icon"></span>
-            <span class="status-message"></span>
+        <div class="pv-status-panel" id="statusPanel" style="display: none;">
+          <span class="pv-status-message"></span>
         </div>
+      </div>
+
     </div>
-</div>
+  </div>
+</section>
 
 <style>
-.config-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
+.pv-back-link {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: var(--pv-accent, #667eea);
+  text-decoration: none;
+  font-size: 13px;
 }
-
-.back-link {
-    display: inline-block;
-    margin-bottom: 16px;
-    color: #667eea;
-    text-decoration: none;
-    font-size: 14px;
-}
-
-.back-link:hover {
-    text-decoration: underline;
-}
-
-.config-header {
-    margin-bottom: 32px;
-}
-
-.config-header h1 {
-    margin: 0 0 8px 0;
-    font-size: 28px;
-}
-
-.config-subtitle {
-    margin: 0;
-    color: #666;
-    font-size: 16px;
-}
-
-.config-form {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 24px;
+.pv-back-link:hover {
+  text-decoration: underline;
 }
 
 .config-sections {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.config-field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+.pv-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.config-field label {
-    font-weight: 600;
-    font-size: 14px;
-    color: #333;
+.pv-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--pv-text, #e0e0e0);
 }
 
-.required-mark {
-    color: #dc3545;
+.pv-required {
+  color: #ef5350;
 }
 
-.field-description {
-    margin: 0;
-    font-size: 13px;
-    color: #666;
+.pv-field-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pv-text-muted, #888);
 }
 
-.config-input {
-    padding: 10px 14px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 14px;
-    transition: border-color 0.2s, box-shadow 0.2s;
+.pv-input {
+  padding: 10px 14px;
+  background: var(--pv-input-bg, #1a1a2e);
+  border: 1px solid var(--pv-border, #333);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--pv-text, #e0e0e0);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.pv-input:focus {
+  outline: none;
+  border-color: var(--pv-accent, #667eea);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+.pv-input::placeholder {
+  color: var(--pv-text-muted, #666);
 }
 
-.config-input:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+.pv-password-field {
+  position: relative;
+  display: flex;
+}
+.pv-password-field .pv-input {
+  flex: 1;
+  padding-right: 44px;
+}
+.pv-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--pv-text-muted, #888);
+  padding: 4px;
+}
+.pv-password-toggle:hover {
+  color: var(--pv-text, #e0e0e0);
 }
 
-.password-field {
-    position: relative;
-    display: flex;
+.pv-toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+}
+.pv-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.pv-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--pv-border, #444);
+  transition: 0.3s;
+  border-radius: 26px;
+}
+.pv-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 4px;
+  bottom: 4px;
+  background-color: #fff;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+input:checked + .pv-toggle-slider {
+  background-color: var(--pv-accent, #667eea);
+}
+input:checked + .pv-toggle-slider:before {
+  transform: translateX(22px);
 }
 
-.password-field .config-input {
-    flex: 1;
-    padding-right: 44px;
+.pv-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pv-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: normal;
+  cursor: pointer;
+  color: var(--pv-text, #e0e0e0);
+  font-size: 14px;
+}
+.pv-checkbox-item input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--pv-accent, #667eea);
 }
 
-.toggle-password {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #888;
-    padding: 4px;
+.pv-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--pv-border, #333);
 }
 
-.toggle-password:hover {
-    color: #333;
+.pv-status-panel {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.pv-status-panel.success {
+  background: rgba(76, 175, 80, 0.15);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  color: #81c784;
+}
+.pv-status-panel.error {
+  background: rgba(244, 67, 54, 0.15);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+  color: #ef5350;
+}
+.pv-status-panel.info {
+  background: rgba(33, 150, 243, 0.15);
+  border: 1px solid rgba(33, 150, 243, 0.4);
+  color: #64b5f6;
 }
 
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 52px;
-    height: 28px;
-}
-
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.toggle-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: 0.3s;
-    border-radius: 28px;
-}
-
-.toggle-slider:before {
-    position: absolute;
-    content: "";
-    height: 20px;
-    width: 20px;
-    left: 4px;
-    bottom: 4px;
-    background-color: white;
-    transition: 0.3s;
-    border-radius: 50%;
-}
-
-input:checked + .toggle-slider {
-    background-color: #667eea;
-}
-
-input:checked + .toggle-slider:before {
-    transform: translateX(24px);
-}
-
-.checkbox-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
-.checkbox-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: normal;
-    cursor: pointer;
-}
-
-.checkbox-item input {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-}
-
-.config-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 32px;
-    padding-top: 24px;
-    border-top: 1px solid #e0e0e0;
-}
-
-.btn {
-    padding: 10px 20px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.btn-primary {
-    background: #667eea;
-    color: white;
-    border: none;
-}
-
-.btn-primary:hover {
-    background: #5a6fd6;
-}
-
-.btn-secondary {
-    background: white;
-    color: #333;
-    border: 1px solid #ddd;
-}
-
-.btn-secondary:hover {
-    background: #f5f5f5;
-}
-
-.config-status {
-    margin-top: 20px;
-    padding: 16px;
-    border-radius: 6px;
-}
-
-.config-status.success {
-    background: #e8f5e9;
-    border: 1px solid #a5d6a7;
-}
-
-.config-status.error {
-    background: #ffebee;
-    border: 1px solid #ef9a9a;
-}
-
-.config-status.info {
-    background: #e3f2fd;
-    border: 1px solid #90caf9;
-}
-
-.status-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.status-icon {
-    font-size: 20px;
-}
-
-.no-config {
-    text-align: center;
-    padding: 40px;
-    color: #666;
+.pv-empty-sm {
+  padding: 30px;
+  text-align: center;
+  color: var(--pv-text-muted, #888);
 }
 </style>
 
