@@ -1,0 +1,60 @@
+ptz_move:
+  name: PTZ Move
+  description: Move the camera in a direction
+  target:
+    entity:
+      integration: pentavision
+      domain: camera
+  fields:
+    direction:
+      name: Direction
+      description: Direction to move the camera
+      required: true
+      selector:
+        select:
+          options:
+            - up
+            - down
+            - left
+            - right
+            - up_left
+            - up_right
+            - down_left
+            - down_right
+            - zoom_in
+            - zoom_out
+    speed:
+      name: Speed
+      description: Movement speed (1-100)
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+
+ptz_preset:
+  name: PTZ Preset
+  description: Go to a PTZ preset position
+  target:
+    entity:
+      integration: pentavision
+      domain: camera
+  fields:
+    preset:
+      name: Preset
+      description: Preset number to go to
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+
+ptz_stop:
+  name: PTZ Stop
+  description: Stop PTZ movement
+  target:
+    entity:
+      integration: pentavision
+      domain: camera

@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to PentaVision",
+        "description": "Enter your PentaVision server details and API key.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_key": "API Key"
+        },
+        "data_description": {
+          "host": "IP address or hostname of your PentaVision server",
+          "port": "Video Tunnel API port (default: 8473)",
+          "api_key": "API key from PentaVision plugin settings"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to PentaVision server",
+      "invalid_api_key": "Invalid API key",
+      "invalid_response": "Invalid response from server",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This PentaVision server is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PentaVision Options",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  }
+}
