@@ -36,14 +36,30 @@
       <div class="pv-card plugin-status-card">
         <div class="plugin-status-row">
           <div class="plugin-status-indicator">
-            {% if plugin.status == 'enabled' or plugin.status == 'active' or plugin.status == 'verified' %}
-            <div class="status-dot status-dot-active"></div>
-            <span class="status-text status-text-active">Module Active</span>
+            <div class="status-dot {% if service_status.running %}status-dot-active{% else %}status-dot-inactive{% endif %}" id="serviceStatusDot"></div>
+            <span class="status-text {% if service_status.running %}status-text-active{% else %}status-text-inactive{% endif %}" id="serviceStatusText">
+              Service {{ 'Running' if service_status.running else 'Stopped' }}
+            </span>
+          </div>
+          <div class="plugin-service-controls">
+            {% if service_status.running %}
+            <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-muted" onclick="controlService('stop')" title="Stop Service">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+              Stop
+            </button>
+            <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-primary" onclick="controlService('restart')" title="Restart Service">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Restart
+            </button>
             {% else %}
-            <div class="status-dot status-dot-inactive"></div>
-            <span class="status-text status-text-inactive">Module Inactive</span>
+            <button class="pv-pm-btn pv-pm-btn-sm pv-pm-btn-success" onclick="controlService('start')" title="Start Service">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+              Start
+            </button>
             {% endif %}
           </div>
+        </div>
+        <div class="plugin-status-row plugin-bind-row">
           <div class="plugin-api-info">
             <div class="api-info-item api-bind-config">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -57,6 +73,7 @@
               </select>
               <span>:</span>
               <input type="number" id="bindPortInput" class="pv-input-sm" value="{{ module_config.api_port|default(8473) }}" min="1024" max="65535" onchange="updateBindAddress()">
+              <span class="bind-status" id="bindStatus"></span>
             </div>
             <div class="api-info-item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -381,6 +398,33 @@
 .pv-input-sm::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+.plugin-service-controls {
+  display: flex;
+  gap: 8px;
+}
+.plugin-bind-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+.bind-status {
+  font-size: 12px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.bind-status.saving {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+}
+.bind-status.saved {
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.15);
+}
+.bind-status.error {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.15);
 }
 
 .plugin-status-badge {
@@ -809,12 +853,49 @@ function updateBindAddress() {
         })
         .then(r => r.json())
         .then(data => {
-            if (!data.success) {
+            const statusEl = document.getElementById('bindStatus');
+            if (data.success) {
+                statusEl.textContent = data.service_restarted ? 'Saved & Restarted' : 'Saved';
+                statusEl.className = 'bind-status saved';
+                setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'bind-status'; }, 3000);
+            } else {
+                statusEl.textContent = 'Error';
+                statusEl.className = 'bind-status error';
                 alert('Error: ' + (data.error || 'Failed to update bind settings'));
             }
         })
-        .catch(err => alert('Error: ' + err.message));
+        .catch(err => {
+            const statusEl = document.getElementById('bindStatus');
+            statusEl.textContent = 'Error';
+            statusEl.className = 'bind-status error';
+            alert('Error: ' + err.message);
+        });
     }, 500);
+}
+
+// Control plugin service (start/stop/restart)
+function controlService(action) {
+    const confirmMsg = {
+        'start': 'Start the plugin service?',
+        'stop': 'Stop the plugin service?',
+        'restart': 'Restart the plugin service?'
+    }[action];
+    
+    if (!confirm(confirmMsg)) return;
+    
+    fetch(`/admin/plugins/${pluginKey}/service/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Service control failed'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
 }
 
 // Toggle global plugin status (enable/disable the entire module)

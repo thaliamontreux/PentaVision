@@ -7,6 +7,7 @@ Flask blueprint for plugin management endpoints.
 import json
 import os
 import socket
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -99,6 +100,91 @@ def get_network_interfaces():
             pass
 
     return interfaces
+
+
+def get_plugin_service_name(plugin_key):
+    """Get the systemd service name for a plugin."""
+    return f"pentavision-plugin-{plugin_key}"
+
+
+def get_plugin_service_status(plugin_key):
+    """Get the status of a plugin's systemd service."""
+    service_name = get_plugin_service_name(plugin_key)
+    try:
+        result = subprocess.run(
+            ['systemctl', 'is-active', service_name],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        status = result.stdout.strip()
+        return {
+            'running': status == 'active',
+            'status': status,
+            'service_name': service_name
+        }
+    except Exception:
+        return {
+            'running': False,
+            'status': 'unknown',
+            'service_name': service_name
+        }
+
+
+def restart_plugin_service(plugin_key):
+    """Restart a plugin's systemd service."""
+    service_name = get_plugin_service_name(plugin_key)
+    try:
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'restart', service_name],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            return {'success': True, 'message': f'Service {service_name} restarted'}
+        else:
+            return {'success': False, 'error': result.stderr or 'Failed to restart service'}
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'error': 'Service restart timed out'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+def stop_plugin_service(plugin_key):
+    """Stop a plugin's systemd service."""
+    service_name = get_plugin_service_name(plugin_key)
+    try:
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'stop', service_name],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            return {'success': True, 'message': f'Service {service_name} stopped'}
+        else:
+            return {'success': False, 'error': result.stderr or 'Failed to stop service'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+def start_plugin_service(plugin_key):
+    """Start a plugin's systemd service."""
+    service_name = get_plugin_service_name(plugin_key)
+    try:
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'start', service_name],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            return {'success': True, 'message': f'Service {service_name} started'}
+        else:
+            return {'success': False, 'error': result.stderr or 'Failed to start service'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 
 # ========================================================================
@@ -311,13 +397,17 @@ def admin_plugin_detail(plugin_key):
         # Get network interfaces for bind address dropdown
         network_interfaces = get_network_interfaces()
 
+        # Get plugin service status
+        service_status = get_plugin_service_status(plugin_key)
+
         return render_template(
             'admin/plugins/detail.html',
             plugin=plugin,
             property_statuses=property_statuses,
             events=events,
             module_config=module_config,
-            network_interfaces=network_interfaces
+            network_interfaces=network_interfaces,
+            service_status=service_status
         )
     
     finally:
@@ -515,13 +605,42 @@ def admin_update_plugin_bind(plugin_key):
         with open(definition_path, 'w', encoding='utf-8') as f:
             json.dump(definition, f, indent=4)
 
+        # Auto-restart the plugin service to apply new settings
+        restart_result = restart_plugin_service(plugin_key)
+
         return jsonify({
             'success': True,
-            'message': f'Bind settings updated to {bind_address}:{port}'
+            'message': f'Bind settings updated to {bind_address}:{port}',
+            'service_restarted': restart_result.get('success', False),
+            'restart_message': restart_result.get('message') or restart_result.get('error')
         })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@plugin_bp.route('/admin/plugins/<plugin_key>/service/<action>', methods=['POST'])
+def admin_plugin_service_control(plugin_key, action):
+    """System Admin: Control plugin service (start/stop/restart)."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
+    if action == 'start':
+        result = start_plugin_service(plugin_key)
+    elif action == 'stop':
+        result = stop_plugin_service(plugin_key)
+    elif action == 'restart':
+        result = restart_plugin_service(plugin_key)
+    elif action == 'status':
+        result = get_plugin_service_status(plugin_key)
+        result['success'] = True
+    else:
+        return jsonify({'error': 'Invalid action. Use: start, stop, restart, status'}), 400
+
+    return jsonify(result)
 
 
 @plugin_bp.route('/admin/plugins/<plugin_key>/toggle-status', methods=['POST'])
