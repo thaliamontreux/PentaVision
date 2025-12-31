@@ -230,12 +230,31 @@ def admin_plugin_detail(plugin_key):
         ).order_by(
             PluginEvent.created_at.desc()
         ).limit(50).all()
-        
+
+        # Load module config from definition.json
+        module_config = {'api_port': 8473}  # Default
+        plugin_dir = PLUGINS_DIR / plugin_key
+        definition_path = plugin_dir / 'definition.json'
+        if not definition_path.exists():
+            # Fallback to repo plugins directory
+            definition_path = Path(__file__).parent.parent / 'plugins' / plugin_key / 'definition.json'
+        if definition_path.exists():
+            try:
+                with open(definition_path) as f:
+                    definition = json.load(f)
+                    config_schema = definition.get('config_schema', {})
+                    props = config_schema.get('properties', {})
+                    if 'api_port' in props:
+                        module_config['api_port'] = props['api_port'].get('default', 8473)
+            except Exception:
+                pass
+
         return render_template(
             'admin/plugins/detail.html',
             plugin=plugin,
             property_statuses=property_statuses,
-            events=events
+            events=events,
+            module_config=module_config
         )
     
     finally:

@@ -4,18 +4,29 @@
         "motion_detection",
         "person_detection",
         "recording_events",
-        "webhook_receiver"
+        "webhook_receiver",
+        "video_tunnel",
+        "camera_proxy"
     ],
     "scopes": [
         "read:cameras",
         "read:events",
         "read:recordings",
+        "read:streams",
         "write:webhooks"
     ],
     "config_schema": {
         "type": "object",
-        "required": ["ha_url", "ha_token"],
+        "required": [],
         "properties": {
+            "api_port": {
+                "type": "integer",
+                "title": "API Port",
+                "description": "Port for Home Assistant API communications and video tunnel (default: 8473)",
+                "default": 8473,
+                "minimum": 1024,
+                "maximum": 65535
+            },
             "ha_url": {
                 "type": "string",
                 "title": "Home Assistant URL",

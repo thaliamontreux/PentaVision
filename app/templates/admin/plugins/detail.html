@@ -30,6 +30,31 @@
         </div>
       </div>
 
+      <!-- Module Status Card -->
+      <div class="pv-card plugin-status-card">
+        <div class="plugin-status-row">
+          <div class="plugin-status-indicator">
+            {% if plugin.status == 'enabled' or plugin.status == 'active' or plugin.status == 'verified' %}
+            <div class="status-dot status-dot-active"></div>
+            <span class="status-text status-text-active">Module Active</span>
+            {% else %}
+            <div class="status-dot status-dot-inactive"></div>
+            <span class="status-text status-text-inactive">Module Inactive</span>
+            {% endif %}
+          </div>
+          <div class="plugin-api-info">
+            <div class="api-info-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span>API Port: <strong>{{ module_config.api_port|default(8473) }}</strong></span>
+            </div>
+            <div class="api-info-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Video Tunnel: <strong>{{ 'Enabled' if module_config.api_port else 'Default (8473)' }}</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Plugin Info Card -->
       <div class="pv-card plugin-info-card">
         <div class="plugin-info-grid">
@@ -239,6 +264,69 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Module Status Card */
+.plugin-status-card {
+  padding: 16px 24px;
+  margin-bottom: 16px;
+}
+.plugin-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.plugin-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+.status-dot-active {
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+.status-dot-inactive {
+  background: #64748b;
+  animation: none;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.status-text {
+  font-size: 16px;
+  font-weight: 600;
+}
+.status-text-active {
+  color: #4ade80;
+}
+.status-text-inactive {
+  color: #64748b;
+}
+.plugin-api-info {
+  display: flex;
+  gap: 24px;
+}
+.api-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+.api-info-item svg {
+  color: #7dd3fc;
+}
+.api-info-item strong {
+  color: #e2e8f0;
 }
 
 .plugin-status-badge {
