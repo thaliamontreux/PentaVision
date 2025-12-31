@@ -467,20 +467,59 @@ class VideoTunnelServer:
         return self.api_key_hashes.get(key_hash)
 
     async def _load_api_keys(self):
-        """Load API keys from database."""
+        """Load API keys from database (supports MySQL and SQLite)."""
         try:
-            # Try to load from PentaVision database
-            db_path = Path("/opt/pentavision/data/pentavision.db")
-            if not db_path.exists():
-                db_path = Path(__file__).parent.parent.parent / "data" / "pentavision.db"
+            # Try MySQL first (production)
+            mysql_loaded = await self._load_api_keys_mysql()
+            if mysql_loaded:
+                return
 
-            if db_path.exists():
-                import sqlite3
-                conn = sqlite3.connect(str(db_path))
-                cursor = conn.cursor()
+            # Fall back to SQLite
+            await self._load_api_keys_sqlite()
 
-                # Get API key hashes from plugin_property_assignments
-                # Note: We store hash -> property_id for validation
+        except Exception as e:
+            logger.error(f"Failed to load API keys: {e}")
+
+    async def _load_api_keys_mysql(self) -> bool:
+        """Load API keys from MySQL database."""
+        try:
+            import pymysql
+            
+            # Read database config from environment or config file
+            db_host = os.environ.get("DB_HOST", "localhost")
+            db_user = os.environ.get("DB_USER", "pentavision")
+            db_pass = os.environ.get("DB_PASSWORD", "")
+            db_name = os.environ.get("DB_NAME", "pentavision")
+            
+            # Try to read from .env file if exists
+            env_path = Path("/opt/pentavision/app/.env")
+            if env_path.exists():
+                with open(env_path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if '=' in line and not line.startswith('#'):
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip().strip('"').strip("'")
+                            if key == "DATABASE_URL" and value.startswith("mysql"):
+                                # Parse mysql://user:pass@host/dbname
+                                import re
+                                match = re.match(r'mysql(?:\+pymysql)?://([^:]+):([^@]+)@([^/]+)/(.+)', value)
+                                if match:
+                                    db_user, db_pass, db_host, db_name = match.groups()
+                                    # Handle host:port
+                                    if ':' in db_host:
+                                        db_host = db_host.split(':')[0]
+
+            conn = pymysql.connect(
+                host=db_host,
+                user=db_user,
+                password=db_pass,
+                database=db_name,
+                cursorclass=pymysql.cursors.DictCursor
+            )
+            
+            with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT property_id, api_key_hash
                     FROM plugin_property_assignments
@@ -488,20 +527,50 @@ class VideoTunnelServer:
                     AND api_key_hash IS NOT NULL
                     AND status = 'enabled'
                 """)
-
+                
                 for row in cursor.fetchall():
-                    property_id, key_hash = row
-                    if key_hash:
-                        # Store hash -> property_id mapping for validation
-                        self.api_key_hashes[key_hash] = property_id
-
-                conn.close()
-                logger.info(f"Loaded {len(self.api_key_hashes)} API keys from database")
-            else:
-                logger.warning("Database not found, no API keys loaded")
-
+                    if row['api_key_hash']:
+                        self.api_key_hashes[row['api_key_hash']] = row['property_id']
+            
+            conn.close()
+            logger.info(f"Loaded {len(self.api_key_hashes)} API keys from MySQL")
+            return True
+            
+        except ImportError:
+            logger.debug("pymysql not available, trying SQLite")
+            return False
         except Exception as e:
-            logger.error(f"Failed to load API keys: {e}")
+            logger.debug(f"MySQL connection failed: {e}, trying SQLite")
+            return False
+
+    async def _load_api_keys_sqlite(self):
+        """Load API keys from SQLite database."""
+        db_path = Path("/opt/pentavision/data/pentavision.db")
+        if not db_path.exists():
+            db_path = Path(__file__).parent.parent.parent / "data" / "pentavision.db"
+
+        if db_path.exists():
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT property_id, api_key_hash
+                FROM plugin_property_assignments
+                WHERE plugin_key = 'home-assistant'
+                AND api_key_hash IS NOT NULL
+                AND status = 'enabled'
+            """)
+
+            for row in cursor.fetchall():
+                property_id, key_hash = row
+                if key_hash:
+                    self.api_key_hashes[key_hash] = property_id
+
+            conn.close()
+            logger.info(f"Loaded {len(self.api_key_hashes)} API keys from SQLite")
+        else:
+            logger.warning("No database found, no API keys loaded")
 
     async def reload_api_keys(self):
         """Reload API keys from database."""
