@@ -1,0 +1,30 @@
+[Unit]
+Description=PentaVision Home Assistant Video Tunnel
+After=network.target pentavision-web.service
+Wants=pentavision-web.service
+
+[Service]
+Type=simple
+User=pentavision
+Group=pentavision
+WorkingDirectory=/opt/pentavision/plugins/home-assistant
+ExecStart=/opt/pentavision/venv/bin/python /opt/pentavision/plugins/home-assistant/video_tunnel.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pentavision-ha-tunnel
+
+# Environment
+Environment=PENTAVISION_API_URL=http://127.0.0.1:5000
+Environment=PYTHONUNBUFFERED=1
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pentavision/data /opt/pentavision/plugins
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
