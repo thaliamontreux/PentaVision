@@ -4,6 +4,7 @@ Enhanced Plugins System - Admin Routes
 Flask blueprint for plugin management endpoints.
 """
 
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -16,11 +17,14 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
+
+PLUGINS_DIR = Path('/opt/pentavision/plugins')
 
 from app.db import get_record_engine, get_user_engine
 from app.models import (
@@ -610,6 +614,22 @@ def property_configure_plugin(property_id, plugin_key):
 
     finally:
         db.close()
+
+
+@plugin_bp.route('/plugins/<plugin_key>/splash.jpg')
+def plugin_splash_image(plugin_key):
+    """Serve the splash image for a plugin."""
+    user = get_current_user()
+    if user is None:
+        abort(403)
+
+    plugin_dir = PLUGINS_DIR / plugin_key
+    splash_path = plugin_dir / 'splash.jpg'
+
+    if not splash_path.exists():
+        abort(404, "Splash image not found")
+
+    return send_file(splash_path, mimetype='image/jpeg')
 
 
 @plugin_bp.route('/properties/<int:property_id>/plugins/<plugin_key>/rotate-key', methods=['POST'])
