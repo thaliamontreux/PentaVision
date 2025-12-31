@@ -1,5 +1,10 @@
 /* Admin theme: restricted_red */
 
+/* Hide top menu when admin sidebar is present */
+.pv-is-admin .pv-header .pv-nav {
+  display: none;
+}
+
 .pv-is-admin .pv-section {
   position: relative;
   overflow: hidden;
@@ -15,7 +20,7 @@
 .pv-is-admin .pv-section::before {
   content: "RESTRICTED AREA";
   position: fixed;
-  top: 250px;
+  top: 60px;
   right: 20px;
   z-index: 9999;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
