@@ -6,6 +6,7 @@ Flask blueprint for plugin management endpoints.
 
 import json
 import os
+import socket
 from datetime import datetime
 from pathlib import Path
 
@@ -42,6 +43,62 @@ from app.plugin_manager import (
 from app.security import get_current_user, user_has_permission
 
 plugin_bp = Blueprint('plugins', __name__)
+
+
+def get_network_interfaces():
+    """Get list of network interfaces and their IP addresses."""
+    interfaces = [
+        {'value': '0.0.0.0', 'label': 'Any (0.0.0.0)', 'interface': 'all'},
+        {'value': '127.0.0.1', 'label': 'Localhost (127.0.0.1)', 'interface': 'lo'},
+    ]
+
+    try:
+        import netifaces
+        for iface in netifaces.interfaces():
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_INET in addrs:
+                for addr_info in addrs[netifaces.AF_INET]:
+                    ip = addr_info.get('addr')
+                    if ip and ip not in ('127.0.0.1', '0.0.0.0'):
+                        interfaces.append({
+                            'value': ip,
+                            'label': f'{iface} ({ip})',
+                            'interface': iface
+                        })
+    except ImportError:
+        # Fallback if netifaces not available - use socket
+        try:
+            hostname = socket.gethostname()
+            # Get all IPs associated with hostname
+            for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+                ip = info[4][0]
+                if ip and ip not in ('127.0.0.1', '0.0.0.0'):
+                    if not any(i['value'] == ip for i in interfaces):
+                        interfaces.append({
+                            'value': ip,
+                            'label': f'eth ({ip})',
+                            'interface': 'eth'
+                        })
+        except Exception:
+            pass
+
+        # Also try to get the primary IP
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+            s.close()
+            if ip and ip not in ('127.0.0.1', '0.0.0.0'):
+                if not any(i['value'] == ip for i in interfaces):
+                    interfaces.append({
+                        'value': ip,
+                        'label': f'Primary ({ip})',
+                        'interface': 'primary'
+                    })
+        except Exception:
+            pass
+
+    return interfaces
 
 
 # ========================================================================
@@ -251,12 +308,16 @@ def admin_plugin_detail(plugin_key):
             except Exception:
                 pass
 
+        # Get network interfaces for bind address dropdown
+        network_interfaces = get_network_interfaces()
+
         return render_template(
             'admin/plugins/detail.html',
             plugin=plugin,
             property_statuses=property_statuses,
             events=events,
-            module_config=module_config
+            module_config=module_config,
+            network_interfaces=network_interfaces
         )
     
     finally:
@@ -399,6 +460,68 @@ def admin_rotate_property_key(plugin_key, property_id):
     
     finally:
         db.close()
+
+
+@plugin_bp.route('/admin/plugins/<plugin_key>/update-bind', methods=['POST'])
+def admin_update_plugin_bind(plugin_key):
+    """System Admin: Update bind address and port for a plugin."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
+    bind_address = request.json.get('bind_address', '0.0.0.0')
+    port = request.json.get('port', 8473)
+
+    # Validate port
+    if not isinstance(port, int) or port < 1024 or port > 65535:
+        return jsonify({'error': 'Invalid port number'}), 400
+
+    # Update the plugin's definition.json with the new bind settings
+    plugin_dir = PLUGINS_DIR / plugin_key
+    definition_path = plugin_dir / 'definition.json'
+    if not definition_path.exists():
+        definition_path = Path(__file__).parent.parent / 'plugins' / plugin_key / 'definition.json'
+
+    if not definition_path.exists():
+        return jsonify({'error': 'Plugin definition not found'}), 404
+
+    try:
+        with open(definition_path, 'r', encoding='utf-8') as f:
+            definition = json.load(f)
+
+        # Update the defaults in config_schema
+        if 'config_schema' not in definition:
+            definition['config_schema'] = {'type': 'object', 'properties': {}}
+        if 'properties' not in definition['config_schema']:
+            definition['config_schema']['properties'] = {}
+
+        definition['config_schema']['properties']['api_bind_address'] = {
+            'type': 'string',
+            'title': 'Bind Address',
+            'description': 'IP address to bind the API server to',
+            'default': bind_address
+        }
+        definition['config_schema']['properties']['api_port'] = {
+            'type': 'integer',
+            'title': 'API Port',
+            'description': 'Port for Home Assistant API communications and video tunnel',
+            'default': port,
+            'minimum': 1024,
+            'maximum': 65535
+        }
+
+        with open(definition_path, 'w', encoding='utf-8') as f:
+            json.dump(definition, f, indent=4)
+
+        return jsonify({
+            'success': True,
+            'message': f'Bind settings updated to {bind_address}:{port}'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @plugin_bp.route('/admin/plugins/<plugin_key>/toggle-status', methods=['POST'])

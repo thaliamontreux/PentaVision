@@ -45,9 +45,18 @@
             {% endif %}
           </div>
           <div class="plugin-api-info">
-            <div class="api-info-item">
+            <div class="api-info-item api-bind-config">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-              <span>Bind: <strong>{{ module_config.api_bind_address|default('0.0.0.0') }}:{{ module_config.api_port|default(8473) }}</strong></span>
+              <span>Bind:</span>
+              <select id="bindAddressSelect" class="pv-select-sm" onchange="updateBindAddress()">
+                {% for iface in network_interfaces %}
+                <option value="{{ iface.value }}" {% if iface.value == module_config.api_bind_address %}selected{% endif %}>
+                  {{ iface.label }}
+                </option>
+                {% endfor %}
+              </select>
+              <span>:</span>
+              <input type="number" id="bindPortInput" class="pv-input-sm" value="{{ module_config.api_port|default(8473) }}" min="1024" max="65535" onchange="updateBindAddress()">
             </div>
             <div class="api-info-item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -329,6 +338,49 @@
 }
 .api-info-item strong {
   color: #e2e8f0;
+}
+.api-bind-config {
+  gap: 6px;
+}
+.pv-select-sm {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.pv-select-sm:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+}
+.pv-select-sm:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+.pv-input-sm {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 4px 8px;
+  width: 70px;
+  text-align: center;
+}
+.pv-input-sm:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+}
+.pv-input-sm:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+.pv-input-sm::-webkit-inner-spin-button,
+.pv-input-sm::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .plugin-status-badge {
@@ -740,6 +792,30 @@
 <script>
 const pluginKey = '{{ plugin.plugin_key }}';
 let currentApiKey = '';
+
+// Update bind address and port configuration
+let bindUpdateTimeout = null;
+function updateBindAddress() {
+    // Debounce to avoid too many requests
+    if (bindUpdateTimeout) clearTimeout(bindUpdateTimeout);
+    bindUpdateTimeout = setTimeout(() => {
+        const address = document.getElementById('bindAddressSelect').value;
+        const port = parseInt(document.getElementById('bindPortInput').value) || 8473;
+        
+        fetch(`/admin/plugins/${pluginKey}/update-bind`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bind_address: address, port: port })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                alert('Error: ' + (data.error || 'Failed to update bind settings'));
+            }
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }, 500);
+}
 
 // Toggle global plugin status (enable/disable the entire module)
 function togglePluginStatus(action) {
