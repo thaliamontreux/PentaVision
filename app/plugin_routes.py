@@ -643,6 +643,53 @@ def admin_plugin_service_control(plugin_key, action):
     return jsonify(result)
 
 
+@plugin_bp.route('/admin/plugins/<plugin_key>/check-bind', methods=['POST'])
+def admin_check_plugin_bind(plugin_key):
+    """System Admin: Check if the plugin is bound to the specified port."""
+    user = get_current_user()
+    if user is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    if not user_has_permission(user, "Admin.System.*"):
+        return jsonify({'error': 'Permission denied'}), 403
+
+    port = request.json.get('port', 8473)
+
+    # Check if port is in use by checking netstat or trying to connect
+    bound = False
+    try:
+        # Method 1: Try to connect to the port
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        result = sock.connect_ex(('127.0.0.1', int(port)))
+        sock.close()
+        bound = (result == 0)
+    except Exception:
+        pass
+
+    # Method 2: If connection test inconclusive, check via service status
+    if not bound:
+        service_status = get_plugin_service_status(plugin_key)
+        if service_status.get('running'):
+            # Service is running, try HTTP health check
+            try:
+                import urllib.request
+                req = urllib.request.Request(f'http://127.0.0.1:{port}/health', method='GET')
+                req.add_header('User-Agent', 'PentaVision-BindCheck/1.0')
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    if resp.status == 200:
+                        bound = True
+            except Exception:
+                pass
+
+    return jsonify({
+        'success': True,
+        'bound': bound,
+        'port': port,
+        'plugin_key': plugin_key
+    })
+
+
 @plugin_bp.route('/admin/plugins/<plugin_key>/toggle-status', methods=['POST'])
 def admin_toggle_plugin_status(plugin_key):
     """System Admin: Enable/disable the entire plugin module globally."""
