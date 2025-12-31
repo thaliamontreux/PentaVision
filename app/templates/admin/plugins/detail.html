@@ -1,233 +1,160 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
-{% block title %}{{ plugin.name }} - Plugin Details{% endblock %}
+{% block title %}{{ plugin.name }} · PentaVision{% endblock %}
 
 {% block content %}
-<div class="admin-container">
-    <div class="admin-header">
-        <h1>{{ plugin.name }}</h1>
-        <a href="{{ url_for('plugins.admin_plugins_list') }}" class="btn btn-secondary">
-            <i class="icon-back"></i> Back to Plugins
-        </a>
-    </div>
+<section class="pv-section">
+  <div class="pv-admin-layout">
+    {% include 'admin/_nav.html' %}
+    <div class="pv-admin-main">
 
-    <div class="plugin-detail-layout">
-        <div class="plugin-main">
-            <div class="card">
-                <div class="card-header">
-                    <h2>Plugin Information</h2>
-                    <span class="status-badge status-{{ plugin.status }}">
-                        {{ plugin.status|replace('_', ' ')|title }}
-                    </span>
-                </div>
-                <div class="card-body">
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <span class="info-label">Version</span>
-                            <span class="info-value">{{ plugin.version }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Category</span>
-                            <span class="info-value">{{ plugin.category|title }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Author</span>
-                            <span class="info-value">{{ plugin.author }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Installed</span>
-                            <span class="info-value">{{ plugin.installed_at|local_dt }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Runtime Type</span>
-                            <span class="info-value">{{ plugin.runtime_type|title }}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Health Status</span>
-                            <span class="info-value status-{{ plugin.last_health_status or 'unknown' }}">
-                                {{ plugin.last_health_status|default('Unknown')|title }}
-                            </span>
-                        </div>
-                    </div>
+      <div class="pv-page-header">
+        <div>
+          <a href="{{ url_for('plugins.admin_plugins_list') }}" class="pv-back-link">← Back to Plugins</a>
+          <h1 class="pv-page-title">{{ plugin.name }}</h1>
+          <p class="pv-page-subtitle">{{ plugin.description }}</p>
+        </div>
+        <span class="plugin-status-badge status-{{ plugin.status }}">{{ plugin.status|replace('_', ' ')|title }}</span>
+      </div>
 
-                    <div class="description-section">
-                        <h3>Description</h3>
-                        <p>{{ plugin.description }}</p>
-                    </div>
-
-                    <div class="capabilities-section">
-                        <h3>Capabilities</h3>
-                        <div class="capabilities-list">
-                            {% set caps = plugin.capabilities|from_json %}
-                            {% for cap in caps %}
-                            <span class="capability-badge">{{ cap }}</span>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <div class="scopes-section">
-                        <h3>Required Scopes</h3>
-                        <div class="scopes-list">
-                            {% set scopes = plugin.scopes|from_json %}
-                            {% for scope in scopes %}
-                            <span class="scope-badge scope-{{ 'write' if 'write' in scope else 'read' }}">
-                                {{ scope }}
-                            </span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h2>Property Access Control</h2>
-                    <span class="property-count">{{ property_statuses|length }} Properties</span>
-                </div>
-                <div class="card-body">
-                    <table class="property-table">
-                        <thead>
-                            <tr>
-                                <th>Property</th>
-                                <th>Status</th>
-                                <th>Admin Control</th>
-                                <th>API Key</th>
-                                <th>Last Used</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for ps in property_statuses %}
-                            <tr data-property-id="{{ ps.property.id }}">
-                                <td>
-                                    <strong>{{ ps.property.name }}</strong>
-                                </td>
-                                <td>
-                                    <span class="status-badge status-{{ ps.status }}">
-                                        {{ ps.status|replace('_', ' ')|title }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if ps.admin_allowed %}
-                                    <span class="admin-status admin-allowed">✓ Allowed</span>
-                                    {% else %}
-                                    <span class="admin-status admin-blocked">✗ Blocked</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if ps.api_key_prefix %}
-                                    <code class="api-key-display">{{ ps.api_key_prefix }}***********************</code>
-                                    {% else %}
-                                    <span class="text-muted">No key</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if ps.api_key_last_used %}
-                                    {{ ps.api_key_last_used|local_dt }}
-                                    {% else %}
-                                    <span class="text-muted">Never</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="action-buttons">
-                                        {% if ps.admin_allowed %}
-                                        <button class="btn btn-sm btn-warning" onclick="toggleAccess({{ ps.property.id }}, 'disable')">
-                                            Disable
-                                        </button>
-                                        {% else %}
-                                        <button class="btn btn-sm btn-success" onclick="toggleAccess({{ ps.property.id }}, 'enable')">
-                                            Enable
-                                        </button>
-                                        {% endif %}
-                                        {% if ps.assignment %}
-                                        <button class="btn btn-sm btn-primary" onclick="rotateKey({{ ps.property.id }})">
-                                            Rotate Key
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h2>Recent Events</h2>
-                </div>
-                <div class="card-body">
-                    <div class="events-list">
-                        {% for event in events %}
-                        <div class="event-item event-{{ event.severity }}">
-                            <div class="event-header">
-                                <span class="event-type">{{ event.event_type }}</span>
-                                <span class="event-time">{{ event.created_at|local_dt }}</span>
-                            </div>
-                            <div class="event-message">{{ event.message }}</div>
-                        </div>
-                        {% else %}
-                        <p class="text-muted">No events recorded</p>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
+      <!-- Plugin Info Card -->
+      <div class="pv-card plugin-info-card">
+        <div class="plugin-info-grid">
+          <div class="plugin-info-item">
+            <span class="plugin-info-label">Version</span>
+            <span class="plugin-info-value">{{ plugin.version }}</span>
+          </div>
+          <div class="plugin-info-item">
+            <span class="plugin-info-label">Category</span>
+            <span class="plugin-info-value">{{ plugin.category|title }}</span>
+          </div>
+          <div class="plugin-info-item">
+            <span class="plugin-info-label">Author</span>
+            <span class="plugin-info-value">{{ plugin.author }}</span>
+          </div>
+          <div class="plugin-info-item">
+            <span class="plugin-info-label">Installed</span>
+            <span class="plugin-info-value">{{ plugin.installed_at|local_dt }}</span>
+          </div>
+          <div class="plugin-info-item">
+            <span class="plugin-info-label">Runtime Type</span>
+            <span class="plugin-info-value">{{ plugin.runtime_type|title }}</span>
+          </div>
+          <div class="plugin-info-item">
+            <span class="plugin-info-label">Health Status</span>
+            <span class="plugin-info-value plugin-health-{{ plugin.last_health_status or 'unknown' }}">
+              {{ plugin.last_health_status|default('Unknown')|title }}
+            </span>
+          </div>
         </div>
 
-        <div class="plugin-sidebar">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Quick Actions</h3>
-                </div>
-                <div class="card-body">
-                    <button class="btn btn-block btn-primary" onclick="runTests()">
-                        Run Test Suite
-                    </button>
-                    <button class="btn btn-block btn-secondary" onclick="viewLogs()">
-                        View Logs
-                    </button>
-                    <button class="btn btn-block btn-warning" onclick="restartPlugin()">
-                        Restart Plugin
-                    </button>
-                    <button class="btn btn-block btn-danger" onclick="uninstallPlugin()">
-                        Uninstall Plugin
-                    </button>
-                </div>
+        <div class="plugin-badges-section">
+          <div class="plugin-badges-group">
+            <h4>Capabilities</h4>
+            <div class="plugin-badges">
+              {% set caps = plugin.capabilities|from_json %}
+              {% for cap in caps %}
+              <span class="plugin-badge plugin-badge-cap">{{ cap }}</span>
+              {% endfor %}
             </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h3>Requirements</h3>
-                </div>
-                <div class="card-body">
-                    <div class="requirement-item">
-                        <span class="req-label">Min Version</span>
-                        <span class="req-value">{{ plugin.min_pentavision_version }}</span>
-                    </div>
-                    {% if plugin.max_pentavision_version %}
-                    <div class="requirement-item">
-                        <span class="req-label">Max Version</span>
-                        <span class="req-value">{{ plugin.max_pentavision_version }}</span>
-                    </div>
-                    {% endif %}
-                    {% if plugin.memory_mb %}
-                    <div class="requirement-item">
-                        <span class="req-label">Memory</span>
-                        <span class="req-value">{{ plugin.memory_mb }} MB</span>
-                    </div>
-                    {% endif %}
-                    {% if plugin.disk_space_mb %}
-                    <div class="requirement-item">
-                        <span class="req-label">Disk Space</span>
-                        <span class="req-value">{{ plugin.disk_space_mb }} MB</span>
-                    </div>
-                    {% endif %}
-                </div>
+          </div>
+          <div class="plugin-badges-group">
+            <h4>Required Scopes</h4>
+            <div class="plugin-badges">
+              {% set scopes = plugin.scopes|from_json %}
+              {% for scope in scopes %}
+              <span class="plugin-badge plugin-badge-{{ 'write' if 'write' in scope else 'read' }}">{{ scope }}</span>
+              {% endfor %}
             </div>
+          </div>
         </div>
+      </div>
+
+      <!-- Property Access Control -->
+      <div class="pv-card">
+        <div class="pv-card-header">
+          <h2>Property Access Control</h2>
+          <span class="plugin-property-count">{{ property_statuses|length }} Properties</span>
+        </div>
+        <div class="pv-table-wrap">
+          <table class="pv-table">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Status</th>
+                <th>Admin Control</th>
+                <th>API Key</th>
+                <th>Last Used</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ps in property_statuses %}
+              <tr data-property-id="{{ ps.property.id }}">
+                <td><strong>{{ ps.property.name }}</strong></td>
+                <td>
+                  <span class="plugin-status-sm status-{{ ps.status }}">{{ ps.status|replace('_', ' ')|title }}</span>
+                </td>
+                <td>
+                  {% if ps.admin_allowed %}
+                  <span class="plugin-admin-allowed">✓ Allowed</span>
+                  {% else %}
+                  <span class="plugin-admin-blocked">✗ Blocked</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if ps.api_key_prefix %}
+                  <code class="plugin-api-key">{{ ps.api_key_prefix }}***</code>
+                  {% else %}
+                  <span class="plugin-text-muted">No key</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if ps.api_key_last_used %}
+                  {{ ps.api_key_last_used|local_dt }}
+                  {% else %}
+                  <span class="plugin-text-muted">Never</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="plugin-actions">
+                    {% if ps.admin_allowed %}
+                    <button class="pv-pm-btn pv-pm-btn-subtle" onclick="toggleAccess({{ ps.property.id }}, 'disable')">Disable</button>
+                    {% else %}
+                    <button class="pv-pm-btn pv-pm-btn-primary" onclick="toggleAccess({{ ps.property.id }}, 'enable')">Enable</button>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Events -->
+      <div class="pv-card">
+        <div class="pv-card-header">
+          <h2>Recent Events</h2>
+        </div>
+        <div class="plugin-events-list">
+          {% for event in events %}
+          <div class="plugin-event plugin-event-{{ event.severity }}">
+            <div class="plugin-event-header">
+              <span class="plugin-event-type">{{ event.event_type }}</span>
+              <span class="plugin-event-time">{{ event.created_at|local_dt }}</span>
+            </div>
+            <div class="plugin-event-message">{{ event.message }}</div>
+          </div>
+          {% else %}
+          <p class="plugin-text-muted" style="padding: 20px;">No events recorded</p>
+          {% endfor %}
+        </div>
+      </div>
+
     </div>
-</div>
+  </div>
+</section>
 
 <div id="keyModal" class="modal" style="display: none;">
     <div class="modal-content">
@@ -254,280 +181,317 @@
 </div>
 
 <style>
-.plugin-detail-layout {
-    display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: 20px;
-    margin-top: 20px;
+/* Plugin Detail Page - Dark Theme */
+.pv-back-link {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: #7dd3fc;
+  text-decoration: none;
+  font-size: 13px;
+}
+.pv-back-link:hover {
+  text-decoration: underline;
+  color: #bae6fd;
 }
 
-.card {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    margin-bottom: 20px;
+.plugin-status-badge {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.plugin-status-badge.status-verified,
+.plugin-status-badge.status-active,
+.plugin-status-badge.status-enabled {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+.plugin-status-badge.status-pending {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
 }
 
-.card-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid #f0f0f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.plugin-info-card {
+  padding: 24px;
 }
 
-.card-header h2, .card-header h3 {
-    margin: 0;
-    font-size: 18px;
+.plugin-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
 }
 
-.card-body {
-    padding: 20px;
+.plugin-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    margin-bottom: 24px;
+.plugin-info-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+.plugin-info-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e2e8f0;
 }
 
-.info-label {
-    font-size: 12px;
-    color: #888;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.plugin-health-healthy {
+  color: #4ade80;
+}
+.plugin-health-unhealthy {
+  color: #f87171;
+}
+.plugin-health-unknown {
+  color: #94a3b8;
 }
 
-.info-value {
-    font-size: 16px;
-    font-weight: 600;
-    color: #333;
+.plugin-badges-section {
+  display: flex;
+  gap: 40px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
 }
 
-.description-section, .capabilities-section, .scopes-section {
-    margin-top: 24px;
+.plugin-badges-group h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
-.description-section h3, .capabilities-section h3, .scopes-section h3 {
-    margin: 0 0 12px 0;
-    font-size: 16px;
+.plugin-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.capabilities-list, .scopes-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+.plugin-badge {
+  padding: 5px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.capability-badge, .scope-badge {
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 13px;
-    background: #e3f2fd;
-    color: #1565c0;
+.plugin-badge-cap {
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
-.scope-badge.scope-write {
-    background: #fff3e0;
-    color: #e65100;
+.plugin-badge-read {
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
-.property-table {
-    width: 100%;
-    border-collapse: collapse;
+.plugin-badge-write {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.3);
 }
 
-.property-table th {
-    text-align: left;
-    padding: 12px;
-    background: #f8f8f8;
-    font-weight: 600;
-    font-size: 13px;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.pv-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
 }
 
-.property-table td {
-    padding: 12px;
-    border-top: 1px solid #f0f0f0;
+.pv-card-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #e2e8f0;
 }
 
-.admin-status {
-    font-size: 13px;
-    font-weight: 500;
+.plugin-property-count {
+  font-size: 13px;
+  color: #94a3b8;
 }
 
-.admin-allowed {
-    color: #2e7d32;
+.plugin-status-sm {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.plugin-status-sm.status-not_assigned {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
 }
 
-.admin-blocked {
-    color: #c62828;
+.plugin-admin-allowed {
+  color: #4ade80;
+  font-size: 13px;
 }
 
-.api-key-display {
-    font-family: monospace;
-    font-size: 12px;
-    background: #f5f5f5;
-    padding: 4px 8px;
-    border-radius: 4px;
+.plugin-admin-blocked {
+  color: #f87171;
+  font-size: 13px;
 }
 
-.action-buttons {
-    display: flex;
-    gap: 8px;
+.plugin-api-key {
+  font-family: monospace;
+  font-size: 11px;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #94a3b8;
 }
 
-.events-list {
-    max-height: 400px;
-    overflow-y: auto;
+.plugin-text-muted {
+  color: #64748b;
+  font-size: 13px;
 }
 
-.event-item {
-    padding: 12px;
-    border-left: 3px solid #ccc;
-    margin-bottom: 12px;
-    background: #f8f8f8;
+.plugin-actions {
+  display: flex;
+  gap: 8px;
 }
 
-.event-item.event-error {
-    border-left-color: #dc3545;
-    background: #ffebee;
+.plugin-events-list {
+  max-height: 300px;
+  overflow-y: auto;
 }
 
-.event-item.event-warning {
-    border-left-color: #ffc107;
-    background: #fff3e0;
+.plugin-event {
+  padding: 12px 20px;
+  border-left: 3px solid #475569;
+  margin: 0;
+  background: rgba(15, 23, 42, 0.3);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
-.event-item.event-info {
-    border-left-color: #2196f3;
-    background: #e3f2fd;
+.plugin-event-error {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }
 
-.event-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
+.plugin-event-warning {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
 }
 
-.event-type {
-    font-weight: 600;
-    font-size: 13px;
+.plugin-event-info {
+  border-left-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
 }
 
-.event-time {
-    font-size: 12px;
-    color: #666;
+.plugin-event-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
 }
 
-.event-message {
-    font-size: 14px;
-    color: #555;
+.plugin-event-type {
+  font-weight: 600;
+  font-size: 13px;
+  color: #e2e8f0;
 }
 
-.btn-block {
-    width: 100%;
-    margin-bottom: 8px;
+.plugin-event-time {
+  font-size: 12px;
+  color: #64748b;
 }
 
-.requirement-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #f0f0f0;
+.plugin-event-message {
+  font-size: 13px;
+  color: #94a3b8;
 }
 
-.req-label {
-    font-size: 13px;
-    color: #666;
-}
-
-.req-value {
-    font-weight: 600;
-    font-size: 13px;
-}
-
+/* Modal - Dark Theme */
 .modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
 
 .modal-content {
-    background: white;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 500px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .modal-header {
-    padding: 20px;
-    border-bottom: 1px solid #e0e0e0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .modal-header h2 {
-    margin: 0;
+  margin: 0;
+  color: #e2e8f0;
 }
 
 .modal-close {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: #666;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #94a3b8;
+}
+.modal-close:hover {
+  color: #e2e8f0;
 }
 
 .modal-body {
-    padding: 20px;
+  padding: 20px;
+  color: #e2e8f0;
 }
 
 .key-display-box {
-    background: #f8f8f8;
-    padding: 20px;
-    border-radius: 6px;
-    text-align: center;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.key-display-box p {
+  color: #fbbf24;
 }
 
 .key-value {
-    font-family: monospace;
-    font-size: 14px;
-    background: white;
-    padding: 12px;
-    border-radius: 4px;
-    margin: 16px 0;
-    word-break: break-all;
-    border: 2px solid #667eea;
+  font-family: monospace;
+  font-size: 14px;
+  background: rgba(15, 23, 42, 0.8);
+  padding: 12px;
+  border-radius: 6px;
+  margin: 16px 0;
+  word-break: break-all;
+  border: 2px solid #38bdf8;
+  color: #7dd3fc;
 }
 
 .key-instructions {
-    margin-top: 16px;
-    font-size: 14px;
-    color: #666;
+  margin-top: 16px;
+  font-size: 14px;
+  color: #94a3b8;
 }
 
 .modal-footer {
-    padding: 16px 20px;
-    border-top: 1px solid #e0e0e0;
-    text-align: right;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  text-align: right;
 }
 </style>
 
