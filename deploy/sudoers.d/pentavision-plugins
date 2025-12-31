@@ -1,0 +1,16 @@
+# PentaVision Plugin Service Control
+# Allow pentavision user to manage plugin services without password
+# Install with: sudo cp pentavision-plugins /etc/sudoers.d/ && sudo chmod 440 /etc/sudoers.d/pentavision-plugins
+
+pentavision ALL=(ALL) NOPASSWD: /bin/systemctl start pentavision-plugin-*
+pentavision ALL=(ALL) NOPASSWD: /bin/systemctl stop pentavision-plugin-*
+pentavision ALL=(ALL) NOPASSWD: /bin/systemctl restart pentavision-plugin-*
+pentavision ALL=(ALL) NOPASSWD: /bin/systemctl status pentavision-plugin-*
+pentavision ALL=(ALL) NOPASSWD: /bin/systemctl is-active pentavision-plugin-*
+
+# Also allow www-data if web server runs as different user
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl start pentavision-plugin-*
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl stop pentavision-plugin-*
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl restart pentavision-plugin-*
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl status pentavision-plugin-*
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl is-active pentavision-plugin-*
