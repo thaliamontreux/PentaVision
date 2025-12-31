@@ -19,6 +19,12 @@
         "type": "object",
         "required": [],
         "properties": {
+            "api_bind_address": {
+                "type": "string",
+                "title": "Bind Address",
+                "description": "IP address to bind the API server to (default: 0.0.0.0 for all interfaces, use 127.0.0.1 for localhost only)",
+                "default": "0.0.0.0"
+            },
             "api_port": {
                 "type": "integer",
                 "title": "API Port",

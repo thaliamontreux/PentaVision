@@ -232,7 +232,7 @@ def admin_plugin_detail(plugin_key):
         ).limit(50).all()
 
         # Load module config from definition.json
-        module_config = {'api_port': 8473}  # Default
+        module_config = {'api_port': 8473, 'api_bind_address': '0.0.0.0'}  # Defaults
         plugin_dir = PLUGINS_DIR / plugin_key
         definition_path = plugin_dir / 'definition.json'
         if not definition_path.exists():
@@ -246,6 +246,8 @@ def admin_plugin_detail(plugin_key):
                     props = config_schema.get('properties', {})
                     if 'api_port' in props:
                         module_config['api_port'] = props['api_port'].get('default', 8473)
+                    if 'api_bind_address' in props:
+                        module_config['api_bind_address'] = props['api_bind_address'].get('default', '0.0.0.0')
             except Exception:
                 pass
 
