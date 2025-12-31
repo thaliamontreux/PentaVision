@@ -20,7 +20,7 @@
 .pv-is-admin .pv-section::before {
   content: "RESTRICTED AREA";
   position: fixed;
-  top: 60px;
+  top: 30px;
   right: 20px;
   z-index: 9999;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
