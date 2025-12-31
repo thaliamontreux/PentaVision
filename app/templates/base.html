@@ -60,7 +60,7 @@
       }
     </style>
   </head>
-  <body class="{% if _pv_path.startswith('/admin') %}pv-is-admin{% endif %}">
+  <body class="{% if _pv_path.startswith('/admin') %}pv-is-admin{% endif %}" {% block body_attrs %}{% endblock %}>
     <a href="#pv-main-content" class="pv-skip-link">Skip to main content</a>
     <div id="pv-splash" class="pv-splash-overlay">
       <div class="pv-splash-inner">
@@ -437,7 +437,13 @@
           navType = 'navigate';
         }
 
-        // Always show splash on explicit reloads.
+        // Skip splash on pages that opt out (e.g., admin plugin management)
+        if (document.body.hasAttribute('data-skip-splash')) {
+          splash.classList.add('pv-splash-hide');
+          return;
+        }
+
+        // Always show splash on explicit reloads (unless opted out).
         if (navType === 'reload') {
           hideSoon();
           return;
