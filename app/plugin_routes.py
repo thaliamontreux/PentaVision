@@ -623,8 +623,14 @@ def plugin_splash_image(plugin_key):
     if user is None:
         abort(403)
 
+    # Try production path first, then fallback to repo plugins directory
     plugin_dir = PLUGINS_DIR / plugin_key
     splash_path = plugin_dir / 'splash.jpg'
+
+    if not splash_path.exists():
+        # Fallback to repo plugins directory (for development)
+        repo_plugin_dir = Path(__file__).parent.parent / 'plugins' / plugin_key
+        splash_path = repo_plugin_dir / 'splash.jpg'
 
     if not splash_path.exists():
         abort(404, "Splash image not found")
