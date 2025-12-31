@@ -19,12 +19,5 @@ SyslogIdentifier=pentavision-ha-tunnel
 Environment=PENTAVISION_API_URL=http://127.0.0.1:5000
 Environment=PYTHONUNBUFFERED=1
 
-# Security hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/pentavision/data /opt/pentavision/plugins
-PrivateTmp=true
-
 [Install]
 WantedBy=multi-user.target
