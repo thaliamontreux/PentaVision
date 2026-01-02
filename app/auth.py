@@ -223,11 +223,17 @@ def _verify_totp(user: User, code: str) -> bool:
 
 def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
     """Verify a TOTP code against a raw secret string (may contain multiple secrets separated by |)."""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"TOTP verify: raw_secret length={len(raw_secret) if raw_secret else 0}, code={code}")
 
     if not raw_secret:
+        logger.info("TOTP verify: no secret configured, returning True")
         return True
 
     if not code:
+        logger.info("TOTP verify: no code provided, returning False")
         return False
 
     try:
@@ -236,15 +242,21 @@ def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
         secrets: list[str] = [
             s.strip() for s in str(raw_secret).split("|") if s.strip()
         ]
+        logger.info(f"TOTP verify: found {len(secrets)} secrets")
         if not secrets:
             return True
 
-        for secret in secrets:
+        for i, secret in enumerate(secrets):
             totp = pyotp.TOTP(secret)
+            expected = totp.now()
+            logger.info(f"TOTP verify: secret[{i}] expected={expected}, provided={code}")
             if totp.verify(code, valid_window=1):
+                logger.info(f"TOTP verify: SUCCESS with secret[{i}]")
                 return True
+        logger.info("TOTP verify: no secrets matched")
         return False
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"TOTP verify: exception {e}")
         return False
 
 
