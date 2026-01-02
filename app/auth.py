@@ -252,7 +252,7 @@ def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
         for i, secret in enumerate(secrets):
             totp = pyotp.TOTP(secret)
             expected = totp.now()
-            print(f"[TOTP VERIFY] secret[{i}] expected={expected}, provided={code}", flush=True)
+            print(f"[TOTP VERIFY] secret[{i}]={secret} expected={expected}, provided={code}", flush=True)
             if totp.verify(code, valid_window=1):
                 print(f"[TOTP VERIFY] SUCCESS with secret[{i}]", flush=True)
                 return True
@@ -622,6 +622,8 @@ def totp_verify():
 
         raw_secret = getattr(user, "totp_secret", None) or ""
         secrets = [s.strip() for s in str(raw_secret).split("|") if s.strip()]
+        print(f"[TOTP VERIFY ENDPOINT] raw_secret from DB: {raw_secret}", flush=True)
+        print(f"[TOTP VERIFY ENDPOINT] secrets list: {secrets}", flush=True)
         if not secrets:
             return jsonify({"error": "no totp configured"}), 400
 
@@ -630,6 +632,8 @@ def totp_verify():
 
             latest_secret = secrets[-1]
             totp = pyotp.TOTP(latest_secret)
+            expected_code = totp.now()
+            print(f"[TOTP VERIFY ENDPOINT] Using secret: {latest_secret}, expected={expected_code}, provided={code}", flush=True)
             if not totp.verify(code, valid_window=1):
                 log_event(
                     "AUTH_TOTP_VERIFY_FAILURE",
