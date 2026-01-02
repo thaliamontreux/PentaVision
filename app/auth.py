@@ -566,11 +566,21 @@ def totp_setup():
         totp = pyotp.TOTP(secret)
         issuer = current_app.config.get("TOTP_ISSUER", "PentaVision")
         otpauth_url = totp.provisioning_uri(name=email, issuer_name=issuer)
+        
+        print(f"[TOTP SETUP] Generated secret: {secret}", flush=True)
+        print(f"[TOTP SETUP] otpauth_url: {otpauth_url}", flush=True)
+        
+        # Verify the secret in the URL matches
+        import urllib.parse
+        parsed = urllib.parse.urlparse(otpauth_url)
+        params = urllib.parse.parse_qs(parsed.query)
+        url_secret = params.get('secret', [''])[0]
+        print(f"[TOTP SETUP] Secret extracted from URL: {url_secret}", flush=True)
+        print(f"[TOTP SETUP] Secrets match: {secret == url_secret}", flush=True)
 
         new_secrets = existing_secrets + [secret]
         user.totp_secret = "|".join(new_secrets)
-        print(f"[TOTP SETUP] Saving secret for {email}: {secret} (length={len(secret)})", flush=True)
-        print(f"[TOTP SETUP] Full totp_secret will be: {user.totp_secret}", flush=True)
+        print(f"[TOTP SETUP] Saving to DB: {user.totp_secret}", flush=True)
         session.add(user)
         session.commit()
         
