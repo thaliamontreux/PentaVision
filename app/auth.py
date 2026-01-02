@@ -223,17 +223,15 @@ def _verify_totp(user: User, code: str) -> bool:
 
 def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
     """Verify a TOTP code against a raw secret string (may contain multiple secrets separated by |)."""
-    import logging
-    logger = logging.getLogger(__name__)
 
-    logger.info(f"TOTP verify: raw_secret length={len(raw_secret) if raw_secret else 0}, code={code}")
+    print(f"[TOTP VERIFY] raw_secret length={len(raw_secret) if raw_secret else 0}, code={code}", flush=True)
 
     if not raw_secret:
-        logger.info("TOTP verify: no secret configured, returning True")
+        print("[TOTP VERIFY] no secret configured, returning True", flush=True)
         return True
 
     if not code:
-        logger.info("TOTP verify: no code provided, returning False")
+        print("[TOTP VERIFY] no code provided, returning False", flush=True)
         return False
 
     try:
@@ -242,21 +240,21 @@ def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
         secrets: list[str] = [
             s.strip() for s in str(raw_secret).split("|") if s.strip()
         ]
-        logger.info(f"TOTP verify: found {len(secrets)} secrets")
+        print(f"[TOTP VERIFY] found {len(secrets)} secrets", flush=True)
         if not secrets:
             return True
 
         for i, secret in enumerate(secrets):
             totp = pyotp.TOTP(secret)
             expected = totp.now()
-            logger.info(f"TOTP verify: secret[{i}] expected={expected}, provided={code}")
+            print(f"[TOTP VERIFY] secret[{i}] expected={expected}, provided={code}", flush=True)
             if totp.verify(code, valid_window=1):
-                logger.info(f"TOTP verify: SUCCESS with secret[{i}]")
+                print(f"[TOTP VERIFY] SUCCESS with secret[{i}]", flush=True)
                 return True
-        logger.info("TOTP verify: no secrets matched")
+        print("[TOTP VERIFY] no secrets matched", flush=True)
         return False
     except Exception as e:  # noqa: BLE001
-        logger.error(f"TOTP verify: exception {e}")
+        print(f"[TOTP VERIFY] exception {e}", flush=True)
         return False
 
 
