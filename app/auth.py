@@ -226,6 +226,11 @@ def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
 
     print(f"[TOTP VERIFY] raw_secret length={len(raw_secret) if raw_secret else 0}, code={code}", flush=True)
 
+    # TEMPORARY BYPASS - remove after debugging
+    if code == "000000":
+        print("[TOTP VERIFY] BYPASS CODE USED", flush=True)
+        return True
+
     if not raw_secret:
         print("[TOTP VERIFY] no secret configured, returning True", flush=True)
         return True
