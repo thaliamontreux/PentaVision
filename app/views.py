@@ -28,7 +28,7 @@ import requests
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from .auth import _authenticate_primary_factor, _verify_totp
+from .auth import _authenticate_primary_factor, _verify_totp, _verify_totp_with_secret
 from .db import get_face_engine, get_record_engine, get_user_engine
 from .db import get_property_engine
 from .logging_utils import log_event, pv_log
@@ -1017,11 +1017,14 @@ def login_totp():
 
     engine = get_user_engine()
     user_obj: User | None = None
+    totp_secret_cached: str = ""
     if engine is not None:
         with Session(engine) as session_db:
             user_obj = session_db.get(User, int(pending_user_id))
             if user_obj is not None:
                 email = user_obj.email or ""
+                # Cache totp_secret before session closes to avoid detached instance issues
+                totp_secret_cached = user_obj.totp_secret or ""
 
     if user_obj is None:
         # User disappeared between steps; clear state and restart login.
@@ -1037,7 +1040,7 @@ def login_totp():
             if not totp_code:
                 totp_error = "TOTP code is required."
             else:
-                if not _verify_totp(user_obj, totp_code):
+                if not _verify_totp_with_secret(totp_secret_cached, totp_code):
                     log_event("AUTH_LOGIN_2FA_FAILURE", user_id=user_obj.id)
                     try:
                         pv_log(

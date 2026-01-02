@@ -218,6 +218,12 @@ def _verify_totp(user: User, code: str) -> bool:
     """Verify a TOTP code for the given user if TOTP is enabled."""
 
     raw_secret = getattr(user, "totp_secret", None) or ""
+    return _verify_totp_with_secret(raw_secret, code)
+
+
+def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
+    """Verify a TOTP code against a raw secret string (may contain multiple secrets separated by |)."""
+
     if not raw_secret:
         return True
 
