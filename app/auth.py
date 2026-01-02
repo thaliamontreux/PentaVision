@@ -443,7 +443,9 @@ def _authenticate_primary_factor(email: str, password: str):
         session_db.add(user)
         session_db.commit()
 
-        requires_totp = bool(getattr(user, "totp_secret", None))
+        totp_secret_val = getattr(user, "totp_secret", None)
+        requires_totp = bool(totp_secret_val)
+        print(f"[AUTH DEBUG] User {email} totp_secret={totp_secret_val!r}, requires_totp={requires_totp}", flush=True)
         return user, None, 200, requires_totp
 
 

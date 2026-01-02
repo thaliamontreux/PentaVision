@@ -1015,9 +1015,6 @@ def login_totp():
     totp_error: str | None = None
     email = ""
 
-    import logging
-    logger = logging.getLogger(__name__)
-    
     engine = get_user_engine()
     user_obj: User | None = None
     totp_secret_cached: str = ""
@@ -1028,7 +1025,7 @@ def login_totp():
                 email = user_obj.email or ""
                 # Cache totp_secret before session closes to avoid detached instance issues
                 totp_secret_cached = user_obj.totp_secret or ""
-                logger.info(f"LOGIN_TOTP: Loaded user {email}, totp_secret_cached length={len(totp_secret_cached)}")
+                print(f"[LOGIN_TOTP DEBUG] Loaded user {email}, totp_secret_cached length={len(totp_secret_cached)}", flush=True)
 
     if user_obj is None:
         # User disappeared between steps; clear state and restart login.
