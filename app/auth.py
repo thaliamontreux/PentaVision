@@ -569,8 +569,14 @@ def totp_setup():
 
         new_secrets = existing_secrets + [secret]
         user.totp_secret = "|".join(new_secrets)
+        print(f"[TOTP SETUP] Saving secret for {email}: {secret} (length={len(secret)})", flush=True)
+        print(f"[TOTP SETUP] Full totp_secret will be: {user.totp_secret}", flush=True)
         session.add(user)
         session.commit()
+        
+        # Verify it was saved correctly
+        session.refresh(user)
+        print(f"[TOTP SETUP] After commit, totp_secret is: {user.totp_secret}", flush=True)
 
         log_event("AUTH_TOTP_SETUP_SUCCESS", user_id=user.id)
         return jsonify({"secret": secret, "otpauth_url": otpauth_url}), 201
