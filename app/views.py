@@ -28,7 +28,7 @@ import requests
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from .auth import _authenticate_primary_factor, _verify_totp, _verify_totp_with_secret
+from .auth import _authenticate_primary_factor, _verify_totp_with_secret
 from .db import get_face_engine, get_record_engine, get_user_engine
 from .db import get_property_engine
 from .logging_utils import log_event, pv_log
@@ -1025,7 +1025,6 @@ def login_totp():
                 email = user_obj.email or ""
                 # Cache totp_secret before session closes to avoid detached instance issues
                 totp_secret_cached = user_obj.totp_secret or ""
-                print(f"[LOGIN_TOTP DEBUG] Loaded user {email}, totp_secret_cached length={len(totp_secret_cached)}", flush=True)
 
     if user_obj is None:
         # User disappeared between steps; clear state and restart login.

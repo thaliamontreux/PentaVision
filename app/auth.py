@@ -28,6 +28,9 @@ from .models import LoginFailure, User, WebAuthnCredential
 from .security import seed_system_admin_role_for_email, login_user
 
 
+TOTP_VALID_WINDOW = 2
+
+
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 _ph = PasswordHasher()
@@ -67,7 +70,12 @@ def _record_login_failure(*, username: str, password: str, reason: str) -> None:
                 LoginFailure.__table__.create(bind=engine, checkfirst=True)
             except Exception:
                 pass
-            row = LoginFailure(ip=str(ip or "")[:64] if ip else None, username=user_val or None, password_enc=token, reason=reason_val or None)
+            row = LoginFailure(
+                ip=str(ip or "")[:64] if ip else None,
+                username=user_val or None,
+                password_enc=token,
+                reason=reason_val or None,
+            )
             session_db.add(row)
             session_db.commit()
     except Exception:
@@ -224,19 +232,10 @@ def _verify_totp(user: User, code: str) -> bool:
 def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
     """Verify a TOTP code against a raw secret string (may contain multiple secrets separated by |)."""
 
-    print(f"[TOTP VERIFY] raw_secret length={len(raw_secret) if raw_secret else 0}, code={code}", flush=True)
-
-    # TEMPORARY BYPASS - remove after debugging
-    if code == "000000":
-        print("[TOTP VERIFY] BYPASS CODE USED", flush=True)
-        return True
-
     if not raw_secret:
-        print("[TOTP VERIFY] no secret configured, returning True", flush=True)
         return True
 
     if not code:
-        print("[TOTP VERIFY] no code provided, returning False", flush=True)
         return False
 
     try:
@@ -245,21 +244,15 @@ def _verify_totp_with_secret(raw_secret: str, code: str) -> bool:
         secrets: list[str] = [
             s.strip() for s in str(raw_secret).split("|") if s.strip()
         ]
-        print(f"[TOTP VERIFY] found {len(secrets)} secrets", flush=True)
         if not secrets:
             return True
 
-        for i, secret in enumerate(secrets):
+        for secret in secrets:
             totp = pyotp.TOTP(secret)
-            expected = totp.now()
-            print(f"[TOTP VERIFY] secret[{i}]={secret} expected={expected}, provided={code}", flush=True)
-            if totp.verify(code, valid_window=1):
-                print(f"[TOTP VERIFY] SUCCESS with secret[{i}]", flush=True)
+            if totp.verify(code, valid_window=TOTP_VALID_WINDOW):
                 return True
-        print("[TOTP VERIFY] no secrets matched", flush=True)
         return False
-    except Exception as e:  # noqa: BLE001
-        print(f"[TOTP VERIFY] exception {e}", flush=True)
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -448,7 +441,6 @@ def _authenticate_primary_factor(email: str, password: str):
 
         totp_secret_val = getattr(user, "totp_secret", None)
         requires_totp = bool(totp_secret_val)
-        print(f"[AUTH DEBUG] User {email} totp_secret={totp_secret_val!r}, requires_totp={requires_totp}", flush=True)
         return user, None, 200, requires_totp
 
 
@@ -566,27 +558,11 @@ def totp_setup():
         totp = pyotp.TOTP(secret)
         issuer = current_app.config.get("TOTP_ISSUER", "PentaVision")
         otpauth_url = totp.provisioning_uri(name=email, issuer_name=issuer)
-        
-        print(f"[TOTP SETUP] Generated secret: {secret}", flush=True)
-        print(f"[TOTP SETUP] otpauth_url: {otpauth_url}", flush=True)
-        
-        # Verify the secret in the URL matches
-        import urllib.parse
-        parsed = urllib.parse.urlparse(otpauth_url)
-        params = urllib.parse.parse_qs(parsed.query)
-        url_secret = params.get('secret', [''])[0]
-        print(f"[TOTP SETUP] Secret extracted from URL: {url_secret}", flush=True)
-        print(f"[TOTP SETUP] Secrets match: {secret == url_secret}", flush=True)
 
         new_secrets = existing_secrets + [secret]
         user.totp_secret = "|".join(new_secrets)
-        print(f"[TOTP SETUP] Saving to DB: {user.totp_secret}", flush=True)
         session.add(user)
         session.commit()
-        
-        # Verify it was saved correctly
-        session.refresh(user)
-        print(f"[TOTP SETUP] After commit, totp_secret is: {user.totp_secret}", flush=True)
 
         log_event("AUTH_TOTP_SETUP_SUCCESS", user_id=user.id)
         return jsonify({"secret": secret, "otpauth_url": otpauth_url}), 201
@@ -632,8 +608,6 @@ def totp_verify():
 
         raw_secret = getattr(user, "totp_secret", None) or ""
         secrets = [s.strip() for s in str(raw_secret).split("|") if s.strip()]
-        print(f"[TOTP VERIFY ENDPOINT] raw_secret from DB: {raw_secret}", flush=True)
-        print(f"[TOTP VERIFY ENDPOINT] secrets list: {secrets}", flush=True)
         if not secrets:
             return jsonify({"error": "no totp configured"}), 400
 
@@ -642,9 +616,7 @@ def totp_verify():
 
             latest_secret = secrets[-1]
             totp = pyotp.TOTP(latest_secret)
-            expected_code = totp.now()
-            print(f"[TOTP VERIFY ENDPOINT] Using secret: {latest_secret}, expected={expected_code}, provided={code}", flush=True)
-            if not totp.verify(code, valid_window=1):
+            if not totp.verify(code, valid_window=TOTP_VALID_WINDOW):
                 log_event(
                     "AUTH_TOTP_VERIFY_FAILURE",
                     user_id=user.id,
