@@ -5,14 +5,12 @@ import io
 import json
 import os
 import random
-import re
 import shutil
 import signal
 import subprocess
 import threading
 import time
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -20,6 +18,7 @@ from zoneinfo import ZoneInfo
 from urllib.parse import urlparse, urlunparse
 
 from flask import Flask
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from .db import get_record_engine
@@ -29,7 +28,6 @@ from .models import (
     CameraPropertyLink,
     CameraRecording,
     CameraRecordingSchedule,
-    CameraRecordingWindow,
     CameraStorageScheduleEntry,
     CameraStoragePolicy,
     CameraUrlPattern,
@@ -978,7 +976,14 @@ class CameraWorker(threading.Thread):
             shm_required = True
         if shm_required:
             # Hard rule: do not fall back to disk.
-            return Path("/dev/shm") / "pentavision" / "ingest" / f"camera_{self.config.dir_key}" / f"session_{self._ingest_session_id}" / "segments"
+            return (
+                Path("/dev/shm")
+                / "pentavision"
+                / "ingest"
+                / f"camera_{self.config.dir_key}"
+                / f"session_{self._ingest_session_id}"
+                / "segments"
+            )
         base = self.app.config.get("RECORDING_BASE_DIR") or ""
         if base:
             return Path(str(base)) / "tmp" / f"camera_{self.config.dir_key}"
@@ -1777,6 +1782,28 @@ class RetentionWorker(threading.Thread):
         with Session(engine) as session:
             CameraRecording.__table__.create(bind=engine, checkfirst=True)
             CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
+            UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
+
+            # Purge stale upload queue entries to prevent unbounded DB growth.
+            # UploadQueueItem.payload is LargeBinary, so old rows can balloon the RecordDB.
+            retention_days = int(self.app.config.get("UPLOAD_QUEUE_RETENTION_DAYS", 7) or 7)
+            if retention_days > 0:
+                cutoff_q = now - timedelta(days=retention_days)
+                # Delete in small batches so we don't lock the table for too long.
+                for _ in range(10):
+                    ids = (
+                        session.query(UploadQueueItem.id)
+                        .filter(UploadQueueItem.created_at < cutoff_q)
+                        .order_by(UploadQueueItem.id)
+                        .limit(500)
+                        .all()
+                    )
+                    if not ids:
+                        break
+                    id_list = [int(r[0]) for r in ids]
+                    session.execute(delete(UploadQueueItem).where(UploadQueueItem.id.in_(id_list)))
+                    session.commit()
+
             policies = (
                 session.query(CameraStoragePolicy)
                 .filter(CameraStoragePolicy.retention_days.isnot(None))
