@@ -579,6 +579,7 @@ def configuration():
                 "label": str(meta.get("label") or key),
                 "description": str(meta.get("description") or ""),
                 "section": str(meta.get("section") or "other"),
+                "unit": str(meta.get("unit") or ""),
                 "type": value_type,
                 "effective": "" if effective_value is None else str(effective_value),
                 "override_enabled": bool(overridden) and not protected,

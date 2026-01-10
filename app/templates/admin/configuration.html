@@ -82,8 +82,22 @@
                             {{ r.description }}
                           </div>
                         {% endif %}
-                        <div style="margin-top: 0.35rem; color:#6b7280; font-size: 0.78rem;">
-                          Key: <code>{{ r.key }}</code>
+                        <div style="margin-top: 0.45rem; display:flex; gap: 0.5rem; align-items:center; flex-wrap: wrap;">
+                          <button
+                            type="button"
+                            class="pv-button pv-button-small"
+                            style="padding: 0.25rem 0.45rem; line-height: 1;"
+                            aria-label="Show config key"
+                            data-pv-key-toggle="{{ r.key }}"
+                          >
+                            i
+                          </button>
+                          <span
+                            id="pvKey__{{ r.key }}"
+                            style="display:none; color:#6b7280; font-size: 0.78rem;"
+                          >
+                            Key: <code>{{ r.key }}</code>
+                          </span>
                         </div>
                       </div>
 
@@ -99,7 +113,7 @@
                           {% endif %}
                         </div>
 
-                        <div>
+                        <div style="display:flex; gap: 0.5rem; align-items:center;">
                           {% if r.protected %}
                             <input name="value__{{ r.key }}" value="{{ r.value }}" disabled />
                           {% else %}
@@ -113,11 +127,18 @@
                               <input name="value__{{ r.key }}" value="{{ r.value }}" />
                             {% endif %}
                           {% endif %}
+
+                          {% if r.unit %}
+                            <span class="pv-badge pv-badge-muted">{{ r.unit }}</span>
+                          {% endif %}
                         </div>
 
                         <div style="font-size: 0.82rem; color:#9ca3af;">
                           Effective:
                           <code style="margin-left: 0.25rem;">{{ r.effective }}</code>
+                          {% if r.unit %}
+                            <span style="margin-left: 0.25rem;">{{ r.unit }}</span>
+                          {% endif %}
                         </div>
                       </div>
                     </div>
@@ -131,6 +152,26 @@
             </div>
           </form>
         </div>
+
+        <script>
+          (function () {
+            function toggleKey(key) {
+              var el = document.getElementById('pvKey__' + key);
+              if (!el) return;
+              el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'inline' : 'none';
+            }
+
+            document.addEventListener('click', function (ev) {
+              var t = ev.target;
+              if (!t) return;
+              var btn = t.closest ? t.closest('[data-pv-key-toggle]') : null;
+              if (!btn) return;
+              ev.preventDefault();
+              var key = btn.getAttribute('data-pv-key-toggle') || '';
+              if (key) toggleKey(key);
+            });
+          })();
+        </script>
 
       </div>
     </div>
