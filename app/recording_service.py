@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 from urllib.parse import urlparse, urlunparse
 
 from flask import Flask
-from sqlalchemy import delete
+from sqlalchemy import delete, func
 from sqlalchemy.orm import Session
 
 from .db import get_record_engine
@@ -37,7 +37,11 @@ from .models import (
     StorageModuleWriteStat,
     UploadQueueItem,
 )
-from .storage_providers import StorageProvider, build_storage_providers
+from .storage_providers import (
+    LocalFilesystemStorageProvider,
+    StorageProvider,
+    build_storage_providers,
+)
 from .preview_history import write_frame
 from .storage_csal import get_storage_router
 from .camera_utils import build_camera_url
@@ -45,6 +49,9 @@ from .camera_utils import build_camera_url
 
 _rtsp_host_lock = threading.Lock()
 _rtsp_host_next_allowed_ts: dict[str, float] = {}
+
+_queue_pause_last_reason: dict[int, str] = {}
+_queue_pause_last_log_ts: dict[int, float] = {}
 
 
 def _rtsp_host_from_url(url: str) -> str:
@@ -171,6 +178,7 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
     now_utc = datetime.now(timezone.utc)
     with Session(engine) as session:
         CameraStorageScheduleEntry.__table__.create(bind=engine, checkfirst=True)
+        UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
 
         # Storage schedule entries are authoritative: if no enabled entries exist
         # for this camera, do not record at all.
@@ -197,6 +205,70 @@ def _should_record_now(app: Flask, device_id: int) -> bool:
         raw_targets = (getattr(active_entry, "storage_targets", None) or "").strip()
         if not raw_targets:
             return False
+
+        # Backpressure: if upload_queue backlog exceeds a per-camera age window,
+        # stop recording new segments for that camera until the queue drains.
+        try:
+            max_age_h = int(app.config.get("UPLOAD_QUEUE_MAX_AGE_HOURS", 12) or 12)
+        except Exception:
+            max_age_h = 12
+        if max_age_h > 0:
+            oldest_pending = None
+            try:
+                oldest_pending = (
+                    session.query(func.min(UploadQueueItem.created_at))
+                    .filter(
+                        UploadQueueItem.device_id == int(device_id),
+                        UploadQueueItem.status == "pending",
+                    )
+                    .scalar()
+                )
+            except Exception:  # noqa: BLE001
+                oldest_pending = None
+            if oldest_pending is not None:
+                try:
+                    if getattr(oldest_pending, "tzinfo", None) is None:
+                        oldest_pending = oldest_pending.replace(tzinfo=timezone.utc)
+                except Exception:  # noqa: BLE001
+                    oldest_pending = None
+                if oldest_pending is not None:
+                    cutoff = now_utc - timedelta(hours=max_age_h)
+                    if oldest_pending < cutoff:
+                        reason = "upload queue backlog exceeded"
+                        try:
+                            now_ts = time.time()
+                        except Exception:
+                            now_ts = 0.0
+                        last_reason = _queue_pause_last_reason.get(int(device_id))
+                        last_ts = float(_queue_pause_last_log_ts.get(int(device_id)) or 0.0)
+                        if last_reason != reason or (now_ts and (now_ts - last_ts) >= 300.0):
+                            _queue_pause_last_reason[int(device_id)] = reason
+                            _queue_pause_last_log_ts[int(device_id)] = now_ts
+                            try:
+                                app.logger.warning(
+                                    (
+                                        "Pausing recording for device=%s: "
+                                        "oldest upload_queue item is %s "
+                                        "(max_age_hours=%s)"
+                                    ),
+                                    int(device_id),
+                                    str(oldest_pending),
+                                    int(max_age_h),
+                                )
+                            except Exception:
+                                pass
+                            try:
+                                pv_log(
+                                    "modules",
+                                    "warn",
+                                    "upload_queue_backpressure_pause",
+                                    component="recording_service",
+                                    device_id=int(device_id),
+                                    max_age_hours=int(max_age_h),
+                                )
+                            except Exception:
+                                pass
+                        return False
         return True
 
 
@@ -1779,10 +1851,146 @@ class RetentionWorker(threading.Thread):
         providers = build_storage_providers(self.app)
         providers_index = {p.name: p for p in providers}
         router = get_storage_router(self.app)
+
+        # Disk pressure policy: when local recording target is close to full,
+        # delete old local files (and their CameraRecording rows) to recover space.
+        local_paths: list[Path] = []
+        for p in providers:
+            try:
+                if isinstance(p, LocalFilesystemStorageProvider):
+                    local_paths.append(Path(p.base_path))
+            except Exception:
+                continue
+        unique_local_paths: list[Path] = []
+        seen_paths: set[str] = set()
+        for p in local_paths:
+            try:
+                key = str(p.resolve())
+            except Exception:
+                key = str(p)
+            if key in seen_paths:
+                continue
+            seen_paths.add(key)
+            unique_local_paths.append(p)
+
+        try:
+            full_pct = int(self.app.config.get("DISK_FULL_THRESHOLD_PCT", 90) or 90)
+        except Exception:
+            full_pct = 90
+        try:
+            recovery_pct = int(self.app.config.get("DISK_FULL_RECOVERY_PCT", 88) or 88)
+        except Exception:
+            recovery_pct = 88
+        try:
+            delete_older_days = int(
+                self.app.config.get("DISK_FULL_DELETE_OLDER_THAN_DAYS", 3) or 3
+            )
+        except Exception:
+            delete_older_days = 3
+
         with Session(engine) as session:
             CameraRecording.__table__.create(bind=engine, checkfirst=True)
             CameraStoragePolicy.__table__.create(bind=engine, checkfirst=True)
             UploadQueueItem.__table__.create(bind=engine, checkfirst=True)
+
+            if unique_local_paths and full_pct > 0 and delete_older_days > 0:
+                for base_path in unique_local_paths:
+                    try:
+                        usage = shutil.disk_usage(str(base_path))
+                        used_pct = int((float(usage.used) / float(usage.total)) * 100.0)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    if used_pct < full_pct:
+                        continue
+
+                    cutoff = now - timedelta(days=delete_older_days)
+                    try:
+                        self.app.logger.warning(
+                            "Disk usage %s%% at %s; deleting local recordings older than %s days",
+                            used_pct,
+                            str(base_path),
+                            int(delete_older_days),
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        pv_log(
+                            "modules",
+                            "warn",
+                            "disk_pressure_cleanup_start",
+                            component="recording_service",
+                            used_pct=int(used_pct),
+                            threshold_pct=int(full_pct),
+                            base_path=str(base_path)[:512],
+                            delete_older_days=int(delete_older_days),
+                        )
+                    except Exception:
+                        pass
+
+                    # Delete in bounded batches so we don't lock the table for long.
+                    for _ in range(50):
+                        try:
+                            usage = shutil.disk_usage(str(base_path))
+                            used_pct = int((float(usage.used) / float(usage.total)) * 100.0)
+                        except Exception:  # noqa: BLE001
+                            break
+                        if used_pct <= recovery_pct:
+                            break
+
+                        local_provider_names = [
+                            name
+                            for name, prov in providers_index.items()
+                            if isinstance(prov, LocalFilesystemStorageProvider)
+                        ]
+                        if not local_provider_names:
+                            break
+                        batch = (
+                            session.query(CameraRecording)
+                            .filter(CameraRecording.storage_provider.in_(local_provider_names))
+                            .filter(CameraRecording.created_at < cutoff)
+                            .order_by(CameraRecording.created_at)
+                            .limit(200)
+                            .all()
+                        )
+                        if not batch:
+                            break
+
+                        deleted_any = False
+                        for rec in batch:
+                            provider = providers_index.get(rec.storage_provider)
+                            storage_key = rec.storage_key or ""
+                            if provider is None:
+                                continue
+                            # Only delete files that are inside this specific base_path.
+                            try:
+                                if isinstance(provider, LocalFilesystemStorageProvider):
+                                    target = Path(str(storage_key)).expanduser()
+                                    if not target.is_absolute():
+                                        target = Path(provider.base_path) / target
+                                    target = target.resolve()
+                                    try:
+                                        target.relative_to(Path(base_path).resolve())
+                                    except ValueError:
+                                        continue
+                            except Exception:
+                                continue
+                            try:
+                                provider.delete(storage_key)
+                            except Exception:  # noqa: BLE001
+                                continue
+                            try:
+                                session.delete(rec)
+                                deleted_any = True
+                            except Exception:
+                                continue
+
+                        if deleted_any:
+                            try:
+                                session.commit()
+                            except Exception:
+                                session.rollback()
+                        else:
+                            break
 
             # Purge stale upload queue entries to prevent unbounded DB growth.
             # UploadQueueItem.payload is LargeBinary, so old rows can balloon the RecordDB.
