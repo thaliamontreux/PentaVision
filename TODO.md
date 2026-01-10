@@ -65,6 +65,13 @@
 
 - [x] Implement persistent ingest service (one RTSP connection per camera) that segments continuously and feeds both dashboard previews and recording uploads (behind `INGEST_ENABLED=1`).
 
+- [x] Add DB-backed application configuration (`app_config`) and Admin Panel editor
+  - [x] Add `AppConfigSetting` model/table in UserDB
+  - [x] Load bootstrap config from `config.json` / env and overlay DB overrides at startup
+  - [x] Add Admin → Configuration page with type-aware controls and CSRF protection
+  - [ ] Migrate remaining runtime settings reads from `os.environ.get(...)` to `current_app.config.get(...)`
+  - [ ] Document migration away from `.env` (keep only bootstrap keys in `config.json`)
+
 ## Pentastar-web UI rules / polish
 
 - [x] Ensure all user feedback (including errors) uses a bottom-right toast bubble with green background and black text.

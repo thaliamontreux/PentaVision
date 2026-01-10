@@ -296,6 +296,16 @@ CREATE TABLE IF NOT EXISTS site_theme_settings (
   updated_at DATETIME(6) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS app_config (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  config_key VARCHAR(128) NOT NULL,
+  config_value TEXT NULL,
+  created_at DATETIME(6) NULL,
+  updated_at DATETIME(6) NULL,
+  UNIQUE KEY ux_app_config_key (config_key),
+  KEY ix_app_config_key (config_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS site_themes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   scope VARCHAR(16) NOT NULL,

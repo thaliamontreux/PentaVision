@@ -314,6 +314,20 @@ class PropertyUserProfile(UserBase):
     )
 
 
+class AppConfigSetting(UserBase):
+    __tablename__ = "app_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_key: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    config_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class PropertyRole(UserBase):
     __tablename__ = "property_roles"
 

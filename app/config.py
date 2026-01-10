@@ -1,14 +1,50 @@
 import os
-from typing import Dict, Any
+import json
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional
 
 from dotenv import load_dotenv
 
+from sqlalchemy.orm import Session
+
+from .models import AppConfigSetting
 
 load_dotenv()
 
 
+def _load_json_config() -> dict[str, object]:
+    path = str(os.getenv("PENTAVISION_CONFIG_FILE") or "config.json").strip()
+    if not path:
+        return {}
+    try:
+        if not os.path.isabs(path):
+            path = os.path.abspath(path)
+        if not os.path.isfile(path):
+            return {}
+        raw = open(path, "r", encoding="utf-8").read()
+        obj = json.loads(raw) if raw else {}
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
+
+
+_JSON_CONFIG: dict[str, object] = _load_json_config()
+
+
+def _get_source_value(name: str) -> Optional[str]:
+    val = os.getenv(name)
+    if val is not None:
+        return val
+    try:
+        if name in _JSON_CONFIG and _JSON_CONFIG.get(name) is not None:
+            return str(_JSON_CONFIG.get(name))
+    except Exception:
+        return None
+    return None
+
+
 def _get_float_env(name: str, default: float) -> float:
-    value = os.getenv(name)
+    value = _get_source_value(name)
     if value is None:
         return default
     try:
@@ -18,7 +54,7 @@ def _get_float_env(name: str, default: float) -> float:
 
 
 def _get_int_env(name: str, default: int) -> int:
-    value = os.getenv(name)
+    value = _get_source_value(name)
     if value is None:
         return default
     try:
@@ -28,11 +64,95 @@ def _get_int_env(name: str, default: int) -> int:
 
 
 def _get_bool_env(name: str, default: bool) -> bool:
-    value = os.getenv(name)
+    value = _get_source_value(name)
     if value is None:
         return default
     text = value.strip().lower()
     return text in {"1", "true", "yes", "on"}
+
+
+def load_db_config_overrides(engine) -> dict[str, str]:
+    try:
+        AppConfigSetting.__table__.create(bind=engine, checkfirst=True)
+    except Exception:
+        return {}
+    try:
+        with Session(engine) as session:
+            rows = session.query(AppConfigSetting).all()
+    except Exception:
+        return {}
+    out: dict[str, str] = {}
+    for row in rows:
+        try:
+            k = str(getattr(row, "config_key", "") or "").strip()
+            if not k:
+                continue
+            v = getattr(row, "config_value", None)
+            out[k] = "" if v is None else str(v)
+        except Exception:
+            continue
+    return out
+
+
+def set_db_config_value(engine, key: str, value: Optional[str]) -> bool:
+    key_norm = str(key or "").strip()
+    if not key_norm:
+        return False
+    try:
+        AppConfigSetting.__table__.create(bind=engine, checkfirst=True)
+    except Exception:
+        return False
+    now_dt = datetime.now(timezone.utc)
+    try:
+        with Session(engine) as session:
+            row = (
+                session.query(AppConfigSetting)
+                .filter(AppConfigSetting.config_key == key_norm)
+                .first()
+            )
+            if value is None:
+                if row is not None:
+                    session.delete(row)
+                    session.commit()
+                return True
+
+            if row is None:
+                row = AppConfigSetting(config_key=key_norm)
+            row.config_value = value
+            row.updated_at = now_dt
+            session.add(row)
+            session.commit()
+        return True
+    except Exception:
+        return False
+
+
+def apply_db_overrides_to_config(
+    config: dict[str, Any],
+    overrides: dict[str, str],
+) -> dict[str, Any]:
+    out = dict(config)
+    for k, v in overrides.items():
+        if k not in out:
+            continue
+
+        cur = out.get(k)
+        if isinstance(cur, bool):
+            text = str(v or "").strip().lower()
+            out[k] = text in {"1", "true", "yes", "on"}
+        elif isinstance(cur, int) and not isinstance(cur, bool):
+            try:
+                out[k] = int(str(v).strip())
+            except Exception:
+                out[k] = cur
+        elif isinstance(cur, float):
+            try:
+                out[k] = float(str(v).strip())
+            except Exception:
+                out[k] = cur
+        else:
+            out[k] = v
+    return out
 
 
 def load_config() -> Dict[str, Any]:
@@ -41,29 +161,29 @@ def load_config() -> Dict[str, Any]:
     _f = _get_float_env
     _GST_REC = "USE_GSTREAMER_RECORDING"
     return {
-        "SECRET_KEY": os.getenv("APP_SECRET_KEY", "change-me"),
-        "USER_DB_URL": os.getenv("USER_DB_URL", ""),
-        "FACE_DB_URL": os.getenv("FACE_DB_URL", ""),
-        "RECORD_DB_URL": os.getenv("RECORD_DB_URL", ""),
-        "PROPERTY_DB_ADMIN_URL": os.getenv("PROPERTY_DB_ADMIN_URL", ""),
-        "PROPERTY_DB_APP_URL_BASE": os.getenv("PROPERTY_DB_APP_URL_BASE", ""),
-        "PROPERTY_DB_NAME_PREFIX": os.getenv("PROPERTY_DB_NAME_PREFIX", "pv_prop_"),
-        "INSTALL_LOCKED": os.getenv("INSTALL_LOCKED", ""),
-        "INSTALL_ACCESS_CODE": os.getenv("INSTALL_ACCESS_CODE", ""),
-        "RECORDING_ENABLED": os.getenv("RECORDING_ENABLED", "0"),
-        "RTMP_ENABLED": os.getenv("RTMP_ENABLED", "0"),
+        "SECRET_KEY": str(_get_source_value("APP_SECRET_KEY") or "change-me"),
+        "USER_DB_URL": str(_get_source_value("USER_DB_URL") or ""),
+        "FACE_DB_URL": str(_get_source_value("FACE_DB_URL") or ""),
+        "RECORD_DB_URL": str(_get_source_value("RECORD_DB_URL") or ""),
+        "PROPERTY_DB_ADMIN_URL": str(_get_source_value("PROPERTY_DB_ADMIN_URL") or ""),
+        "PROPERTY_DB_APP_URL_BASE": str(_get_source_value("PROPERTY_DB_APP_URL_BASE") or ""),
+        "PROPERTY_DB_NAME_PREFIX": str(_get_source_value("PROPERTY_DB_NAME_PREFIX") or "pv_prop_"),
+        "INSTALL_LOCKED": str(_get_source_value("INSTALL_LOCKED") or ""),
+        "INSTALL_ACCESS_CODE": str(_get_source_value("INSTALL_ACCESS_CODE") or ""),
+        "RECORDING_ENABLED": _b("RECORDING_ENABLED", False),
+        "RTMP_ENABLED": _b("RTMP_ENABLED", False),
         "RTMP_LOW_LATENCY": _b("RTMP_LOW_LATENCY", False),
-        "DLNA_ENABLED": os.getenv("DLNA_ENABLED", "0"),
-        "DLNA_FRIENDLY_NAME": os.getenv(
-            "DLNA_FRIENDLY_NAME",
-            "PentaVision DLNA",
+        "DLNA_ENABLED": _b("DLNA_ENABLED", False),
+        "DLNA_FRIENDLY_NAME": str(
+            _get_source_value("DLNA_FRIENDLY_NAME")
+            or "PentaVision DLNA"
         ),
-        "MINIDLNA_BIN": os.getenv("MINIDLNA_BIN", "minidlnad"),
-        "GERBERA_BIN": os.getenv("GERBERA_BIN", "gerbera"),
-        "IPTV_ENABLED": os.getenv("IPTV_ENABLED", "0"),
-        "RECORDING_BASE_DIR": os.getenv("RECORDING_BASE_DIR", ""),
-        "STORAGE_TARGETS": os.getenv("STORAGE_TARGETS", ""),
-        "LOCAL_STORAGE_PATH": os.getenv("LOCAL_STORAGE_PATH", ""),
+        "MINIDLNA_BIN": str(_get_source_value("MINIDLNA_BIN") or "minidlnad"),
+        "GERBERA_BIN": str(_get_source_value("GERBERA_BIN") or "gerbera"),
+        "IPTV_ENABLED": _b("IPTV_ENABLED", False),
+        "RECORDING_BASE_DIR": str(_get_source_value("RECORDING_BASE_DIR") or ""),
+        "STORAGE_TARGETS": str(_get_source_value("STORAGE_TARGETS") or ""),
+        "LOCAL_STORAGE_PATH": str(_get_source_value("LOCAL_STORAGE_PATH") or ""),
         "RECORD_SEGMENT_SECONDS": _i("RECORD_SEGMENT_SECONDS", 60),
         "RECORD_FFMPEG_THREADS": _i("RECORD_FFMPEG_THREADS", 2),
         "UPLOAD_QUEUE_RETENTION_DAYS": _i("UPLOAD_QUEUE_RETENTION_DAYS", 7),
@@ -97,13 +217,13 @@ def load_config() -> Dict[str, Any]:
         "PREVIEW_MAX_WIDTH": _i("PREVIEW_MAX_WIDTH", 0),
         "PREVIEW_MAX_HEIGHT": _i("PREVIEW_MAX_HEIGHT", 0),
         "PREVIEW_CAPTURE_FPS": _f("PREVIEW_CAPTURE_FPS", 10.0),
-        "PREVIEW_CACHE_DIR": os.getenv(
-            "PREVIEW_CACHE_DIR",
-            "/dev/shm/pentavision/previews",
+        "PREVIEW_CACHE_DIR": str(
+            _get_source_value("PREVIEW_CACHE_DIR")
+            or "/dev/shm/pentavision/previews"
         ),
         "PREVIEW_HISTORY_SECONDS": _i("PREVIEW_HISTORY_SECONDS", 60),
         "URL_HEALTHCHECK_ENABLED": _b("URL_HEALTHCHECK_ENABLED", True),
-        "LOG_SERVER_HOST": os.getenv("LOG_SERVER_HOST", "127.0.0.1"),
+        "LOG_SERVER_HOST": str(_get_source_value("LOG_SERVER_HOST") or "127.0.0.1"),
         "LOG_SERVER_PORT": _i("LOG_SERVER_PORT", 8123),
         "STREAMS_ENABLED": _b("STREAMS_ENABLED", True),
         "INGEST_ENABLED": _b("INGEST_ENABLED", False),
@@ -113,37 +233,31 @@ def load_config() -> Dict[str, Any]:
             False,
         ),
         "GST_RTSP_LATENCY_MS": _i("GST_RTSP_LATENCY_MS", 200),
-        "STREAM_FFMPEG_DIAGNOSTICS": os.getenv(
-            "STREAM_FFMPEG_DIAGNOSTICS",
-            "0",
+        "STREAM_FFMPEG_DIAGNOSTICS": str(
+            _get_source_value("STREAM_FFMPEG_DIAGNOSTICS")
+            or "0"
         ),
-        "WEBAUTHN_RP_ID": os.getenv("WEBAUTHN_RP_ID", ""),
-        "WEBAUTHN_RP_NAME": os.getenv("WEBAUTHN_RP_NAME", "PentaVision"),
-        "S3_ENDPOINT": os.getenv("S3_ENDPOINT", ""),
-        "S3_REGION": os.getenv("S3_REGION", ""),
-        "S3_BUCKET": os.getenv("S3_BUCKET", ""),
-        "S3_ACCESS_KEY": os.getenv("S3_ACCESS_KEY", ""),
-        "S3_SECRET_KEY": os.getenv("S3_SECRET_KEY", ""),
-        "GCS_BUCKET": os.getenv("GCS_BUCKET", ""),
-        "AZURE_BLOB_CONNECTION_STRING": os.getenv(
-            "AZURE_BLOB_CONNECTION_STRING",
-            "",
-        ),
-        "AZURE_BLOB_CONTAINER": os.getenv("AZURE_BLOB_CONTAINER", ""),
-        "DROPBOX_ACCESS_TOKEN": os.getenv("DROPBOX_ACCESS_TOKEN", ""),
-        "WEBDAV_BASE_URL": os.getenv("WEBDAV_BASE_URL", ""),
-        "WEBDAV_USERNAME": os.getenv("WEBDAV_USERNAME", ""),
-        "WEBDAV_PASSWORD": os.getenv("WEBDAV_PASSWORD", ""),
-        "FACE_MATCH_THRESHOLD": os.getenv(
-            "FACE_MATCH_THRESHOLD",
-            "",
-        ),
+        "WEBAUTHN_RP_ID": str(_get_source_value("WEBAUTHN_RP_ID") or ""),
+        "WEBAUTHN_RP_NAME": str(_get_source_value("WEBAUTHN_RP_NAME") or "PentaVision"),
+        "S3_ENDPOINT": str(_get_source_value("S3_ENDPOINT") or ""),
+        "S3_REGION": str(_get_source_value("S3_REGION") or ""),
+        "S3_BUCKET": str(_get_source_value("S3_BUCKET") or ""),
+        "S3_ACCESS_KEY": str(_get_source_value("S3_ACCESS_KEY") or ""),
+        "S3_SECRET_KEY": str(_get_source_value("S3_SECRET_KEY") or ""),
+        "GCS_BUCKET": str(_get_source_value("GCS_BUCKET") or ""),
+        "AZURE_BLOB_CONNECTION_STRING": str(_get_source_value("AZURE_BLOB_CONNECTION_STRING") or ""),
+        "AZURE_BLOB_CONTAINER": str(_get_source_value("AZURE_BLOB_CONTAINER") or ""),
+        "DROPBOX_ACCESS_TOKEN": str(_get_source_value("DROPBOX_ACCESS_TOKEN") or ""),
+        "WEBDAV_BASE_URL": str(_get_source_value("WEBDAV_BASE_URL") or ""),
+        "WEBDAV_USERNAME": str(_get_source_value("WEBDAV_USERNAME") or ""),
+        "WEBDAV_PASSWORD": str(_get_source_value("WEBDAV_PASSWORD") or ""),
+        "FACE_MATCH_THRESHOLD": str(_get_source_value("FACE_MATCH_THRESHOLD") or ""),
 
         # Diagnostics crawler support (disabled by default).
         # Enable only when you need diagnostics and keep it IP-restricted.
         "DIAGNOSTICS_ENABLED": _b("DIAGNOSTICS_ENABLED", False),
-        "DIAGNOSTICS_TOKEN": os.getenv("DIAGNOSTICS_TOKEN", ""),
-        "DIAGNOSTICS_USER_EMAIL": os.getenv("DIAGNOSTICS_USER_EMAIL", ""),
+        "DIAGNOSTICS_TOKEN": str(_get_source_value("DIAGNOSTICS_TOKEN") or ""),
+        "DIAGNOSTICS_USER_EMAIL": str(_get_source_value("DIAGNOSTICS_USER_EMAIL") or ""),
         "DIAGNOSTICS_GRANT_SYSTEM_ADMIN": _b(
             "DIAGNOSTICS_GRANT_SYSTEM_ADMIN",
             False,
@@ -152,13 +266,7 @@ def load_config() -> Dict[str, Any]:
             "DIAGNOSTICS_LOCAL_ONLY",
             True,
         ),
-        "DIAGNOSTICS_ALLOWED_CIDRS": os.getenv(
-            "DIAGNOSTICS_ALLOWED_CIDRS",
-            "",
-        ),
+        "DIAGNOSTICS_ALLOWED_CIDRS": str(_get_source_value("DIAGNOSTICS_ALLOWED_CIDRS") or ""),
 
-        "BOOTSTRAP_SYSTEM_ADMIN_EMAIL": os.getenv(
-            "BOOTSTRAP_SYSTEM_ADMIN_EMAIL",
-            "",
-        ),
+        "BOOTSTRAP_SYSTEM_ADMIN_EMAIL": str(_get_source_value("BOOTSTRAP_SYSTEM_ADMIN_EMAIL") or ""),
     }

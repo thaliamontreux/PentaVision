@@ -28,6 +28,12 @@ from werkzeug.routing import BuildError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from .config import (
+    apply_db_overrides_to_config,
+    load_config,
+    load_db_config_overrides,
+    set_db_config_value,
+)
 from .db import get_property_engine, get_user_engine
 from .logging_utils import log_event, _client_ip
 from .models import (
@@ -431,6 +437,158 @@ def themes():
         selected_admin=selected_admin,
         system_themes=_SYSTEM_THEME_NAMES,
         custom_themes=custom_themes,
+    )
+
+
+@bp.route("/configuration", methods=["GET", "POST"])
+def configuration():
+    user = get_current_user()
+    if user is None:
+        abort(403)
+    if not user_has_permission(user, "Admin.System.*"):
+        abort(403)
+
+    engine = get_user_engine()
+    errors: List[str] = []
+    messages: List[str] = []
+    csrf_token = _ensure_csrf_token()
+
+    base_cfg = load_config()
+    keys = sorted(base_cfg.keys())
+
+    overrides: dict[str, str] = {}
+    if engine is not None:
+        overrides = load_db_config_overrides(engine)
+    else:
+        errors.append("User database is not configured.")
+
+    protected_keys: Set[str] = {
+        "SECRET_KEY",
+        "USER_DB_URL",
+        "FACE_DB_URL",
+        "RECORD_DB_URL",
+        "PROPERTY_DB_ADMIN_URL",
+        "PROPERTY_DB_APP_URL_BASE",
+    }
+
+    def _int_range_for_key(key: str) -> tuple[int, int, int] | None:
+        ranges: dict[str, tuple[int, int, int]] = {
+            "UPLOAD_QUEUE_RETENTION_DAYS": (1, 30, 1),
+            "UPLOAD_QUEUE_MAX_AGE_HOURS": (1, 48, 1),
+            "DISK_FULL_THRESHOLD_PCT": (50, 99, 1),
+            "DISK_FULL_RECOVERY_PCT": (50, 99, 1),
+            "DISK_FULL_DELETE_OLDER_THAN_DAYS": (1, 14, 1),
+            "RECORD_SEGMENT_SECONDS": (10, 300, 10),
+            "RECORD_FFMPEG_THREADS": (1, 16, 1),
+            "SHM_INGEST_CAMERA_LIMIT_MB": (64, 2048, 64),
+            "SHM_INGEST_GLOBAL_LIMIT_MB": (256, 8192, 256),
+            "SHM_INGEST_MIN_FREE_MB": (64, 2048, 64),
+            "PREVIEW_HISTORY_SECONDS": (10, 600, 10),
+            "PREVIEW_MAX_WIDTH": (0, 3840, 160),
+            "PREVIEW_MAX_HEIGHT": (0, 2160, 120),
+            "GST_RTSP_LATENCY_MS": (0, 2000, 50),
+            "LOG_SERVER_PORT": (8000, 9000, 1),
+        }
+        if key in ranges:
+            return ranges[key]
+        return None
+
+    def _select_options_for_key(key: str, base_value: object) -> list[str] | None:
+        if isinstance(base_value, bool):
+            return ["off", "on"]
+        if isinstance(base_value, int) and not isinstance(base_value, bool):
+            r = _int_range_for_key(key)
+            if r is None:
+                return None
+            lo, hi, step = r
+            return [str(i) for i in range(int(lo), int(hi) + 1, int(step))]
+        if isinstance(base_value, float):
+            if key in {"PREVIEW_LOW_FPS", "PREVIEW_HIGH_FPS", "PREVIEW_CAPTURE_FPS"}:
+                return ["0.5", "1", "2", "5", "10", "15", "20", "30"]
+            return None
+        return None
+
+    if request.method == "POST" and engine is not None:
+        if not _validate_csrf_token(request.form.get("csrf_token")):
+            errors.append("Invalid or missing CSRF token.")
+        else:
+            changed = 0
+            for key in keys:
+                if key in protected_keys:
+                    continue
+                flag = request.form.get(f"override__{key}")
+                raw_val = request.form.get(f"value__{key}")
+                if flag:
+                    ok = set_db_config_value(engine, key, "" if raw_val is None else str(raw_val))
+                else:
+                    ok = set_db_config_value(engine, key, None)
+                if ok:
+                    changed += 1
+
+            try:
+                actor = get_current_user()
+                log_event(
+                    "ADMIN_CONFIG_UPDATE",
+                    user_id=actor.id if actor else None,
+                    details=f"keys={changed}",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+            try:
+                overrides = load_db_config_overrides(engine)
+                for k in protected_keys:
+                    overrides.pop(k, None)
+                merged = apply_db_overrides_to_config(dict(current_app.config), overrides)
+                current_app.config.update(merged)
+            except Exception:  # noqa: BLE001
+                pass
+
+            messages.append(
+                "Configuration saved. Restart background services to ensure all workers apply the new settings."
+            )
+
+    rows: list[dict[str, object]] = []
+    for key in keys:
+        base_value = base_cfg.get(key)
+        effective_value = current_app.config.get(key)
+        overridden = key in overrides
+        protected = key in protected_keys
+
+        stored = overrides.get(key)
+        form_value = (
+            stored if overridden else ("" if effective_value is None else str(effective_value))
+        )
+        options = _select_options_for_key(key, base_value)
+
+        value_type = "string"
+        if isinstance(base_value, bool):
+            value_type = "bool"
+            text = str(form_value or "").strip().lower()
+            form_value = "on" if text in {"1", "true", "yes", "on"} else "off"
+        elif isinstance(base_value, int) and not isinstance(base_value, bool):
+            value_type = "int"
+        elif isinstance(base_value, float):
+            value_type = "float"
+
+        rows.append(
+            {
+                "key": key,
+                "type": value_type,
+                "effective": "" if effective_value is None else str(effective_value),
+                "override_enabled": bool(overridden) and not protected,
+                "protected": bool(protected),
+                "value": "" if form_value is None else str(form_value),
+                "options": options,
+            }
+        )
+
+    return render_template(
+        "admin/configuration.html",
+        errors=errors,
+        messages=messages,
+        csrf_token=csrf_token,
+        rows=rows,
     )
 
 
@@ -927,10 +1085,15 @@ def git_pull_view(run_id: str):
         "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
         "  <title>PentaVision · Git Pull Output</title>"
         "  <style>"
-        "    body{margin:0;background:#050b14;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}"
-        "    .top{position:sticky;top:0;padding:10px 12px;background:rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(12px);}"
-        "    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;}"
-        "    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.08);color:#e5e7eb;font-weight:800;cursor:pointer;}"
+        "    body{margin:0;background:#050b14;color:#e5e7eb;font-family:ui-sans-serif,"
+        "system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}"
+        "    .top{position:sticky;top:0;padding:10px 12px;background:rgba(255,255,255,0.06);"
+        "border-bottom:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(12px);}"
+        "    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"
+        "Liberation Mono,Courier New,monospace;}"
+        "    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;"
+        "border-radius:10px;border:1px solid rgba(255,255,255,0.16);"
+        "background:rgba(255,255,255,0.08);color:#e5e7eb;font-weight:800;cursor:pointer;}"
         "    .btn:hover{border-color:rgba(34,211,238,0.55);}"
         "    pre{margin:0;padding:12px;white-space:pre-wrap;word-break:break-word;}"
         "  </style>"
@@ -3461,7 +3624,7 @@ def rbac_management():
 
 @bp.get("/rbac/roles/<int:role_id>")
 def rbac_role_detail(role_id: int):
-    """View and edit a specific role and its permissions."""
+    """View role details and permissions."""
     user = get_current_user()
     if user is None:
         abort(403)
@@ -3482,7 +3645,7 @@ def rbac_role_detail(role_id: int):
             abort(404)
 
         all_permissions = db.query(Permission).order_by(Permission.name).all()
-        
+
         role_permission_ids = [
             rp.permission_id
             for rp in db.query(RolePermission)
@@ -3710,7 +3873,7 @@ def diagnostics():
     try:
         user_engine = get_user_engine()
         record_engine = get_record_engine()
-        
+
         diagnostics_data["database"]["user_db"] = {
             "connected": user_engine is not None,
             "url": str(user_engine.url) if user_engine else None,
@@ -3741,7 +3904,7 @@ def diagnostics():
     try:
         from .stream_service import get_stream_manager
         stream_mgr = get_stream_manager()
-        
+
         diagnostics_data["services"]["stream_manager"] = {
             "running": stream_mgr is not None,
             "active_streams": len(stream_mgr.get_active_streams()) if stream_mgr else 0,

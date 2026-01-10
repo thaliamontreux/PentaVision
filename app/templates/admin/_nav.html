@@ -51,6 +51,10 @@
     <a class="pv-admin-navbtn" href="{{ url_for('admin.themes') }}">Themes</a>
   {% endif %}
 
+  {% if has_permission('Admin.System.*') %}
+    <a class="pv-admin-navbtn" href="{{ url_for('admin.configuration') }}">Configuration</a>
+  {% endif %}
+
   {% if has_permission('Admin.RBAC.*') %}
     <a class="pv-admin-navbtn" href="{{ url_for('admin.rbac_management') }}">RBAC</a>
   {% endif %}

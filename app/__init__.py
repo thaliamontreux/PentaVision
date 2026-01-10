@@ -14,7 +14,11 @@ from sqlalchemy.orm import Session
 from .admin import bp as admin_bp
 from .auth import bp as auth_bp
 from .camera_admin import bp as camera_admin_bp
-from .config import load_config
+from .config import (
+    apply_db_overrides_to_config,
+    load_config,
+    load_db_config_overrides,
+)
 from .db import get_face_engine, get_record_engine, get_user_engine
 from .diagnostics import (
     bp as diagnostics_bp,
@@ -50,6 +54,16 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(load_config())
     init_security(app)
+
+    _ = (
+        EnhancedPlugin,
+        PluginPropertyAssignment,
+        PluginHealthCheck,
+        PluginEvent,
+        PluginTestRun,
+        PluginApiKeyRotation,
+    )
+
     app.jinja_loader = ChoiceLoader(
         [
             app.jinja_loader,
@@ -98,6 +112,28 @@ def create_app() -> Flask:
                     pass
         except Exception:  # noqa: BLE001
             pass
+
+        if engine is not None:
+            try:
+                overrides = load_db_config_overrides(engine)
+                # Prevent DB overrides from mutating bootstrap settings required
+                # to bring the app up (and avoid circular dependencies).
+                for k in (
+                    "SECRET_KEY",
+                    "USER_DB_URL",
+                    "FACE_DB_URL",
+                    "RECORD_DB_URL",
+                    "PROPERTY_DB_ADMIN_URL",
+                    "PROPERTY_DB_APP_URL_BASE",
+                ):
+                    try:
+                        overrides.pop(k, None)
+                    except Exception:
+                        pass
+                merged = apply_db_overrides_to_config(dict(app.config), overrides)
+                app.config.update(merged)
+            except Exception:  # noqa: BLE001
+                pass
 
         if engine is not None:
             try:
