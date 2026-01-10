@@ -8,10 +8,19 @@
       {% include 'admin/_nav.html' %}
       <div class="pv-admin-main">
 
+        {% set active_section_label = active_section %}
+        {% if sections %}
+          {% for s in sections %}
+            {% if s.id == active_section %}
+              {% set active_section_label = s.label %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+
         <div class="pv-page-header">
           <div>
-            <h1 class="pv-page-title">Configuration</h1>
-            <p class="pv-page-subtitle">Manage application configuration stored in the database. The effective value is shown for each key.</p>
+            <h1 class="pv-page-title">Configuration · {{ active_section_label }}</h1>
+            <p class="pv-page-subtitle">Friendly labels are shown here, but the underlying keys are preserved when saving.</p>
           </div>
         </div>
 
@@ -35,61 +44,90 @@
           </div>
         {% endif %}
 
+        <div class="pv-card" style="padding: 0.75rem; margin-bottom: 1rem;">
+          <div style="display:flex; gap:0.5rem; flex-wrap: wrap;">
+            {% for s in sections %}
+              {% if s.count and s.count > 0 %}
+                {% set href = url_for('admin.configuration', section=s.id) %}
+                <a class="pv-button pv-button-small{% if s.id == active_section %} pv-button-primary{% endif %}" href="{{ href }}">
+                  {{ s.label }}
+                </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
         <div class="pv-card">
           <h2>Settings</h2>
-          <p class="pv-card-subtitle">Enable a DB override per key to persist it. Protected bootstrap keys are read-only.</p>
+          <p class="pv-card-subtitle">Enable <strong>Use DB</strong> to persist a value. Some bootstrap settings are protected and read-only.</p>
 
           <form method="post" class="pv-form" style="margin-top: 0;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
-            <div class="pv-table-wrap pv-mt-3">
-              <table class="pv-table">
-                <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th class="pv-nowrap">DB override</th>
-                    <th>Value</th>
-                    <th>Effective</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for r in rows %}
-                    <tr>
-                      <td class="pv-nowrap"><code>{{ r.key }}</code></td>
-                      <td class="pv-nowrap">
-                        {% if r.protected %}
-                          <span style="color:#9ca3af;">Protected</span>
-                        {% else %}
-                          <label class="pv-inline-form" style="gap: 0.45rem; align-items:center;">
-                            <input type="checkbox" name="override__{{ r.key }}" value="1" {% if r.override_enabled %}checked{% endif %} />
-                            <span>Use DB</span>
-                          </label>
+            {% if not rows %}
+              <div class="pv-empty" style="margin-top: 0.75rem;">
+                <p class="pv-empty-title">No settings in this section</p>
+              </div>
+            {% else %}
+              <div class="pv-dashboard-grid" style="margin-top: 0.85rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start;">
+                {% for r in rows %}
+                  <div class="pv-card" style="padding: 0.9rem;">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap: 0.75rem;">
+                      <div style="min-width: 0;">
+                        <div style="font-weight: 900; font-size: 1.02rem; line-height: 1.2;">
+                          {{ r.label }}
+                        </div>
+                        {% if r.description %}
+                          <div style="margin-top: 0.25rem; color:#9ca3af; font-size: 0.9rem; line-height: 1.35;">
+                            {{ r.description }}
+                          </div>
                         {% endif %}
-                      </td>
-                      <td>
-                        {% if r.protected %}
-                          <input name="value__{{ r.key }}" value="{{ r.value }}" disabled />
-                        {% else %}
-                          {% if r.options and r.options|length %}
-                            <select name="value__{{ r.key }}">
-                              {% for opt in r.options %}
-                                <option value="{{ opt }}" {% if opt|string == r.value|string %}selected{% endif %}>{{ opt }}</option>
-                              {% endfor %}
-                            </select>
-                          {% else %}
-                            <input name="value__{{ r.key }}" value="{{ r.value }}" />
-                          {% endif %}
-                        {% endif %}
-                      </td>
-                      <td><code>{{ r.effective }}</code></td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
+                        <div style="margin-top: 0.35rem; color:#6b7280; font-size: 0.78rem;">
+                          Key: <code>{{ r.key }}</code>
+                        </div>
+                      </div>
 
-            <div class="pv-form-actions">
-              <button type="submit" class="pv-button-primary">Save configuration</button>
+                      <div style="display:flex; flex-direction:column; gap: 0.55rem; min-width: 240px;">
+                        <div>
+                          {% if r.protected %}
+                            <span class="pv-badge pv-badge-muted">Protected</span>
+                          {% else %}
+                            <label class="pv-inline-form" style="gap: 0.45rem; align-items:center;">
+                              <input type="checkbox" name="override__{{ r.key }}" value="1" {% if r.override_enabled %}checked{% endif %} />
+                              <span>Use DB</span>
+                            </label>
+                          {% endif %}
+                        </div>
+
+                        <div>
+                          {% if r.protected %}
+                            <input name="value__{{ r.key }}" value="{{ r.value }}" disabled />
+                          {% else %}
+                            {% if r.options and r.options|length %}
+                              <select name="value__{{ r.key }}">
+                                {% for opt in r.options %}
+                                  <option value="{{ opt }}" {% if opt|string == r.value|string %}selected{% endif %}>{{ opt }}</option>
+                                {% endfor %}
+                              </select>
+                            {% else %}
+                              <input name="value__{{ r.key }}" value="{{ r.value }}" />
+                            {% endif %}
+                          {% endif %}
+                        </div>
+
+                        <div style="font-size: 0.82rem; color:#9ca3af;">
+                          Effective:
+                          <code style="margin-left: 0.25rem;">{{ r.effective }}</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <div class="pv-form-actions" style="margin-top: 1rem;">
+              <button type="submit" class="pv-button-primary">Save {{ active_section_label }}</button>
             </div>
           </form>
         </div>

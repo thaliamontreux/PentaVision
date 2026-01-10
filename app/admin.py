@@ -71,6 +71,7 @@ from .security import (
     user_has_permission,
     validate_global_csrf_token,
 )
+from .config_ui import CONFIG_SECTIONS, get_config_ui
 from .storage_settings_page import storage_settings_page
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -454,7 +455,12 @@ def configuration():
     csrf_token = _ensure_csrf_token()
 
     base_cfg = load_config()
-    keys = sorted(base_cfg.keys())
+    keys_all = sorted(base_cfg.keys())
+
+    section_id = str(request.args.get("section") or "").strip().lower() or "recording"
+    allowed_section_ids = {str(s.get("id") or "").strip().lower() for s in CONFIG_SECTIONS}
+    if section_id not in allowed_section_ids:
+        section_id = "recording"
 
     overrides: dict[str, str] = {}
     if engine is not None:
@@ -471,42 +477,35 @@ def configuration():
         "PROPERTY_DB_APP_URL_BASE",
     }
 
-    def _int_range_for_key(key: str) -> tuple[int, int, int] | None:
-        ranges: dict[str, tuple[int, int, int]] = {
-            "UPLOAD_QUEUE_RETENTION_DAYS": (1, 30, 1),
-            "UPLOAD_QUEUE_MAX_AGE_HOURS": (1, 48, 1),
-            "DISK_FULL_THRESHOLD_PCT": (50, 99, 1),
-            "DISK_FULL_RECOVERY_PCT": (50, 99, 1),
-            "DISK_FULL_DELETE_OLDER_THAN_DAYS": (1, 14, 1),
-            "RECORD_SEGMENT_SECONDS": (10, 300, 10),
-            "RECORD_FFMPEG_THREADS": (1, 16, 1),
-            "SHM_INGEST_CAMERA_LIMIT_MB": (64, 2048, 64),
-            "SHM_INGEST_GLOBAL_LIMIT_MB": (256, 8192, 256),
-            "SHM_INGEST_MIN_FREE_MB": (64, 2048, 64),
-            "PREVIEW_HISTORY_SECONDS": (10, 600, 10),
-            "PREVIEW_MAX_WIDTH": (0, 3840, 160),
-            "PREVIEW_MAX_HEIGHT": (0, 2160, 120),
-            "GST_RTSP_LATENCY_MS": (0, 2000, 50),
-            "LOG_SERVER_PORT": (8000, 9000, 1),
-        }
-        if key in ranges:
-            return ranges[key]
-        return None
+    def _select_options_for_key(key: str, base_value: object, meta: dict[str, object]) -> list[str] | None:
+        opts = meta.get("options")
+        if isinstance(opts, list) and opts:
+            return [str(o) for o in opts]
 
-    def _select_options_for_key(key: str, base_value: object) -> list[str] | None:
+        r = meta.get("range")
+        if isinstance(r, tuple) and len(r) == 3:
+            try:
+                lo, hi, step = int(r[0]), int(r[1]), int(r[2])
+                if step <= 0:
+                    return None
+                return [str(i) for i in range(int(lo), int(hi) + 1, int(step))]
+            except Exception:
+                return None
+
         if isinstance(base_value, bool):
             return ["off", "on"]
-        if isinstance(base_value, int) and not isinstance(base_value, bool):
-            r = _int_range_for_key(key)
-            if r is None:
-                return None
-            lo, hi, step = r
-            return [str(i) for i in range(int(lo), int(hi) + 1, int(step))]
-        if isinstance(base_value, float):
-            if key in {"PREVIEW_LOW_FPS", "PREVIEW_HIGH_FPS", "PREVIEW_CAPTURE_FPS"}:
-                return ["0.5", "1", "2", "5", "10", "15", "20", "30"]
-            return None
         return None
+
+    def _keys_for_section(section: str) -> list[str]:
+        out: list[str] = []
+        for k in keys_all:
+            meta = get_config_ui(k)
+            sec = str(meta.get("section") or "other")
+            if sec == section:
+                out.append(k)
+        return out
+
+    keys = _keys_for_section(section_id)
 
     if request.method == "POST" and engine is not None:
         if not _validate_csrf_token(request.form.get("csrf_token")):
@@ -548,18 +547,21 @@ def configuration():
                 "Configuration saved. Restart background services to ensure all workers apply the new settings."
             )
 
+            return redirect(url_for("admin.configuration", section=section_id))
+
     rows: list[dict[str, object]] = []
     for key in keys:
+        meta = get_config_ui(key)
         base_value = base_cfg.get(key)
         effective_value = current_app.config.get(key)
         overridden = key in overrides
-        protected = key in protected_keys
+        protected = key in protected_keys or bool(meta.get("protected") or False)
 
         stored = overrides.get(key)
         form_value = (
             stored if overridden else ("" if effective_value is None else str(effective_value))
         )
-        options = _select_options_for_key(key, base_value)
+        options = _select_options_for_key(key, base_value, meta)
 
         value_type = "string"
         if isinstance(base_value, bool):
@@ -574,6 +576,9 @@ def configuration():
         rows.append(
             {
                 "key": key,
+                "label": str(meta.get("label") or key),
+                "description": str(meta.get("description") or ""),
+                "section": str(meta.get("section") or "other"),
                 "type": value_type,
                 "effective": "" if effective_value is None else str(effective_value),
                 "override_enabled": bool(overridden) and not protected,
@@ -583,12 +588,33 @@ def configuration():
             }
         )
 
+    section_counts: dict[str, int] = {}
+    for k in keys_all:
+        meta = get_config_ui(k)
+        sec = str(meta.get("section") or "other")
+        section_counts[sec] = int(section_counts.get(sec, 0)) + 1
+
+    sections = []
+    for s in CONFIG_SECTIONS:
+        sid = str(s.get("id") or "").strip().lower()
+        if not sid:
+            continue
+        sections.append(
+            {
+                "id": sid,
+                "label": str(s.get("label") or sid),
+                "count": int(section_counts.get(sid, 0)),
+            }
+        )
+
     return render_template(
         "admin/configuration.html",
         errors=errors,
         messages=messages,
         csrf_token=csrf_token,
         rows=rows,
+        sections=sections,
+        active_section=section_id,
     )
 
 
